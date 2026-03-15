@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+gymnasium
+numpy
+manim
+pytest
+pydantic
+requests
