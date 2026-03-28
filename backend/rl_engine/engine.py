@@ -1,25 +1,43 @@
+import os
+from typing import Any, Dict
+
 import gymnasium as gym
-from typing import Dict, Any
+from PIL import Image
 
 from backend.lessons import get_lesson_definition
 from backend.user_code import load_user_function
 
+
 class EnvironmentAdapter:
-    """Manages the instantiation and interfacing with Gymnasium environments."""
-    
-    def __init__(self, env_name: str):
+    """Manages Gymnasium environments and exports render frames for visualization."""
+
+    def __init__(
+        self,
+        env_name: str,
+        frame_dir: str | None = None,
+        render_mode: str = "rgb_array",
+    ):
         self.env_name = env_name
+        self.render_mode = render_mode
+        self.frame_dir = frame_dir
+        self._frame_index = 0
+        if self.frame_dir is not None:
+            os.makedirs(self.frame_dir, exist_ok=True)
         self.env = self._create_env()
 
     def _create_env(self):
         if self.env_name == "FrozenLake":
-            # Using 4x4 GridWorld 
-            return gym.make('FrozenLake-v1', desc=None, map_name="4x4", is_slippery=False)
-        else:
-            raise ValueError(f"Environment {self.env_name} is not currently supported.")
+            return gym.make(
+                "FrozenLake-v1",
+                desc=None,
+                map_name="4x4",
+                is_slippery=True,
+                render_mode=self.render_mode,
+            )
+        raise ValueError(f"Environment {self.env_name} is not currently supported.")
 
-    def reset(self):
-        return self.env.reset()
+    def reset(self, seed: int | None = None):
+        return self.env.reset(seed=seed)
 
     def step(self, action):
         return self.env.step(action)
@@ -27,15 +45,59 @@ class EnvironmentAdapter:
     def close(self):
         self.env.close()
 
+    def transition_details(self, state: int, action: int) -> list[dict[str, Any]]:
+        return [
+            {
+                "probability": float(probability),
+                "next_state": int(next_state),
+                "reward": float(reward),
+                "done": bool(done),
+            }
+            for probability, next_state, reward, done in self.env.unwrapped.P[state][action]
+        ]
+
+    def action_label(self, action: int) -> str:
+        return {
+            0: "Left",
+            1: "Down",
+            2: "Right",
+            3: "Up",
+        }.get(action, f"Action {action}")
+
+    def set_render_state(self, state: int) -> None:
+        self.env.unwrapped.s = state
+
+    def capture_frame_png(self, state: int | None = None, prefix: str = "step") -> str:
+        if self.frame_dir is None:
+            return ""
+
+        if state is not None:
+            self.set_render_state(state)
+
+        frame = self.env.render()
+        if frame is None:
+            return ""
+
+        self._frame_index += 1
+        path = os.path.join(self.frame_dir, f"{prefix}_{self._frame_index:03d}.png")
+        Image.fromarray(frame).save(path)
+        return path
+
+
 class RLEngine:
-    """Core engine to run RL simulations."""
-    
+    """Core engine to run RL simulations and record reasoning traces."""
+
     def __init__(self, adapter: EnvironmentAdapter, logger):
         self.adapter = adapter
         self.logger = logger
-        
-    def run_episodes(self, lesson_id: str, code_module_str: str, num_episodes: int, hyperparameters: Dict[str, float]):
-        """Runs the RL loop with the injected code snippet."""
+
+    def run_episodes(
+        self,
+        lesson_id: str,
+        code_module_str: str,
+        num_episodes: int,
+        hyperparameters: Dict[str, float],
+    ):
         self.logger.clear()
         lesson = get_lesson_definition(lesson_id)
         if lesson is None:
@@ -44,7 +106,9 @@ class RLEngine:
         lesson_function = load_user_function(code_module_str, lesson.required_function)
 
         if lesson_id == "dp_policy_eval":
-            self._run_policy_evaluation(lesson_function, num_episodes, hyperparameters)
+            self._run_policy_evaluation(lesson_function, hyperparameters)
+        elif lesson_id == "dp_value_iteration":
+            self._run_value_iteration(lesson_function, hyperparameters)
         elif lesson_id == "mc_first_visit":
             self._run_mc_first_visit(lesson_function, num_episodes, hyperparameters)
         elif lesson_id == "td_q_learning":
@@ -52,55 +116,150 @@ class RLEngine:
         else:
             raise ValueError(f"Lesson '{lesson_id}' is not implemented.")
 
-    def _run_policy_evaluation(self, lesson_function, num_episodes: int, hyperparameters: Dict[str, float]):
+    def _run_policy_evaluation(self, lesson_function, hyperparameters: Dict[str, float]):
         state_count = self.adapter.env.observation_space.n
         action_count = self.adapter.env.action_space.n
         values = [0.0 for _ in range(state_count)]
         policy = [[1.0 / action_count for _ in range(action_count)] for _ in range(state_count)]
 
         lesson_function(values, policy, self.adapter.env.unwrapped, hyperparameters["gamma"])
+        self.adapter.reset(seed=7)
 
-        for _ in range(num_episodes):
-            state, _ = self.adapter.reset()
-            done = False
-
-            while not done:
-                action = self.adapter.env.action_space.sample()
-                next_state, reward, terminated, truncated, _ = self.adapter.step(action)
-                self.logger.log_step(
-                    {
-                        "state": state,
-                        "action": action,
-                        "reward": reward,
-                        "next_state": next_state,
-                        "updated_values": {f"V({state})": round(values[state], 4)},
-                    }
+        for state in range(state_count):
+            reasoning_lines = [
+                "Bellman expectation backup:",
+                "V(s) = sum_a pi(a|s) sum_s',r p(s',r|s,a) [r + gamma V(s')]",
+            ]
+            action_summaries = []
+            for action, action_prob in enumerate(policy[state]):
+                transitions = self.adapter.transition_details(state, action)
+                expected_return = 0.0
+                for transition in transitions:
+                    future = 0.0 if transition["done"] else values[transition["next_state"]]
+                    expected_return += transition["probability"] * (
+                        transition["reward"] + hyperparameters["gamma"] * future
+                    )
+                action_summaries.append(
+                    f"a={action}, pi={round(action_prob, 2)}, expected={round(expected_return, 3)}"
                 )
-                state = next_state
-                done = terminated or truncated
 
-            self.logger.end_episode()
+            frame_path = self.adapter.capture_frame_png(state=state, prefix="policy_eval")
+            self.logger.log_step(
+                {
+                    "state": state,
+                    "action": -1,
+                    "reward": 0.0,
+                    "next_state": state,
+                    "transition_probability": 1.0,
+                    "frame_path": frame_path,
+                    "agent_caption": f"Dynamic-programming sweep focuses on state {state}.",
+                    "code_title": "Code Trace",
+                    "code_lines": [
+                        "for action, action_prob in enumerate(policy[state]):",
+                        "    for transition_prob, next_state, reward, done in env.P[state][action]:",
+                        "        new_value += action_prob * transition_prob * (reward + gamma * future)",
+                    ],
+                    "math_title": "Bellman Expectation",
+                    "math_equation": r"V^{\pi}(s)=\sum_a \pi(a|s)\sum_{s',r} p(s',r|s,a)\left[r+\gamma V^{\pi}(s')\right]",
+                    "math_lines": reasoning_lines + action_summaries[:3],
+                    "updated_values": {f"V({state})": round(values[state], 4)},
+                }
+            )
+
+        self.logger.end_episode()
+
+    def _run_value_iteration(self, lesson_function, hyperparameters: Dict[str, float]):
+        state_count = self.adapter.env.observation_space.n
+        values = [0.0 for _ in range(state_count)]
+
+        lesson_function(values, self.adapter.env.unwrapped, hyperparameters["gamma"])
+        self.adapter.reset(seed=11)
+
+        for state in range(state_count):
+            action_values = []
+            for action in range(self.adapter.env.action_space.n):
+                transitions = self.adapter.transition_details(state, action)
+                action_value = 0.0
+                for transition in transitions:
+                    future = 0.0 if transition["done"] else values[transition["next_state"]]
+                    action_value += transition["probability"] * (
+                        transition["reward"] + hyperparameters["gamma"] * future
+                    )
+                action_values.append((action, action_value))
+
+            best_action, best_value = max(action_values, key=lambda item: item[1])
+            frame_path = self.adapter.capture_frame_png(state=state, prefix="value_iter")
+            self.logger.log_step(
+                {
+                    "state": state,
+                    "action": best_action,
+                    "reward": 0.0,
+                    "next_state": state,
+                    "transition_probability": 1.0,
+                    "frame_path": frame_path,
+                    "agent_caption": f"Value iteration backs up state {state} and keeps best action {self.adapter.action_label(best_action)}.",
+                    "code_title": "Code Trace",
+                    "code_lines": [
+                        "for action in range(action_count):",
+                        "    action_value += transition_prob * (reward + gamma * future)",
+                        "V[state] = max(action_values)",
+                    ],
+                    "math_title": "Bellman Optimality",
+                    "math_equation": r"V_*(s)=\max_a \sum_{s',r} p(s',r|s,a)\left[r+\gamma V_*(s')\right]",
+                    "math_lines": [
+                        "Bellman optimality backup:",
+                        "V(s) = max_a sum_s',r p(s',r|s,a) [r + gamma V(s')]",
+                        *[
+                            f"a={action} -> {round(value, 3)}"
+                            for action, value in action_values
+                        ],
+                        f"best action = {best_action}",
+                    ],
+                    "updated_values": {
+                        f"V({state})": round(values[state], 4),
+                        "backup": round(best_value, 4),
+                    },
+                }
+            )
+
+        self.logger.end_episode()
 
     def _run_mc_first_visit(self, lesson_function, num_episodes: int, hyperparameters: Dict[str, float]):
         state_count = self.adapter.env.observation_space.n
         values = [0.0 for _ in range(state_count)]
         returns = {state: [] for state in range(state_count)}
 
-        for _ in range(num_episodes):
-            state, _ = self.adapter.reset()
+        for episode_index in range(num_episodes):
+            state, _ = self.adapter.reset(seed=episode_index)
             done = False
             episode_trace = []
 
             while not done:
                 action = self.adapter.env.action_space.sample()
-                next_state, reward, terminated, truncated, _ = self.adapter.step(action)
+                next_state, reward, terminated, truncated, info = self.adapter.step(action)
                 episode_trace.append((state, action, reward))
+                frame_path = self.adapter.capture_frame_png(prefix="mc")
                 self.logger.log_step(
                     {
                         "state": state,
                         "action": action,
                         "reward": reward,
                         "next_state": next_state,
+                        "transition_probability": round(float(info.get("p", 1.0)), 4),
+                        "frame_path": frame_path,
+                        "agent_caption": f"Agent sampled {self.adapter.action_label(action)} from state {state} to state {next_state}.",
+                        "code_title": "Code Trace",
+                        "code_lines": [
+                            "episode_trace.append((state, action, reward))",
+                            "done = terminated or truncated",
+                            "updates wait until the full episode is collected",
+                        ],
+                        "math_title": "Episode Sampling",
+                        "math_equation": r"\text{Sample a complete trajectory } (S_0,A_0,R_1,\dots,S_T)",
+                        "math_lines": [
+                            "A full episode is sampled before any value update is applied.",
+                            f"Observed transition probability p = {round(float(info.get('p', 1.0)), 4)}",
+                        ],
                         "updated_values": {f"V({state})": round(values[state], 4)},
                     }
                 )
@@ -108,6 +267,48 @@ class RLEngine:
                 done = terminated or truncated
 
             lesson_function(episode_trace, values, returns, hyperparameters["gamma"])
+
+            visited_states = set()
+            for index, (visited_state, action, _reward) in enumerate(episode_trace):
+                if visited_state in visited_states:
+                    continue
+                visited_states.add(visited_state)
+                discounted_return = 0.0
+                discount = 1.0
+                for _next_state, _next_action, reward in episode_trace[index:]:
+                    discounted_return += discount * reward
+                    discount *= hyperparameters["gamma"]
+
+                frame_path = self.adapter.capture_frame_png(
+                    state=visited_state,
+                    prefix="mc_return",
+                )
+                self.logger.log_step(
+                    {
+                        "state": visited_state,
+                        "action": action,
+                        "reward": 0.0,
+                        "next_state": visited_state,
+                        "transition_probability": 1.0,
+                        "frame_path": frame_path,
+                        "agent_caption": f"First-visit update revisits state {visited_state} after the episode has finished.",
+                        "code_title": "Code Trace",
+                        "code_lines": [
+                            "if state in visited_states: continue",
+                            "G += discount * reward",
+                            "V[state] = sum(returns[state]) / len(returns[state])",
+                        ],
+                        "math_title": "First-Visit Return",
+                        "math_equation": r"G_t=\sum_{k=0}^{T-t-1}\gamma^k R_{t+k+1},\quad V(s)\leftarrow \text{mean}(G_t)",
+                        "math_lines": [
+                            f"First visit to state {visited_state} occurs at time index {index}.",
+                            f"G = {round(discounted_return, 4)} is appended to returns[{visited_state}].",
+                            f"V({visited_state}) becomes the mean of observed returns.",
+                        ],
+                        "updated_values": {f"V({visited_state})": round(values[visited_state], 4)},
+                    }
+                )
+
             self.logger.end_episode()
 
     def _run_q_learning(self, lesson_function, num_episodes: int, hyperparameters: Dict[str, float]):
@@ -115,13 +316,16 @@ class RLEngine:
         action_count = self.adapter.env.action_space.n
         q_table = [[0.0 for _ in range(action_count)] for _ in range(state_count)]
 
-        for _ in range(num_episodes):
-            state, _ = self.adapter.reset()
+        for episode_index in range(num_episodes):
+            state, _ = self.adapter.reset(seed=episode_index)
             done = False
 
             while not done:
                 action = self.adapter.env.action_space.sample()
-                next_state, reward, terminated, truncated, _ = self.adapter.step(action)
+                next_state, reward, terminated, truncated, info = self.adapter.step(action)
+                old_value = q_table[state][action]
+                best_next_value = max(q_table[next_state])
+                td_target = reward + hyperparameters["gamma"] * best_next_value
                 lesson_function(
                     q_table,
                     state,
@@ -131,12 +335,29 @@ class RLEngine:
                     hyperparameters["alpha"],
                     hyperparameters["gamma"],
                 )
+                frame_path = self.adapter.capture_frame_png(prefix="q_learning")
                 self.logger.log_step(
                     {
                         "state": state,
                         "action": action,
                         "reward": reward,
                         "next_state": next_state,
+                        "transition_probability": round(float(info.get("p", 1.0)), 4),
+                        "frame_path": frame_path,
+                        "agent_caption": f"Agent moved {self.adapter.action_label(action)} from state {state} to {next_state}.",
+                        "code_title": "Code Trace",
+                        "code_lines": [
+                            "best_next_value = max(Q[next_state])",
+                            "td_target = reward + gamma * best_next_value",
+                            "Q[state][action] = Q[state][action] + alpha * (td_target - Q[state][action])",
+                        ],
+                        "math_title": "TD / Q-Learning",
+                        "math_equation": r"Q(s,a)\leftarrow Q(s,a)+\alpha\left[r+\gamma \max_{a'}Q(s',a')-Q(s,a)\right]",
+                        "math_lines": [
+                            f"Sampled transition probability p = {round(float(info.get('p', 1.0)), 4)}.",
+                            f"TD target = reward + gamma * max Q(next_state, ·) = {round(td_target, 4)}.",
+                            f"Q({state}, {action}) updates from {round(old_value, 4)} to {round(q_table[state][action], 4)}.",
+                        ],
                         "updated_values": {
                             f"Q({state}, {action})": round(q_table[state][action], 4)
                         },

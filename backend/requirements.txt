@@ -6,3 +6,6 @@ manim
 pytest
 pydantic
 requests
+sqlmodel
+openpyxl
+psycopg[binary]

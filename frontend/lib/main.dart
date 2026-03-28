@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:rl_ide/core/theme.dart';
+import 'package:rl_ide/core/onboarding_prefs.dart';
+import 'package:rl_ide/features/onboarding/splash_screen.dart';
 import 'package:rl_ide/layout/main_layout.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const RLSimulationIDE());
 }
 
@@ -14,10 +17,53 @@ class RLSimulationIDE extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'RL Setup Environment',
+      title: 'RL Learning Platform',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      home: home ?? const MainLayout(),
+      home: home ?? const _AppBootstrapper(),
+    );
+  }
+}
+
+class _AppBootstrapper extends StatefulWidget {
+  const _AppBootstrapper();
+
+  @override
+  State<_AppBootstrapper> createState() => _AppBootstrapperState();
+}
+
+class _AppBootstrapperState extends State<_AppBootstrapper> {
+  bool _loading = true;
+  bool _showOnboarding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    final shouldShowOnboarding = await OnboardingPrefs.shouldShowOnboarding();
+    await Future<void>.delayed(const Duration(milliseconds: 1500));
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _showOnboarding = shouldShowOnboarding;
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const AppSplashScreen();
+    }
+
+    return MainLayout(
+      showOnboardingOnStart: _showOnboarding,
     );
   }
 }

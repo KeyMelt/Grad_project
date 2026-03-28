@@ -36,6 +36,9 @@ flutter run -d chrome
 
 - Keep the app in `Simulation` mode. `Hardware` mode is still a placeholder.
 - The backend listens on `http://127.0.0.1:8000`.
+- Learner data is now persisted in SQL (`backend/data/rl_learning_platform.db` by default).
+- Set `RL_IDE_DB_URL` to use a production database (for example PostgreSQL via `psycopg`).
+- Admin can export N-gain metrics as Excel from `GET /admin/metrics/n-gain/export`.
 - The frontend now submits runs to `/submit`, polls `/tasks/{task_id}`, and displays returned metrics and video path information.
 - The older synchronous `/execute` endpoint is still available for direct smoke testing.
 - If Manim rendering is unavailable, execution can still succeed but return no video path.

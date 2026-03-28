@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rl_ide/core/backend_api.dart';
 import 'package:rl_ide/core/workbench_state.dart';
@@ -5,14 +6,124 @@ import 'package:rl_ide/layout/main_layout.dart';
 import 'package:rl_ide/main.dart';
 
 class FakeBackendApi extends BackendApi {
+  LearnerProfile? _student;
+  LearnerProgress _progress = const LearnerProgress.empty();
+  QuizPhase? _latestPhase;
+
+  @override
+  Future<LearnerDashboard> signIn({
+    required String displayName,
+  }) async {
+    _student = LearnerProfile(
+      id: 'student-123',
+      displayName: displayName,
+    );
+    return LearnerDashboard(student: _student!, progress: _progress);
+  }
+
+  @override
+  Future<LearnerDashboard> getDashboard({
+    required String studentId,
+  }) async {
+    return LearnerDashboard(
+      student: _student!,
+      progress: _progress,
+    );
+  }
+
+  @override
+  Future<QuizSessionData> startQuiz({
+    required String studentId,
+    required QuizPhase phase,
+  }) async {
+    _latestPhase = phase;
+    return QuizSessionData(
+      sessionId: '${quizPhaseApiValue(phase)}-session',
+      phase: phase,
+      questionCount: 2,
+      questions: const [
+        QuizQuestionData(
+          id: 'q1',
+          concept: 'Core RL',
+          prompt: 'What does gamma control?',
+          options: [
+            'How much future rewards matter',
+            'How fast the video plays',
+            'How many states exist',
+            'How many files Manim writes',
+          ],
+        ),
+        QuizQuestionData(
+          id: 'q2',
+          concept: 'Temporal Difference',
+          prompt: 'What is the TD target in Q-learning?',
+          options: [
+            'Reward plus discounted best next-state action value',
+            'Average reward minus epsilon',
+            'The current value of the same state',
+            'Only the immediate reward',
+          ],
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<QuizAttemptSummary> submitQuiz({
+    required String studentId,
+    required String sessionId,
+    required Map<String, int> answers,
+  }) async {
+    if (_latestPhase == QuizPhase.pretest) {
+      _progress = const LearnerProgress(
+        completedLessonIds: ['dp_policy_eval'],
+        successfulRuns: 1,
+        latestLessonId: 'dp_policy_eval',
+        pretestScore: 50.0,
+        posttestScore: null,
+        nGain: null,
+        quizAttempts: {
+          'pretest': 1,
+          'posttest': 0,
+        },
+      );
+      return QuizAttemptSummary(
+        phase: QuizPhase.pretest,
+        score: 1,
+        totalQuestions: 2,
+        percentage: 50.0,
+        nGain: null,
+        progress: _progress,
+      );
+    }
+
+    _progress = const LearnerProgress(
+      completedLessonIds: ['dp_policy_eval'],
+      successfulRuns: 1,
+      latestLessonId: 'dp_policy_eval',
+      pretestScore: 50.0,
+      posttestScore: 100.0,
+      nGain: 1.0,
+      quizAttempts: {
+        'pretest': 1,
+        'posttest': 1,
+      },
+    );
+    return QuizAttemptSummary(
+      phase: QuizPhase.posttest,
+      score: 2,
+      totalQuestions: 2,
+      percentage: 100.0,
+      nGain: 1.0,
+      progress: _progress,
+    );
+  }
+
   @override
   Future<SubmittedExecutionTask> submitCode({
     required String lessonId,
     required String code,
-    required double learningRate,
-    required double discountFactor,
-    required double explorationRate,
-    required int episodeCount,
+    String? studentId,
   }) async {
     return const SubmittedExecutionTask(
       taskId: 'task-123',
@@ -22,13 +133,26 @@ class FakeBackendApi extends BackendApi {
 
   @override
   Future<ExecutionTaskSnapshot> getTaskStatus(String taskId) async {
+    _progress = const LearnerProgress(
+      completedLessonIds: ['dp_policy_eval'],
+      successfulRuns: 1,
+      latestLessonId: 'dp_policy_eval',
+      pretestScore: null,
+      posttestScore: null,
+      nGain: null,
+      quizAttempts: {
+        'pretest': 0,
+        'posttest': 0,
+      },
+    );
+
     return const ExecutionTaskSnapshot(
       taskId: 'task-123',
       status: ExecutionTaskStatus.succeeded,
       result: ExecutionResult(
         message: 'Execution pipeline completed.',
-        lessonTitle: 'Monte Carlo: First-Visit Prediction',
-        videoPath: '/tmp/mc_first_visit.mp4',
+        lessonTitle: 'Dynamic Programming: Policy Evaluation',
+        videoPath: '/tmp/dp_policy_eval.mp4',
         visualizationReady: true,
         metrics: ExecutionMetrics(
           episodesCompleted: 5,
@@ -39,47 +163,150 @@ class FakeBackendApi extends BackendApi {
         ),
         testResults: [
           ExecutionTestCaseResult(
-            name: 'mc_first_visit_returns',
+            name: 'policy_evaluation_bellman_backup',
             passed: true,
-            message: 'Computes first-visit returns over a short episode.',
-            expected: 'V[0] = 3.0 and V[1] = 2.0',
-            actual: 'V[0] = 3.0 and V[1] = 2.0',
+            message: 'Applies the Bellman expectation update.',
+            expected: 'V[0] reflects discounted successor values',
+            actual: 'V[0] reflects discounted successor values',
+          ),
+        ],
+        stepTrace: [
+          ExecutionTraceStep(
+            state: 0,
+            action: 1,
+            nextState: 4,
+            reward: 0,
+            transitionProbability: 0.333,
+            framePath: '',
+            agentCaption: 'Agent sampled Down from state 0 to state 4.',
+            codeTitle: 'Code Trace',
+            codeLines: [
+              'new_value += action_prob * transition_prob * (reward + gamma * future)',
+            ],
+            mathTitle: 'Bellman Expectation',
+            mathEquation:
+                r"V(s) \leftarrow \sum_a \pi(a|s)\sum_{s',r} p(s',r|s,a)(r + \gamma V(s'))",
+            mathLines: [
+              'Each transition contributes according to policy and model probability.',
+            ],
+            updatedValues: {
+              'V(0)': 0.17,
+            },
           ),
         ],
       ),
     );
   }
+
+  @override
+  Future<NGainMetricsExport> exportNGainMetrics() async {
+    return const NGainMetricsExport(
+      fileName: 'n_gain_metrics_test.xlsx',
+      bytes: <int>[1, 2, 3],
+    );
+  }
 }
 
 void main() {
-  testWidgets('App runs against backend client and renders returned metrics', (
+  testWidgets('Home dashboard signs in a learner and shows progress cards', (
     WidgetTester tester,
   ) async {
-    final controller = RLWorkbenchController(api: FakeBackendApi());
+    tester.view.physicalSize = const Size(1440, 1800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final cubit = RLWorkbenchCubit(api: FakeBackendApi());
 
     await tester.pumpWidget(
       RLSimulationIDE(
-        home: MainLayout(controller: controller),
+        home: MainLayout(cubit: cubit),
       ),
     );
 
-    expect(find.text('RL_IDE'), findsOneWidget);
+    expect(find.text('RL Learning Platform'), findsOneWidget);
+    expect(find.text('Student Sign In'), findsOneWidget);
 
-    await tester.tap(find.text('MC Prediction'));
+    await tester.enterText(
+      find.byType(TextField),
+      'Maya Hassan',
+    );
+    await tester.ensureVisible(find.text('Sign In'));
+    await tester.tap(find.text('Sign In'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Visualization: MC Prediction'), findsOneWidget);
+    expect(find.textContaining('Welcome back, Maya Hassan'), findsOneWidget);
+    expect(find.text('Lessons completed'), findsOneWidget);
+    expect(find.text('Flashcards'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Run'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Run'));
+    await cubit.close();
+  });
+
+  testWidgets('Workspace and quiz flow update learner progress end to end', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final cubit = RLWorkbenchCubit(api: FakeBackendApi());
+
+    await tester.pumpWidget(
+      RLSimulationIDE(
+        home: MainLayout(cubit: cubit),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField), 'Maya Hassan');
+    await tester.ensureVisible(find.text('Sign In'));
+    await tester.tap(find.text('Sign In'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Complete'), findsWidgets);
-    expect(find.textContaining('Video ready'), findsWidgets);
-    expect(find.text('3.0'), findsOneWidget);
-    expect(find.textContaining('/tmp/mc_first_visit.mp4'), findsOneWidget);
-    expect(find.text('Lesson Sample Tests'), findsOneWidget);
-    expect(find.text('mc_first_visit_returns'), findsOneWidget);
+    await tester.tap(find.text('Workspace'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Concept lesson video'), findsOneWidget);
+
+    await tester.tap(find.text('Code'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Exercise'), findsWidgets);
+
+    await tester.tap(find.text('Run').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Replay'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Generated Step Replay'), findsOneWidget);
+    expect(find.text('Sample Test Results'), findsOneWidget);
+
+    await tester.tap(find.text('Quiz'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Start Pre-test'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('How much future rewards matter'));
+    await tester.tap(
+      find.text('Reward plus discounted best next-state action value'),
+    );
+    await tester.tap(find.text('Submit Quiz'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('50.0%'), findsWidgets);
+
+    await tester.tap(find.text('Start Post-test'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('How much future rewards matter'));
+    await tester.tap(
+      find.text('Reward plus discounted best next-state action value'),
+    );
+    await tester.tap(find.text('Submit Quiz'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1.000'), findsWidgets);
+    expect(find.text('100.0%'), findsWidgets);
+
+    await cubit.close();
   });
 }

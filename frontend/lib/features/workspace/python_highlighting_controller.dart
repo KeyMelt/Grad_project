@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class PythonHighlightingController extends TextEditingController {
-  PythonHighlightingController({String? text}) : super(text: text);
+  PythonHighlightingController({super.text});
 
   static final RegExp _tokenPattern = RegExp(
     "(#.*\$)|('[^'\\n]*'|\"[^\"\\n]*\")|\\b(def|return|for|while|if|else|elif|in|pass|continue|break|True|False|None|and|or|not|class|import|from|as)\\b|\\b\\d+(\\.\\d+)?\\b",
@@ -35,14 +35,14 @@ class PythonHighlightingController extends TextEditingController {
   static const TextStyle _baseStyle = TextStyle(
     fontFamily: 'Courier',
     fontSize: 14,
-    color: Color(0xFF1D2939),
+    color: Color(0xFFE5E7EB),
     height: 1.5,
   );
 
   static const TextStyle _keywordStyle = TextStyle(
     fontFamily: 'Courier',
     fontSize: 14,
-    color: Color(0xFF1D4ED8),
+    color: Color(0xFF93C5FD),
     fontWeight: FontWeight.w700,
     height: 1.5,
   );
@@ -50,14 +50,14 @@ class PythonHighlightingController extends TextEditingController {
   static const TextStyle _stringStyle = TextStyle(
     fontFamily: 'Courier',
     fontSize: 14,
-    color: Color(0xFFB54708),
+    color: Color(0xFFFCA5A5),
     height: 1.5,
   );
 
   static const TextStyle _commentStyle = TextStyle(
     fontFamily: 'Courier',
     fontSize: 14,
-    color: Color(0xFF667085),
+    color: Color(0xFF94A3B8),
     fontStyle: FontStyle.italic,
     height: 1.5,
   );
@@ -65,7 +65,7 @@ class PythonHighlightingController extends TextEditingController {
   static const TextStyle _numberStyle = TextStyle(
     fontFamily: 'Courier',
     fontSize: 14,
-    color: Color(0xFF7A271A),
+    color: Color(0xFFFDE68A),
     height: 1.5,
   );
 

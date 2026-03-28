@@ -47,6 +47,34 @@ class CodeValidatorTest(unittest.TestCase):
         self.assertFalse(result.is_valid)
         self.assertIn("Import", result.errors[0])
 
+    def test_accepts_value_iteration_function(self):
+        result = self.validator.validate_code(
+            (
+                "def value_iteration(V, env, gamma=0.9, theta=1e-8):\n"
+                "    delta = float('inf')\n"
+                "    action_count = env.action_space.n\n"
+                "    while delta > theta:\n"
+                "        delta = 0.0\n"
+                "        for state in range(len(V)):\n"
+                "            old_value = V[state]\n"
+                "            action_values = []\n"
+                "            for action in range(action_count):\n"
+                "                action_value = 0.0\n"
+                "                for transition_prob, next_state, reward, done in env.P[state][action]:\n"
+                "                    future = 0.0 if done else V[next_state]\n"
+                "                    action_value += transition_prob * (reward + gamma * future)\n"
+                "                action_values.append(action_value)\n"
+                "            V[state] = max(action_values)\n"
+                "            delta = max(delta, abs(old_value - V[state]))\n"
+                "    return V\n"
+            ),
+            "dp_value_iteration",
+        )
+
+        self.assertTrue(result.is_valid)
+        self.assertEqual(result.errors, [])
+        self.assertTrue(all(test["passed"] for test in result.test_results))
+
 
 if __name__ == "__main__":
     unittest.main()

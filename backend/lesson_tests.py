@@ -18,6 +18,8 @@ def run_lesson_tests(
 ) -> List[Dict[str, Any]]:
     if lesson_id == "dp_policy_eval":
         results = _test_policy_evaluation(lesson_function)
+    elif lesson_id == "dp_value_iteration":
+        results = _test_value_iteration(lesson_function)
     elif lesson_id == "mc_first_visit":
         results = _test_mc_first_visit(lesson_function)
     elif lesson_id == "td_q_learning":
@@ -107,6 +109,43 @@ def _test_policy_evaluation(lesson_function: Callable[..., Any]) -> list[LessonT
             passed=passed,
             message="Evaluates a deterministic one-action toy environment.",
             expected="V[0] ~= 2.0 and V[1] = 0.0",
+            actual=f"V[0] = {round(values[0], 6)} and V[1] = {round(values[1], 6)}",
+        ),
+    ]
+
+
+def _test_value_iteration(lesson_function: Callable[..., Any]) -> list[LessonTestCaseResult]:
+    class _ActionSpace:
+        n = 2
+
+    class _ToyEnv:
+        action_space = _ActionSpace()
+        P = {
+            0: {
+                0: [(1.0, 0, 0.0, False)],
+                1: [(1.0, 1, 1.0, True)],
+            },
+            1: {
+                0: [(1.0, 1, 0.0, True)],
+                1: [(1.0, 1, 0.0, True)],
+            },
+        }
+
+    values = [0.0, 0.0]
+    lesson_function(values, _ToyEnv(), 0.9)
+
+    passed = math.isclose(values[0], 1.0, rel_tol=1e-4, abs_tol=1e-4) and math.isclose(
+        values[1],
+        0.0,
+        rel_tol=1e-4,
+        abs_tol=1e-4,
+    )
+    return [
+        LessonTestCaseResult(
+            name="value_iteration_toy_env",
+            passed=passed,
+            message="Computes the optimal Bellman backup for a two-action toy environment.",
+            expected="V[0] ~= 1.0 and V[1] = 0.0",
             actual=f"V[0] = {round(values[0], 6)} and V[1] = {round(values[1], 6)}",
         ),
     ]

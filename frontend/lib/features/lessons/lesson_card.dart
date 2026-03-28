@@ -7,7 +7,7 @@ class LessonCard extends StatelessWidget {
   final String description;
   final bool isActive;
   final bool hasVideo;
-  final bool hasHardware;
+  final bool backendEnabled;
   final VoidCallback? onTap;
 
   const LessonCard({
@@ -16,7 +16,7 @@ class LessonCard extends StatelessWidget {
     required this.description,
     this.isActive = false,
     this.hasVideo = false,
-    this.hasHardware = false,
+    this.backendEnabled = true,
     this.onTap,
   });
 
@@ -39,7 +39,7 @@ class LessonCard extends StatelessWidget {
             boxShadow: isActive
                 ? [
                     BoxShadow(
-                      color: AppTheme.primaryBlue.withOpacity(0.1),
+                      color: AppTheme.primaryBlue.withValues(alpha: 0.1),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
@@ -62,9 +62,13 @@ class LessonCard extends StatelessWidget {
                     children: [
                       if (hasVideo)
                         _buildIconBadge(Icons.play_arrow, AppTheme.primaryBlue),
-                      if (hasHardware) const SizedBox(width: 4),
-                      if (hasHardware)
-                        _buildIconBadge(Icons.memory, AppTheme.successGreen),
+                      if (hasVideo) const SizedBox(width: 4),
+                      _buildIconBadge(
+                        backendEnabled ? Icons.code : Icons.edit_note_rounded,
+                        backendEnabled
+                            ? AppTheme.successGreen
+                            : const Color(0xFFF59E0B),
+                      ),
                     ],
                   ),
                 ],
@@ -74,6 +78,25 @@ class LessonCard extends StatelessWidget {
                 description,
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
+              if (!backendEnabled) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF7ED),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: const Color(0xFFF59E0B)),
+                  ),
+                  child: const Text(
+                    'Draft content',
+                    style: TextStyle(
+                      color: Color(0xFFB45309),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -85,7 +108,7 @@ class LessonCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Icon(icon, size: 16, color: color),

@@ -8,12 +8,14 @@ class LessonBrowser extends StatelessWidget {
   final List<LessonSection> sections;
   final LessonDefinition selectedLesson;
   final ValueChanged<LessonDefinition> onLessonSelected;
+  final VoidCallback onToggleVisibility;
 
   const LessonBrowser({
     super.key,
     required this.sections,
     required this.selectedLesson,
     required this.onLessonSelected,
+    required this.onToggleVisibility,
   });
 
   @override
@@ -24,9 +26,20 @@ class LessonBrowser extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Lessons',
-            style: Theme.of(context).textTheme.titleLarge,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Course Outline',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Hide lesson sidebar',
+                onPressed: onToggleVisibility,
+                icon: const Icon(Icons.chevron_left_rounded),
+              ),
+            ],
           ),
           const SizedBox(height: AppConstants.defaultPadding),
           
@@ -48,7 +61,7 @@ class LessonBrowser extends StatelessWidget {
                                 description: lesson.description,
                                 isActive: lesson.id == selectedLesson.id,
                                 hasVideo: lesson.hasVideo,
-                                hasHardware: lesson.hasHardware,
+                                backendEnabled: lesson.backendEnabled,
                                 onTap: () => onLessonSelected(lesson),
                               ),
                             )

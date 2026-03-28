@@ -53,12 +53,18 @@ FORBIDDEN_NAMES = {
 }
 
 
-def load_user_function(submitted_code: str, required_function: str) -> Callable[..., Any]:
-    """Parse, validate, and load a user-defined function in a restricted namespace."""
+def load_user_context(submitted_code: str) -> dict[str, Any]:
+    """Parse, validate, and execute a user program in a restricted namespace."""
     _validate_user_code(submitted_code)
 
     local_context = {"__builtins__": SAFE_BUILTINS}
     exec(submitted_code, local_context, local_context)
+    return local_context
+
+
+def load_user_function(submitted_code: str, required_function: str) -> Callable[..., Any]:
+    """Parse, validate, and load a user-defined function in a restricted namespace."""
+    local_context = load_user_context(submitted_code)
 
     function = local_context.get(required_function)
     if not callable(function):

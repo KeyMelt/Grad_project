@@ -10,7 +10,11 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
+  flutter_bloc: ^8.1.6
+  flutter_math_fork: ^0.7.4
   http: ^1.2.2
+  shared_preferences: ^2.3.2
+  video_player: ^2.9.2
 
 dev_dependencies:
   flutter_test:
@@ -19,3 +23,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/videos/
