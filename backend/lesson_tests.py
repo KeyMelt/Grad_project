@@ -20,8 +20,12 @@ def run_lesson_tests(
         results = _test_policy_evaluation(lesson_function)
     elif lesson_id == "dp_value_iteration":
         results = _test_value_iteration(lesson_function)
+    elif lesson_id == "dp_policy_improvement":
+        results = _test_policy_improvement(lesson_function)
     elif lesson_id == "mc_first_visit":
         results = _test_mc_first_visit(lesson_function)
+    elif lesson_id == "td_sarsa":
+        results = _test_sarsa(lesson_function)
     elif lesson_id == "td_q_learning":
         results = _test_q_learning(lesson_function)
     else:
@@ -58,6 +62,35 @@ def _test_q_learning(lesson_function: Callable[..., Any]) -> list[LessonTestCase
             name="q_learning_update_rule",
             passed=passed,
             message="Updates the selected Q-value using the one-step TD target.",
+            expected=f"Q[0][1] = {expected}",
+            actual=f"Q[0][1] = {round(updated_value, 6)}",
+        ),
+    ]
+
+
+def _test_sarsa(lesson_function: Callable[..., Any]) -> list[LessonTestCaseResult]:
+    q_table = [
+        [0.0, 0.0],
+        [4.0, 1.0],
+    ]
+    lesson_function(
+        q_table,
+        0,
+        1,
+        2.0,
+        1,
+        0,
+        0.5,
+        0.5,
+    )
+    updated_value = q_table[0][1]
+    expected = 2.0
+    passed = math.isclose(updated_value, expected, rel_tol=1e-6, abs_tol=1e-6)
+    return [
+        LessonTestCaseResult(
+            name="sarsa_update_rule",
+            passed=passed,
+            message="Updates the selected Q-value using the sampled next action in the TD target.",
             expected=f"Q[0][1] = {expected}",
             actual=f"Q[0][1] = {round(updated_value, 6)}",
         ),
@@ -147,5 +180,43 @@ def _test_value_iteration(lesson_function: Callable[..., Any]) -> list[LessonTes
             message="Computes the optimal Bellman backup for a two-action toy environment.",
             expected="V[0] ~= 1.0 and V[1] = 0.0",
             actual=f"V[0] = {round(values[0], 6)} and V[1] = {round(values[1], 6)}",
+        ),
+    ]
+
+
+def _test_policy_improvement(lesson_function: Callable[..., Any]) -> list[LessonTestCaseResult]:
+    class _ActionSpace:
+        n = 2
+
+    class _ToyEnv:
+        action_space = _ActionSpace()
+        P = {
+            0: {
+                0: [(1.0, 0, 1.0, False)],
+                1: [(1.0, 1, 0.0, False)],
+            },
+            1: {
+                0: [(1.0, 1, 0.0, True)],
+                1: [(1.0, 1, 0.0, True)],
+            },
+        }
+
+    values = [0.0, 4.0]
+    policy = lesson_function(values, _ToyEnv(), 0.9)
+    state_zero_row = policy[0]
+    row_sum = sum(state_zero_row)
+    passed = (
+        len(state_zero_row) == 2
+        and math.isclose(state_zero_row[0], 0.0, rel_tol=1e-6, abs_tol=1e-6)
+        and math.isclose(state_zero_row[1], 1.0, rel_tol=1e-6, abs_tol=1e-6)
+        and math.isclose(row_sum, 1.0, rel_tol=1e-6, abs_tol=1e-6)
+    )
+    return [
+        LessonTestCaseResult(
+            name="policy_improvement_greedy_action",
+            passed=passed,
+            message="Builds a greedy one-hot policy from action-value backups.",
+            expected="policy[0] = [0.0, 1.0]",
+            actual=f"policy[0] = {[round(value, 6) for value in state_zero_row]}",
         ),
     ]

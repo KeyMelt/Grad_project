@@ -9,3 +9,6 @@ requests
 sqlmodel
 openpyxl
 psycopg[binary]
+firebase-admin
+pytest-cov
+websockets

@@ -69,6 +69,35 @@ def value_iteration(V, env, gamma=DISCOUNT_FACTOR, theta=1e-8):
     return V
 """.strip(),
     ),
+    "dp_policy_improvement": LessonDefinition(
+        id="dp_policy_improvement",
+        title="Dynamic Programming: Policy Improvement",
+        description="Turn FrozenLake state values into a greedy policy with one Bellman-style backup per action.",
+        category="Dynamic Programming",
+        required_function="policy_improvement",
+        environment_name="FrozenLake",
+        starter_code="""
+DISCOUNT_FACTOR = 0.95
+
+def policy_improvement(V, env, gamma=DISCOUNT_FACTOR):
+    action_count = env.action_space.n
+    policy = [[0.0 for _ in range(action_count)] for _ in range(len(V))]
+
+    for state in range(len(V)):
+        action_values = []
+        for action in range(action_count):
+            action_value = 0.0
+            for transition_prob, next_state, reward, done in env.P[state][action]:
+                future = 0.0 if done else V[next_state]
+                action_value += transition_prob * (reward + gamma * future)
+            action_values.append(action_value)
+
+        best_action = max(range(action_count), key=lambda index: action_values[index])
+        policy[state][best_action] = 1.0
+
+    return policy
+""".strip(),
+    ),
     "mc_first_visit": LessonDefinition(
         id="mc_first_visit",
         title="Monte Carlo: First-Visit Prediction",
@@ -112,6 +141,35 @@ EPISODE_COUNT = 6
 def q_learning_update(Q, state, action, reward, next_state, alpha=LEARNING_RATE, gamma=DISCOUNT_FACTOR):
     best_next_value = max(Q[next_state])
     td_target = reward + gamma * best_next_value
+    Q[state][action] = Q[state][action] + alpha * (td_target - Q[state][action])
+    return Q
+""".strip(),
+    ),
+    "td_sarsa": LessonDefinition(
+        id="td_sarsa",
+        title="Temporal Difference: SARSA",
+        description="Update FrozenLake action values with on-policy TD targets that use the next sampled action.",
+        category="Temporal Difference",
+        required_function="sarsa_update",
+        environment_name="FrozenLake",
+        starter_code="""
+LEARNING_RATE = 0.10
+DISCOUNT_FACTOR = 0.95
+EXPLORATION_RATE = 0.20
+EPISODE_COUNT = 6
+
+def sarsa_update(
+    Q,
+    state,
+    action,
+    reward,
+    next_state,
+    next_action,
+    alpha=LEARNING_RATE,
+    gamma=DISCOUNT_FACTOR,
+):
+    bootstrap = 0.0 if next_action is None else Q[next_state][next_action]
+    td_target = reward + gamma * bootstrap
     Q[state][action] = Q[state][action] + alpha * (td_target - Q[state][action])
     return Q
 """.strip(),

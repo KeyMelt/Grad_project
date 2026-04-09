@@ -109,12 +109,61 @@ class RLEngine:
             self._run_policy_evaluation(lesson_function, hyperparameters)
         elif lesson_id == "dp_value_iteration":
             self._run_value_iteration(lesson_function, hyperparameters)
+        elif lesson_id == "dp_policy_improvement":
+            self._run_policy_improvement(lesson_function, hyperparameters)
         elif lesson_id == "mc_first_visit":
             self._run_mc_first_visit(lesson_function, num_episodes, hyperparameters)
+        elif lesson_id == "td_sarsa":
+            self._run_sarsa(lesson_function, num_episodes, hyperparameters)
         elif lesson_id == "td_q_learning":
             self._run_q_learning(lesson_function, num_episodes, hyperparameters)
         else:
             raise ValueError(f"Lesson '{lesson_id}' is not implemented.")
+
+    def _build_policy_improvement_values(self) -> list[float]:
+        desc = getattr(self.adapter.env.unwrapped, "desc", None)
+        state_count = self.adapter.env.observation_space.n
+        if desc is None:
+            return [0.0 for _ in range(state_count)]
+
+        row_count = len(desc)
+        column_count = len(desc[0])
+        goal_row, goal_col = row_count - 1, column_count - 1
+        values: list[float] = []
+
+        for state in range(state_count):
+            row, col = divmod(state, column_count)
+            tile = desc[row][col].decode("utf-8")
+            if tile == "G":
+                values.append(1.0)
+                continue
+            if tile == "H":
+                values.append(0.0)
+                continue
+
+            distance = abs(goal_row - row) + abs(goal_col - col)
+            shaped_value = max(0.05, 1.0 - 0.15 * distance)
+            if tile == "S":
+                shaped_value = max(shaped_value, 0.2)
+            values.append(round(shaped_value, 4))
+
+        return values
+
+    def _choose_epsilon_greedy_action(self, q_row: list[float], epsilon: float) -> int:
+        rng = getattr(self.adapter.env.unwrapped, "np_random", None)
+        sample_threshold = float(rng.random()) if rng is not None else 1.0
+        if sample_threshold < epsilon:
+            return int(self.adapter.env.action_space.sample())
+
+        best_value = max(q_row)
+        best_actions = [
+            action for action, value in enumerate(q_row) if value == best_value
+        ]
+        if len(best_actions) == 1:
+            return best_actions[0]
+        if rng is not None:
+            return best_actions[int(rng.integers(len(best_actions)))]
+        return best_actions[0]
 
     def _run_policy_evaluation(self, lesson_function, hyperparameters: Dict[str, float]):
         state_count = self.adapter.env.observation_space.n
@@ -217,6 +266,79 @@ class RLEngine:
                     ],
                     "updated_values": {
                         f"V({state})": round(values[state], 4),
+                        "backup": round(best_value, 4),
+                    },
+                }
+            )
+
+        self.logger.end_episode()
+
+    def _run_policy_improvement(self, lesson_function, hyperparameters: Dict[str, float]):
+        state_count = self.adapter.env.observation_space.n
+        values = self._build_policy_improvement_values()
+        policy = lesson_function(
+            values,
+            self.adapter.env.unwrapped,
+            hyperparameters["gamma"],
+        )
+        if policy is None:
+            raise ValueError("policy_improvement must return a policy table.")
+
+        self.adapter.reset(seed=13)
+
+        for state in range(state_count):
+            action_values = []
+            for action in range(self.adapter.env.action_space.n):
+                transitions = self.adapter.transition_details(state, action)
+                action_value = 0.0
+                for transition in transitions:
+                    future = 0.0 if transition["done"] else values[transition["next_state"]]
+                    action_value += transition["probability"] * (
+                        transition["reward"] + hyperparameters["gamma"] * future
+                    )
+                action_values.append((action, action_value))
+
+            best_action, best_value = max(action_values, key=lambda item: item[1])
+            policy_row = policy[state] if state < len(policy) else []
+            selected_action = (
+                max(range(len(policy_row)), key=lambda index: policy_row[index])
+                if policy_row
+                else best_action
+            )
+            frame_path = self.adapter.capture_frame_png(
+                state=state,
+                prefix="policy_improvement",
+            )
+            self.logger.log_step(
+                {
+                    "state": state,
+                    "action": selected_action,
+                    "reward": 0.0,
+                    "next_state": state,
+                    "transition_probability": 1.0,
+                    "frame_path": frame_path,
+                    "agent_caption": (
+                        f"Policy improvement backs up state {state} and chooses "
+                        f"{self.adapter.action_label(selected_action)} as the greedy action."
+                    ),
+                    "code_title": "Code Trace",
+                    "code_lines": [
+                        "for action in range(env.action_space.n):",
+                        "    action_value += transition_prob * (reward + gamma * future)",
+                        "policy[state][best_action] = 1.0",
+                    ],
+                    "math_title": "Greedy Policy Improvement",
+                    "math_equation": r"\pi'(s)=\arg\max_a \sum_{s',r} p(s',r|s,a)\left[r+\gamma V(s')\right]",
+                    "math_lines": [
+                        "Use the current value table to score each available action.",
+                        *[
+                            f"a={action} -> {round(value, 3)}"
+                            for action, value in action_values
+                        ],
+                        f"greedy action = {self.adapter.action_label(selected_action)}",
+                    ],
+                    "updated_values": {
+                        f"pi({state})": self.adapter.action_label(selected_action),
                         "backup": round(best_value, 4),
                     },
                 }
@@ -364,6 +486,82 @@ class RLEngine:
                     }
                 )
                 state = next_state
+                done = terminated or truncated
+
+            self.logger.end_episode()
+
+    def _run_sarsa(self, lesson_function, num_episodes: int, hyperparameters: Dict[str, float]):
+        state_count = self.adapter.env.observation_space.n
+        action_count = self.adapter.env.action_space.n
+        q_table = [[0.0 for _ in range(action_count)] for _ in range(state_count)]
+
+        for episode_index in range(num_episodes):
+            state, _ = self.adapter.reset(seed=episode_index)
+            action = self._choose_epsilon_greedy_action(
+                q_table[state],
+                hyperparameters["epsilon"],
+            )
+            done = False
+
+            while not done:
+                next_state, reward, terminated, truncated, info = self.adapter.step(action)
+                next_action = None
+                if not (terminated or truncated):
+                    next_action = self._choose_epsilon_greedy_action(
+                        q_table[next_state],
+                        hyperparameters["epsilon"],
+                    )
+                old_value = q_table[state][action]
+                bootstrap = 0.0 if next_action is None else q_table[next_state][next_action]
+                td_target = reward + hyperparameters["gamma"] * bootstrap
+                lesson_function(
+                    q_table,
+                    state,
+                    action,
+                    reward,
+                    next_state,
+                    next_action,
+                    hyperparameters["alpha"],
+                    hyperparameters["gamma"],
+                )
+                frame_path = self.adapter.capture_frame_png(prefix="sarsa")
+                sampled_next_action = (
+                    "terminal"
+                    if next_action is None
+                    else self.adapter.action_label(next_action)
+                )
+                self.logger.log_step(
+                    {
+                        "state": state,
+                        "action": action,
+                        "reward": reward,
+                        "next_state": next_state,
+                        "transition_probability": round(float(info.get("p", 1.0)), 4),
+                        "frame_path": frame_path,
+                        "agent_caption": (
+                            f"SARSA uses the sampled next action {sampled_next_action} "
+                            f"after moving from state {state} to {next_state}."
+                        ),
+                        "code_title": "Code Trace",
+                        "code_lines": [
+                            "next_action = behavior_policy(next_state)",
+                            "td_target = reward + gamma * Q[next_state][next_action]",
+                            "Q[state][action] = Q[state][action] + alpha * (td_target - Q[state][action])",
+                        ],
+                        "math_title": "TD / SARSA",
+                        "math_equation": r"Q(s,a)\leftarrow Q(s,a)+\alpha\left[r+\gamma Q(s',a')-Q(s,a)\right]",
+                        "math_lines": [
+                            f"Sampled transition probability p = {round(float(info.get('p', 1.0)), 4)}.",
+                            f"Next action a' = {sampled_next_action}.",
+                            f"TD target = {round(td_target, 4)} updates Q({state}, {action}) from {round(old_value, 4)} to {round(q_table[state][action], 4)}.",
+                        ],
+                        "updated_values": {
+                            f"Q({state}, {action})": round(q_table[state][action], 4)
+                        },
+                    }
+                )
+                state = next_state
+                action = next_action if next_action is not None else 0
                 done = terminated or truncated
 
             self.logger.end_episode()

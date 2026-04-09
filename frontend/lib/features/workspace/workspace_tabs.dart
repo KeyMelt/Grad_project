@@ -10,8 +10,13 @@ import 'video_player.dart';
 class WorkspaceTabs extends StatelessWidget {
   final LessonDefinition lesson;
   final String code;
-  final ValueChanged<String> onCodeChanged;
-  final VoidCallback onRun;
+  final String? workspaceSessionId;
+  final bool workspaceReady;
+  final WorkspaceConnectionStatus editorConnectionStatus;
+  final WorkspaceConnectionStatus consoleConnectionStatus;
+  final String? editorShellUrl;
+  final int scriptVersion;
+  final VoidCallback onSubmit;
   final VoidCallback onStop;
   final VoidCallback onReset;
   final String statusMessage;
@@ -29,8 +34,13 @@ class WorkspaceTabs extends StatelessWidget {
     super.key,
     required this.lesson,
     required this.code,
-    required this.onCodeChanged,
-    required this.onRun,
+    required this.workspaceSessionId,
+    required this.workspaceReady,
+    required this.editorConnectionStatus,
+    required this.consoleConnectionStatus,
+    required this.editorShellUrl,
+    required this.scriptVersion,
+    required this.onSubmit,
     required this.onStop,
     required this.onReset,
     required this.statusMessage,
@@ -84,10 +94,15 @@ class WorkspaceTabs extends StatelessWidget {
                   _CodeExercisePane(
                     lesson: lesson,
                     code: code,
+                    workspaceSessionId: workspaceSessionId,
+                    workspaceReady: workspaceReady,
+                    editorConnectionStatus: editorConnectionStatus,
+                    consoleConnectionStatus: consoleConnectionStatus,
+                    editorShellUrl: editorShellUrl,
+                    scriptVersion: scriptVersion,
                     statusMessage: statusMessage,
                     runStatusLabel: runStatusLabel,
-                    onCodeChanged: onCodeChanged,
-                    onRun: onRun,
+                    onSubmit: onSubmit,
                     onStop: onStop,
                     onReset: onReset,
                   ),
@@ -215,20 +230,30 @@ class _RunStatusVisual {
 class _CodeExercisePane extends StatelessWidget {
   final LessonDefinition lesson;
   final String code;
+  final String? workspaceSessionId;
+  final bool workspaceReady;
+  final WorkspaceConnectionStatus editorConnectionStatus;
+  final WorkspaceConnectionStatus consoleConnectionStatus;
+  final String? editorShellUrl;
+  final int scriptVersion;
   final String statusMessage;
   final String runStatusLabel;
-  final ValueChanged<String> onCodeChanged;
-  final VoidCallback onRun;
+  final VoidCallback onSubmit;
   final VoidCallback onStop;
   final VoidCallback onReset;
 
   const _CodeExercisePane({
     required this.lesson,
     required this.code,
+    required this.workspaceSessionId,
+    required this.workspaceReady,
+    required this.editorConnectionStatus,
+    required this.consoleConnectionStatus,
+    required this.editorShellUrl,
+    required this.scriptVersion,
     required this.statusMessage,
     required this.runStatusLabel,
-    required this.onCodeChanged,
-    required this.onRun,
+    required this.onSubmit,
     required this.onStop,
     required this.onReset,
   });
@@ -249,10 +274,15 @@ class _CodeExercisePane extends StatelessWidget {
                 child: CodeEditorTab(
                   lesson: lesson,
                   code: code,
+                  workspaceSessionId: workspaceSessionId,
+                  workspaceReady: workspaceReady,
+                  editorConnectionStatus: editorConnectionStatus,
+                  consoleConnectionStatus: consoleConnectionStatus,
+                  editorShellUrl: editorShellUrl,
                   statusMessage: statusMessage,
                   runStatusLabel: runStatusLabel,
-                  onChanged: onCodeChanged,
-                  onRun: onRun,
+                  scriptVersion: scriptVersion,
+                  onSubmit: onSubmit,
                   onStop: onStop,
                   onReset: onReset,
                 ),
@@ -273,10 +303,15 @@ class _CodeExercisePane extends StatelessWidget {
               child: CodeEditorTab(
                 lesson: lesson,
                 code: code,
+                workspaceSessionId: workspaceSessionId,
+                workspaceReady: workspaceReady,
+                editorConnectionStatus: editorConnectionStatus,
+                consoleConnectionStatus: consoleConnectionStatus,
+                editorShellUrl: editorShellUrl,
                 statusMessage: statusMessage,
                 runStatusLabel: runStatusLabel,
-                onChanged: onCodeChanged,
-                onRun: onRun,
+                scriptVersion: scriptVersion,
+                onSubmit: onSubmit,
                 onStop: onStop,
                 onReset: onReset,
               ),

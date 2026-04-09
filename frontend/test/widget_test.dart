@@ -9,11 +9,15 @@ class FakeBackendApi extends BackendApi {
   LearnerProfile? _student;
   LearnerProgress _progress = const LearnerProgress.empty();
   QuizPhase? _latestPhase;
+  String _workspaceContent = 'print("workspace")\n';
 
   @override
   Future<LearnerDashboard> signIn({
     required String displayName,
+    required String password,
+    String? firebaseIdToken,
   }) async {
+    if (firebaseIdToken != null) {}
     _student = LearnerProfile(
       id: 'student-123',
       displayName: displayName,
@@ -205,6 +209,101 @@ class FakeBackendApi extends BackendApi {
       bytes: <int>[1, 2, 3],
     );
   }
+
+  @override
+  Future<WorkspaceSessionData> createWorkspaceSession({
+    required String lessonId,
+  }) async {
+    return WorkspaceSessionData(
+      sessionId: 'workspace-$lessonId',
+      lessonId: lessonId,
+      visibleFiles: const ['script.py'],
+      consoleReady: true,
+    );
+  }
+
+  @override
+  Future<WorkspaceHealthData> getWorkspaceHealth() async {
+    return const WorkspaceHealthData(
+      ready: true,
+      workerReachable: true,
+      dockerCliAvailable: true,
+      dockerDaemonReachable: true,
+      runtimeMode: 'docker',
+      message: 'Workspace runtime is ready.',
+      issues: [],
+    );
+  }
+
+  @override
+  Future<WorkspaceSessionData> getWorkspaceSession(String sessionId) async {
+    return WorkspaceSessionData(
+      sessionId: sessionId,
+      lessonId: 'dp_policy_eval',
+      visibleFiles: const ['script.py'],
+      consoleReady: true,
+    );
+  }
+
+  @override
+  Future<WorkspaceFileSnapshot> getWorkspaceFile({
+    required String sessionId,
+    String path = 'script.py',
+  }) async {
+    return WorkspaceFileSnapshot(
+      path: path,
+      content: _workspaceContent,
+      version: 1,
+      diagnostics: const [],
+    );
+  }
+
+  @override
+  Future<WorkspaceFileSnapshot> updateWorkspaceFile({
+    required String sessionId,
+    String path = 'script.py',
+    required String content,
+  }) async {
+    _workspaceContent = content;
+    return WorkspaceFileSnapshot(
+      path: path,
+      content: content,
+      version: 2,
+      diagnostics: const [],
+    );
+  }
+
+  @override
+  Future<WorkspaceRunData> runWorkspaceScript({
+    required String sessionId,
+  }) async {
+    return const WorkspaceRunData(
+      runId: 'run-123',
+      status: 'running',
+      exitCode: null,
+      startedAt: '2026-01-01T00:00:00Z',
+      finishedAt: null,
+    );
+  }
+
+  @override
+  Future<WorkspaceRunData> getWorkspaceRun({
+    required String sessionId,
+    required String runId,
+  }) async {
+    return const WorkspaceRunData(
+      runId: 'run-123',
+      status: 'completed',
+      exitCode: 0,
+      startedAt: '2026-01-01T00:00:00Z',
+      finishedAt: '2026-01-01T00:00:02Z',
+    );
+  }
+
+  @override
+  String workspaceEditorShellUrl(String sessionId) {
+    return 'http://127.0.0.1:8000/workspace/editor-shell?session_id=$sessionId';
+  }
 }
 
 void main() {
@@ -224,20 +323,23 @@ void main() {
       ),
     );
 
-    expect(find.text('RL Learning Platform'), findsOneWidget);
+    expect(find.text('RL Learning Platform'), findsNothing);
     expect(find.text('Student Sign In'), findsOneWidget);
 
-    await tester.enterText(
-      find.byType(TextField),
-      'Maya Hassan',
-    );
+    await tester.enterText(find.byType(TextField).at(0), 'Maya Hassan');
+    await tester.enterText(find.byType(TextField).at(1), 'Password123!');
     await tester.ensureVisible(find.text('Sign In'));
     await tester.tap(find.text('Sign In'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Welcome back, Maya Hassan'), findsOneWidget);
     expect(find.text('Lessons completed'), findsOneWidget);
-    expect(find.text('Flashcards'), findsOneWidget);
+    expect(find.text('Study Flashcards'), findsOneWidget);
+
+    await tester.tap(find.text('Sign Out'));
+    await tester.pumpAndSettle();
+    expect(find.text('Student Sign In'), findsOneWidget);
+    expect(find.textContaining('Signed out.'), findsOneWidget);
 
     await cubit.close();
   });
@@ -258,7 +360,8 @@ void main() {
       ),
     );
 
-    await tester.enterText(find.byType(TextField), 'Maya Hassan');
+    await tester.enterText(find.byType(TextField).at(0), 'Maya Hassan');
+    await tester.enterText(find.byType(TextField).at(1), 'Password123!');
     await tester.ensureVisible(find.text('Sign In'));
     await tester.tap(find.text('Sign In'));
     await tester.pumpAndSettle();
@@ -270,9 +373,9 @@ void main() {
 
     await tester.tap(find.text('Code'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Exercise'), findsWidgets);
+    expect(find.text('Implement iterative policy evaluation'), findsWidgets);
 
-    await tester.tap(find.text('Run').last);
+    await tester.tap(find.text('Submit'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Replay'));
@@ -306,6 +409,22 @@ void main() {
 
     expect(find.text('1.000'), findsWidgets);
     expect(find.text('100.0%'), findsWidgets);
+
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Study Flashcards'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tap any card to flip between question and answer.'),
+        findsOneWidget);
+    expect(find.text('What is Bellman Expectation?'), findsOneWidget);
+    await tester.tap(find.text('What is Bellman Expectation?'));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining(
+        'Policy evaluation updates each state with an expectation',
+      ),
+      findsOneWidget,
+    );
 
     await cubit.close();
   });

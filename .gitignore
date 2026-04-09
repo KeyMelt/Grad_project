@@ -32,6 +32,22 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+coverage.xml
+.coverage
+
+# Generated media and runtime artifacts
+frontend/assets/videos/*.mp4
+backend/visualization/_concept_media/
+backend/visualization/animations/
+backend/data/
+output/runtime_logs/
+
+# Local-only research and scratch directories
+RL_manim/
+VidDemo/
+_tmp_grad1/
+media/
+tmp/
 
 # Symbolication related
 app.*.symbols

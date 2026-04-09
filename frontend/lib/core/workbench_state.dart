@@ -8,7 +8,7 @@ import 'export_file_saver.dart';
 
 enum RunStatus { idle, running, success, failed, stopped }
 
-enum AppSection { home, workspace, quiz, admin }
+enum AppSection { home, workspace, flashcards, quiz, admin }
 
 @immutable
 class StudyFlashcard {
@@ -183,7 +183,7 @@ def policy_evaluation(V, policy, env, gamma=DISCOUNT_FACTOR, theta=1e-8):
 ''',
         conceptVideo: LessonConceptVideo(
           assetPath: 'assets/videos/dp_policy_eval_concept.mp4',
-          durationLabel: '00:14',
+          durationLabel: '00:11',
           summary:
               'This lesson video walks through one Bellman expectation sweep with the FrozenLake grid, the update loop, and the numerical backup shown together.',
           highlights: [
@@ -240,7 +240,7 @@ def value_iteration(V, env, gamma=DISCOUNT_FACTOR, theta=1e-8):
 ''',
         conceptVideo: LessonConceptVideo(
           assetPath: 'assets/videos/dp_value_iteration_concept.mp4',
-          durationLabel: '00:15',
+          durationLabel: '00:07',
           summary:
               'The concept video contrasts action backups for the same state so the learner can see why value iteration keeps only the best action value.',
           highlights: [
@@ -266,6 +266,63 @@ def value_iteration(V, env, gamma=DISCOUNT_FACTOR, theta=1e-8):
           ],
           codeTip:
               'There is no slider for gamma anymore. Change DISCOUNT_FACTOR directly in the code to alter the backups.',
+        ),
+      ),
+      LessonDefinition(
+        id: 'dp_policy_improvement',
+        title: 'Policy Improvement',
+        description:
+            'Turn a state-value table into a greedy FrozenLake policy by backing up each available action.',
+        category: 'Dynamic Programming',
+        starterCode: '''
+DISCOUNT_FACTOR = 0.95
+
+def policy_improvement(V, env, gamma=DISCOUNT_FACTOR):
+    action_count = env.action_space.n
+    policy = [[0.0 for _ in range(action_count)] for _ in range(len(V))]
+
+    for state in range(len(V)):
+        action_values = []
+        for action in range(action_count):
+            action_value = 0.0
+            for transition_prob, next_state, reward, done in env.P[state][action]:
+                future = 0.0 if done else V[next_state]
+                action_value += transition_prob * (reward + gamma * future)
+            action_values.append(action_value)
+
+        best_action = max(range(action_count), key=lambda index: action_values[index])
+        policy[state][best_action] = 1.0
+
+    return policy
+''',
+        conceptVideo: LessonConceptVideo(
+          assetPath: 'assets/videos/dp_policy_improvement_concept.mp4',
+          durationLabel: '00:10',
+          summary:
+              'This lesson focuses on one greedy improvement step: compare every action backup, then place all policy mass on the best action.',
+          highlights: [
+            'How the current value table scores each action.',
+            'Why policy improvement uses argmax instead of an expectation.',
+            'How the chosen action becomes a one-hot policy row.',
+          ],
+        ),
+        exercise: LessonExerciseBrief(
+          title: 'Implement greedy policy improvement',
+          overview:
+              'Build a greedy policy row for each state by evaluating every action backup against the current value table.',
+          tasks: [
+            'Loop through all actions available in the current state.',
+            'Compute each action backup from transition probabilities, rewards, and discounted future values.',
+            'Choose the best action and write a one-hot policy row.',
+            'Adjust DISCOUNT_FACTOR in code when you want a different improvement step.',
+          ],
+          successCriteria: [
+            'The returned policy selects the greedy action in the sample test.',
+            'Each policy row remains a valid one-hot distribution.',
+            'The generated replay can tie the chosen action to the backup values that justified it.',
+          ],
+          codeTip:
+              'Keep the output as a policy table. Each row should contain one 1.0 entry for the greedy action and 0.0 elsewhere.',
         ),
       ),
     ],
@@ -300,7 +357,7 @@ def mc_first_visit_prediction(episode, V, returns, gamma=DISCOUNT_FACTOR):
 ''',
         conceptVideo: LessonConceptVideo(
           assetPath: 'assets/videos/mc_first_visit_concept.mp4',
-          durationLabel: '00:16',
+          durationLabel: '00:06',
           summary:
               'This lesson video follows one sampled episode from start to finish, then walks backward through the return calculation for the first visit of each state.',
           highlights: [
@@ -334,6 +391,63 @@ def mc_first_visit_prediction(episode, V, returns, gamma=DISCOUNT_FACTOR):
     title: 'Temporal Difference',
     lessons: [
       LessonDefinition(
+        id: 'td_sarsa',
+        title: 'SARSA',
+        description:
+            'Update tabular action values with an on-policy TD target that uses the next sampled action.',
+        category: 'Temporal Difference',
+        starterCode: '''
+LEARNING_RATE = 0.10
+DISCOUNT_FACTOR = 0.95
+EXPLORATION_RATE = 0.20
+EPISODE_COUNT = 6
+
+def sarsa_update(
+    Q,
+    state,
+    action,
+    reward,
+    next_state,
+    next_action,
+    alpha=LEARNING_RATE,
+    gamma=DISCOUNT_FACTOR,
+):
+    bootstrap = 0.0 if next_action is None else Q[next_state][next_action]
+    td_target = reward + gamma * bootstrap
+    Q[state][action] = Q[state][action] + alpha * (td_target - Q[state][action])
+    return Q
+''',
+        conceptVideo: LessonConceptVideo(
+          assetPath: 'assets/videos/td_sarsa_concept.mp4',
+          durationLabel: '00:11',
+          summary:
+              'The lesson walkthrough keeps the sampled next action on screen so the learner can see why SARSA is an on-policy update.',
+          highlights: [
+            'How the sampled next action enters the TD target.',
+            'Why SARSA follows the same behaviour policy during learning.',
+            'How alpha scales the change to one Q-value.',
+          ],
+        ),
+        exercise: LessonExerciseBrief(
+          title: 'Implement the SARSA update rule',
+          overview:
+              'Complete the on-policy TD update so the bootstrap term comes from the next sampled action rather than from a max over the next-state row.',
+          tasks: [
+            'Accept the sampled next action as part of the function input.',
+            'Use a zero bootstrap when the transition is terminal.',
+            'Build the TD target from reward plus the discounted next-action value.',
+            'Change LEARNING_RATE, DISCOUNT_FACTOR, EXPLORATION_RATE, and EPISODE_COUNT directly in code when you want a different run.',
+          ],
+          successCriteria: [
+            'The update passes the sample SARSA test case.',
+            'The replay identifies the sampled next action used in the bootstrap.',
+            'The function returns the updated Q-table without changing the required signature.',
+          ],
+          codeTip:
+              'The key difference from Q-learning is the bootstrap term. Use the provided next_action rather than taking a max over the next-state row.',
+        ),
+      ),
+      LessonDefinition(
         id: 'td_q_learning',
         title: 'Q-Learning',
         description:
@@ -353,7 +467,7 @@ def q_learning_update(Q, state, action, reward, next_state, alpha=LEARNING_RATE,
 ''',
         conceptVideo: LessonConceptVideo(
           assetPath: 'assets/videos/td_q_learning_concept.mp4',
-          durationLabel: '00:18',
+          durationLabel: '00:07',
           summary:
               'The pre-rendered explainer synchronizes the agent move, the highlighted update line, and the numeric TD target so the learner can see exactly how one Q-value changes.',
           highlights: [
@@ -399,10 +513,22 @@ const List<StudyFlashcard> _studyFlashcards = [
         'Value iteration selects the largest action backup instead of averaging under a fixed policy.',
   ),
   StudyFlashcard(
+    term: 'Policy Improvement',
+    category: 'Dynamic Programming',
+    explanation:
+        'Policy improvement chooses the greedy action for each state using the current value table.',
+  ),
+  StudyFlashcard(
     term: 'First-Visit Return',
     category: 'Monte Carlo Methods',
     explanation:
         'First-visit Monte Carlo updates a state only once per episode, using the full discounted return from its first occurrence.',
+  ),
+  StudyFlashcard(
+    term: 'SARSA',
+    category: 'Temporal Difference',
+    explanation:
+        'SARSA is on-policy because its TD target uses the next action that the behaviour policy actually sampled.',
   ),
   StudyFlashcard(
     term: 'TD Target',
@@ -442,6 +568,13 @@ class RLWorkbenchState {
   final QuizAttemptSummary? lastQuizSummary;
   final LessonDefinition selectedLesson;
   final String code;
+  final String? workspaceSessionId;
+  final bool workspaceReady;
+  final WorkspaceConnectionStatus editorConnectionStatus;
+  final WorkspaceConnectionStatus consoleConnectionStatus;
+  final String? activeRunId;
+  final String runOutputBuffer;
+  final int scriptVersion;
   final RunStatus runStatus;
   final int currentEpisode;
   final int currentStep;
@@ -472,6 +605,13 @@ class RLWorkbenchState {
     required this.lastQuizSummary,
     required this.selectedLesson,
     required this.code,
+    required this.workspaceSessionId,
+    required this.workspaceReady,
+    required this.editorConnectionStatus,
+    required this.consoleConnectionStatus,
+    required this.activeRunId,
+    required this.runOutputBuffer,
+    required this.scriptVersion,
     required this.runStatus,
     required this.currentEpisode,
     required this.currentStep,
@@ -506,6 +646,13 @@ class RLWorkbenchState {
       lastQuizSummary: null,
       selectedLesson: selectedLesson,
       code: selectedLesson.starterCode,
+      workspaceSessionId: null,
+      workspaceReady: false,
+      editorConnectionStatus: WorkspaceConnectionStatus.disconnected,
+      consoleConnectionStatus: WorkspaceConnectionStatus.disconnected,
+      activeRunId: null,
+      runOutputBuffer: '',
+      scriptVersion: 1,
       runStatus: RunStatus.idle,
       currentEpisode: 0,
       currentStep: 0,
@@ -553,6 +700,13 @@ class RLWorkbenchState {
     Object? lastQuizSummary = _sentinel,
     LessonDefinition? selectedLesson,
     String? code,
+    Object? workspaceSessionId = _sentinel,
+    bool? workspaceReady,
+    WorkspaceConnectionStatus? editorConnectionStatus,
+    WorkspaceConnectionStatus? consoleConnectionStatus,
+    Object? activeRunId = _sentinel,
+    String? runOutputBuffer,
+    int? scriptVersion,
     RunStatus? runStatus,
     int? currentEpisode,
     int? currentStep,
@@ -589,6 +743,19 @@ class RLWorkbenchState {
           : lastQuizSummary as QuizAttemptSummary?,
       selectedLesson: selectedLesson ?? this.selectedLesson,
       code: code ?? this.code,
+      workspaceSessionId: identical(workspaceSessionId, _sentinel)
+          ? this.workspaceSessionId
+          : workspaceSessionId as String?,
+      workspaceReady: workspaceReady ?? this.workspaceReady,
+      editorConnectionStatus:
+          editorConnectionStatus ?? this.editorConnectionStatus,
+      consoleConnectionStatus:
+          consoleConnectionStatus ?? this.consoleConnectionStatus,
+      activeRunId: identical(activeRunId, _sentinel)
+          ? this.activeRunId
+          : activeRunId as String?,
+      runOutputBuffer: runOutputBuffer ?? this.runOutputBuffer,
+      scriptVersion: scriptVersion ?? this.scriptVersion,
       runStatus: runStatus ?? this.runStatus,
       currentEpisode: currentEpisode ?? this.currentEpisode,
       currentStep: currentStep ?? this.currentStep,
@@ -613,10 +780,18 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   RLWorkbenchCubit({
     BackendApi? api,
   })  : _api = api ?? HttpBackendApi(),
-        super(RLWorkbenchState.initial());
+        super(RLWorkbenchState.initial()) {
+    if (state.selectedLesson.backendEnabled) {
+      unawaited(
+          _attachWorkspaceSession(state.selectedLesson, announceStatus: false));
+    }
+  }
 
   final BackendApi _api;
   String? _activeTaskId;
+  String? _activeWorkspaceRunId;
+
+  BackendApi get api => _api;
 
   void navigateTo(AppSection section) {
     emit(state.copyWith(currentSection: section));
@@ -626,10 +801,14 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     emit(state.copyWith(sidebarVisible: !state.sidebarVisible));
   }
 
-  Future<void> signIn(String displayName) async {
+  Future<void> signIn(String displayName, String password) async {
     final normalizedName = displayName.trim();
     if (normalizedName.isEmpty) {
       emit(state.copyWith(homeMessage: 'Enter a student name to continue.'));
+      return;
+    }
+    if (password.trim().isEmpty) {
+      emit(state.copyWith(homeMessage: 'Enter your password to continue.'));
       return;
     }
 
@@ -639,7 +818,10 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     ));
 
     try {
-      final dashboard = await _api.signIn(displayName: normalizedName);
+      final dashboard = await _api.signIn(
+        displayName: normalizedName,
+        password: password,
+      );
       emit(
         state.copyWith(
           learner: dashboard.student,
@@ -661,6 +843,33 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         homeMessage: 'Backend unavailable. Start FastAPI and try again.',
       ));
     }
+  }
+
+  void signOut() {
+    _activeTaskId = null;
+    _activeWorkspaceRunId = null;
+    emit(
+      state.copyWith(
+        learner: null,
+        progress: const LearnerProgress.empty(),
+        activeQuiz: null,
+        quizAnswers: const {},
+        lastQuizSummary: null,
+        isQuizLoading: false,
+        currentSection: AppSection.home,
+        homeMessage:
+            'Signed out. Sign in to save quiz results and lesson progress.',
+        quizStatusMessage:
+            'Take a randomized pre-test before you begin the lessons.',
+        workspaceSessionId: null,
+        workspaceReady: false,
+        editorConnectionStatus: WorkspaceConnectionStatus.disconnected,
+        consoleConnectionStatus: WorkspaceConnectionStatus.disconnected,
+        activeRunId: null,
+        runOutputBuffer: '',
+        scriptVersion: 1,
+      ),
+    );
   }
 
   Future<void> refreshDashboard({bool quiet = false}) async {
@@ -692,11 +901,30 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   }
 
   void openLesson(LessonDefinition lesson) {
+    _activeTaskId = null;
+    _activeWorkspaceRunId = null;
+    final preserveWorkspace = state.selectedLesson.id == lesson.id &&
+        state.workspaceSessionId != null;
     emit(
       state.copyWith(
         selectedLesson: lesson,
-        code: lesson.starterCode,
+        code: preserveWorkspace ? state.code : lesson.starterCode,
         currentSection: AppSection.workspace,
+        workspaceSessionId: preserveWorkspace ? state.workspaceSessionId : null,
+        workspaceReady: preserveWorkspace ? state.workspaceReady : false,
+        editorConnectionStatus: preserveWorkspace
+            ? state.editorConnectionStatus
+            : lesson.backendEnabled
+                ? WorkspaceConnectionStatus.connecting
+                : WorkspaceConnectionStatus.disconnected,
+        consoleConnectionStatus: preserveWorkspace
+            ? state.consoleConnectionStatus
+            : lesson.backendEnabled
+                ? WorkspaceConnectionStatus.connecting
+                : WorkspaceConnectionStatus.disconnected,
+        activeRunId: null,
+        runOutputBuffer: '',
+        scriptVersion: preserveWorkspace ? state.scriptVersion : 1,
         runStatus: RunStatus.idle,
         currentEpisode: 0,
         currentStep: 0,
@@ -706,11 +934,16 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         videoPath: '',
         testResults: const [],
         stepTrace: const [],
-        statusMessage: lesson.backendEnabled
-            ? 'Ready to run ${lesson.title}.'
-            : '${lesson.title} is draft-only.',
+        statusMessage: preserveWorkspace
+            ? state.statusMessage
+            : lesson.backendEnabled
+                ? 'Ready to run ${lesson.title}.'
+                : '${lesson.title} is draft-only.',
       ),
     );
+    if (lesson.backendEnabled && !preserveWorkspace) {
+      unawaited(_attachWorkspaceSession(lesson));
+    }
   }
 
   void selectLesson(LessonDefinition lesson) {
@@ -723,6 +956,10 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
 
   void updateCode(String value) {
     emit(state.copyWith(code: value));
+    final sessionId = state.workspaceSessionId;
+    if (sessionId != null) {
+      unawaited(_syncWorkspaceCode(sessionId, value));
+    }
   }
 
   Future<void> startQuiz(QuizPhase phase) async {
@@ -855,6 +1092,66 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   }
 
   Future<void> run() async {
+    await runWorkspace();
+  }
+
+  Future<void> runWorkspace() async {
+    final sessionId = await _ensureWorkspaceSession();
+    if (sessionId == null) {
+      emit(
+        state.copyWith(
+          statusMessage: 'Workspace runtime is not ready for this lesson.',
+          editorConnectionStatus: WorkspaceConnectionStatus.failed,
+          consoleConnectionStatus: WorkspaceConnectionStatus.failed,
+        ),
+      );
+      return;
+    }
+
+    emit(
+      state.copyWith(
+        currentSection: AppSection.workspace,
+        statusMessage: 'Running script.py in the workspace...',
+        editorConnectionStatus: WorkspaceConnectionStatus.ready,
+        consoleConnectionStatus: WorkspaceConnectionStatus.ready,
+      ),
+    );
+
+    try {
+      final run = await _api.runWorkspaceScript(sessionId: sessionId);
+      _activeWorkspaceRunId = run.runId;
+      emit(
+        state.copyWith(
+          activeRunId: run.runId,
+          statusMessage: 'Workspace run ${run.runId} started.',
+        ),
+      );
+      await _pollWorkspaceRun(sessionId, run.runId);
+    } on BackendApiException catch (error) {
+      _activeWorkspaceRunId = null;
+      emit(
+        state.copyWith(
+          activeRunId: null,
+          statusMessage: error.message,
+          editorConnectionStatus: WorkspaceConnectionStatus.failed,
+          consoleConnectionStatus: WorkspaceConnectionStatus.failed,
+        ),
+      );
+    } catch (_) {
+      _activeWorkspaceRunId = null;
+      emit(
+        state.copyWith(
+          activeRunId: null,
+          statusMessage:
+              'Workspace runtime unavailable at $defaultBackendBaseUrl.',
+          editorConnectionStatus: WorkspaceConnectionStatus.failed,
+          consoleConnectionStatus: WorkspaceConnectionStatus.failed,
+        ),
+      );
+    }
+  }
+
+  Future<void> submit() async {
     if (!state.selectedLesson.backendEnabled) {
       emit(
         state.copyWith(
@@ -865,7 +1162,8 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       return;
     }
 
-    if (state.code.trim().isEmpty) {
+    final submissionCode = await _latestSubmissionCode();
+    if (submissionCode.trim().isEmpty) {
       emit(
         _resetProgressState(
           'Add code before running ${state.selectedLesson.title}.',
@@ -879,21 +1177,22 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         currentSection: AppSection.workspace,
         runStatus: RunStatus.running,
         currentEpisode: 0,
-        currentStep: _nonEmptyLineCount(state.code),
+        currentStep: _nonEmptyLineCount(submissionCode),
         totalReward: 0.0,
         averageReward: 0.0,
         bestEpisodeReward: 0.0,
         videoPath: '',
         testResults: const [],
         stepTrace: const [],
-        statusMessage: 'Running ${state.selectedLesson.title}...',
+        statusMessage:
+            'Submitting ${state.selectedLesson.title} for grading...',
       ),
     );
 
     try {
       final task = await _api.submitCode(
         lessonId: state.selectedLesson.id,
-        code: state.code,
+        code: submissionCode,
         studentId: state.learner?.id,
       );
       _activeTaskId = task.taskId;
@@ -940,24 +1239,31 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   }
 
   void stop() {
-    if (state.runStatus == RunStatus.idle) {
+    if (state.runStatus == RunStatus.idle && _activeWorkspaceRunId == null) {
       return;
     }
 
     _activeTaskId = null;
+    _activeWorkspaceRunId = null;
     emit(
       state.copyWith(
+        activeRunId: null,
         runStatus: RunStatus.stopped,
-        statusMessage: 'Stopped polling. Task may still run on backend.',
+        statusMessage:
+            'Stopped monitoring the current run. Background execution may continue.',
       ),
     );
   }
 
   void reset() {
     _activeTaskId = null;
+    _activeWorkspaceRunId = null;
     emit(
       state.copyWith(
         code: state.selectedLesson.starterCode,
+        activeRunId: null,
+        runOutputBuffer: '',
+        scriptVersion: 1,
         runStatus: RunStatus.idle,
         currentEpisode: 0,
         currentStep: 0,
@@ -971,6 +1277,11 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
             'Reset ${state.selectedLesson.title} to its starter template.',
       ),
     );
+    final sessionId = state.workspaceSessionId;
+    if (sessionId != null) {
+      unawaited(
+          _syncWorkspaceCode(sessionId, state.selectedLesson.starterCode));
+    }
   }
 
   void selectAdminLesson(String lessonId) {
@@ -1217,6 +1528,139 @@ def lesson_function(*args, **kwargs):
     }
   }
 
+  Future<String?> _ensureWorkspaceSession() async {
+    final existingSessionId = state.workspaceSessionId;
+    if (existingSessionId != null && state.workspaceReady) {
+      return existingSessionId;
+    }
+
+    if (!state.selectedLesson.backendEnabled) {
+      return null;
+    }
+
+    await _attachWorkspaceSession(state.selectedLesson);
+    return state.workspaceSessionId;
+  }
+
+  Future<void> _attachWorkspaceSession(
+    LessonDefinition lesson, {
+    bool announceStatus = true,
+  }) async {
+    final requestedLessonId = lesson.id;
+    final showProgress =
+        announceStatus || state.currentSection == AppSection.workspace;
+    emit(
+      state.copyWith(
+        workspaceReady: false,
+        editorConnectionStatus: WorkspaceConnectionStatus.connecting,
+        consoleConnectionStatus: WorkspaceConnectionStatus.connecting,
+        statusMessage: showProgress
+            ? 'Preparing workspace for ${lesson.title}...'
+            : state.statusMessage,
+      ),
+    );
+
+    try {
+      final session =
+          await _api.createWorkspaceSession(lessonId: requestedLessonId);
+      final file = await _api.getWorkspaceFile(sessionId: session.sessionId);
+      if (isClosed || state.selectedLesson.id != requestedLessonId) {
+        return;
+      }
+
+      emit(
+        state.copyWith(
+          code: file.content,
+          workspaceSessionId: session.sessionId,
+          workspaceReady: true,
+          editorConnectionStatus: WorkspaceConnectionStatus.ready,
+          consoleConnectionStatus: session.consoleReady
+              ? WorkspaceConnectionStatus.ready
+              : WorkspaceConnectionStatus.connecting,
+          scriptVersion: file.version,
+          statusMessage: showProgress
+              ? 'Workspace ready for ${lesson.title}.'
+              : state.statusMessage,
+        ),
+      );
+    } on BackendApiException catch (error) {
+      if (isClosed || state.selectedLesson.id != requestedLessonId) {
+        return;
+      }
+      emit(
+        state.copyWith(
+          workspaceSessionId: null,
+          workspaceReady: false,
+          editorConnectionStatus: WorkspaceConnectionStatus.failed,
+          consoleConnectionStatus: WorkspaceConnectionStatus.failed,
+          statusMessage: showProgress ? error.message : state.statusMessage,
+        ),
+      );
+    } catch (_) {
+      if (isClosed || state.selectedLesson.id != requestedLessonId) {
+        return;
+      }
+      emit(
+        state.copyWith(
+          workspaceSessionId: null,
+          workspaceReady: false,
+          editorConnectionStatus: WorkspaceConnectionStatus.failed,
+          consoleConnectionStatus: WorkspaceConnectionStatus.failed,
+          statusMessage: showProgress
+              ? 'Workspace runtime unavailable. Start the gateway and worker in remote mode.'
+              : state.statusMessage,
+        ),
+      );
+    }
+  }
+
+  Future<void> _syncWorkspaceCode(String sessionId, String content) async {
+    try {
+      final snapshot = await _api.updateWorkspaceFile(
+        sessionId: sessionId,
+        content: content,
+      );
+      if (isClosed || state.workspaceSessionId != sessionId) {
+        return;
+      }
+      emit(
+        state.copyWith(
+          code: snapshot.content,
+          scriptVersion: snapshot.version,
+        ),
+      );
+    } on BackendApiException {
+      if (isClosed || state.workspaceSessionId != sessionId) {
+        return;
+      }
+      emit(
+        state.copyWith(
+          editorConnectionStatus: WorkspaceConnectionStatus.failed,
+        ),
+      );
+    }
+  }
+
+  Future<String> _latestSubmissionCode() async {
+    final sessionId = state.workspaceSessionId;
+    if (sessionId == null) {
+      return state.code;
+    }
+
+    try {
+      final snapshot = await _api.getWorkspaceFile(sessionId: sessionId);
+      emit(
+        state.copyWith(
+          code: snapshot.content,
+          scriptVersion: snapshot.version,
+        ),
+      );
+      return snapshot.content;
+    } on BackendApiException {
+      return state.code;
+    }
+  }
+
   RLWorkbenchState _resetProgressState(String message) {
     return state.copyWith(
       runStatus: RunStatus.idle,
@@ -1302,6 +1746,35 @@ def lesson_function(*args, **kwargs):
       }
 
       await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+  }
+
+  Future<void> _pollWorkspaceRun(String sessionId, String runId) async {
+    while (_activeWorkspaceRunId == runId) {
+      final snapshot = await _api.getWorkspaceRun(
+        sessionId: sessionId,
+        runId: runId,
+      );
+      if (_activeWorkspaceRunId != runId) {
+        return;
+      }
+
+      if (snapshot.isTerminal) {
+        _activeWorkspaceRunId = null;
+        emit(
+          state.copyWith(
+            activeRunId: null,
+            statusMessage: snapshot.exitCode == 0
+                ? 'Workspace run completed.'
+                : 'Workspace run failed with exit code ${snapshot.exitCode ?? 1}.',
+            editorConnectionStatus: WorkspaceConnectionStatus.ready,
+            consoleConnectionStatus: WorkspaceConnectionStatus.ready,
+          ),
+        );
+        return;
+      }
+
+      await Future<void>.delayed(const Duration(milliseconds: 400));
     }
   }
 

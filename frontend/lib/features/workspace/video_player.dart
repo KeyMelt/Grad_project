@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -177,9 +176,12 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: AppTheme.borderLight),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+          child: SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
                 child: Row(
@@ -226,9 +228,10 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
                   isPlaying: isPlaying,
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: ExpansionTile(
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: ExpansionTile(
+                  maintainState: true,
                   tilePadding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                   collapsedBackgroundColor: const Color(0xFFF8FAFC),
@@ -251,60 +254,54 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
                     overflow: TextOverflow.ellipsis,
                   ),
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            lessonVideo.summary,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  color: AppTheme.textPrimary,
-                                  height: 1.45,
-                                ),
-                          ),
-                          const SizedBox(height: 10),
-                          ...lessonVideo.highlights.map(
-                            (highlight) => Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Row(
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 190),
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+                              child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Padding(
-                                    padding: EdgeInsets.only(top: 4),
-                                    child: Icon(
-                                      Icons.circle,
-                                      size: 7,
-                                      color: AppTheme.primaryBlue,
+                                  ...lessonVideo.highlights.map(
+                                    (highlight) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 8),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Padding(
+                                      padding: EdgeInsets.only(top: 4),
+                                      child: Icon(
+                                        Icons.circle,
+                                        size: 7,
+                                        color: AppTheme.primaryBlue,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      highlight,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                            color: AppTheme.textPrimary,
-                                            height: 1.4,
-                                          ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        highlight,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                              color: AppTheme.textPrimary,
+                                              height: 1.4,
+                                            ),
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ],
-                ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         );
       },
@@ -480,8 +477,8 @@ class _VideoPlaceholder extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        DecoratedBox(
-          decoration: const BoxDecoration(
+        const DecoratedBox(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
                 Color(0xFF020617),
@@ -533,7 +530,7 @@ class _VideoPlaceholder extends StatelessWidget {
                     ),
               ),
               const SizedBox(height: 18),
-              Wrap(
+              const Wrap(
                 spacing: 12,
                 runSpacing: 12,
                 children: [

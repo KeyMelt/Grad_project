@@ -1,0 +1,2 @@
+"""SQLModel persistence models."""
+

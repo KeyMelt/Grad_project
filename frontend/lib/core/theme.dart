@@ -24,7 +24,6 @@ class AppTheme {
         seedColor: primaryBlue,
         primary: primaryBlue,
         surface: surfaceWhite,
-        background: backgroundLight,
       ),
       fontFamily: 'Roboto', // Defaulting to a clean sans-serif like Figma
       textTheme: const TextTheme(

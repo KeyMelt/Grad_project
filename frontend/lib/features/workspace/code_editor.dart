@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 
-import '../../core/constants.dart';
-import '../../core/theme.dart';
+import '../../core/backend_api.dart';
 import '../../core/workbench_state.dart';
-import 'python_highlighting_controller.dart';
+import 'workspace_shell_host.dart';
 
-class CodeEditorTab extends StatefulWidget {
+class CodeEditorTab extends StatelessWidget {
   final LessonDefinition lesson;
   final String code;
+  final String? workspaceSessionId;
+  final bool workspaceReady;
+  final WorkspaceConnectionStatus editorConnectionStatus;
+  final WorkspaceConnectionStatus consoleConnectionStatus;
+  final String? editorShellUrl;
   final String statusMessage;
   final String runStatusLabel;
-  final ValueChanged<String> onChanged;
-  final VoidCallback onRun;
+  final int scriptVersion;
+  final VoidCallback onSubmit;
   final VoidCallback onStop;
   final VoidCallback onReset;
 
@@ -19,66 +23,29 @@ class CodeEditorTab extends StatefulWidget {
     super.key,
     required this.lesson,
     required this.code,
+    required this.workspaceSessionId,
+    required this.workspaceReady,
+    required this.editorConnectionStatus,
+    required this.consoleConnectionStatus,
+    required this.editorShellUrl,
     required this.statusMessage,
     required this.runStatusLabel,
-    required this.onChanged,
-    required this.onRun,
+    required this.scriptVersion,
+    required this.onSubmit,
     required this.onStop,
     required this.onReset,
   });
 
   @override
-  State<CodeEditorTab> createState() => _CodeEditorTabState();
-}
-
-class _CodeEditorTabState extends State<CodeEditorTab> {
-  late final PythonHighlightingController _controller;
-  late final ScrollController _terminalScrollController;
-  final List<String> _terminalLines = <String>[];
-  double _terminalRatio = 0.30;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = PythonHighlightingController(text: widget.code);
-    _terminalScrollController = ScrollController();
-    _appendTerminalLine('rl-studio\$ workspace ready for ${widget.lesson.id}.py');
-    _appendTerminalLine('[${_clockNow()}] ${widget.runStatusLabel}: ${widget.statusMessage}');
-  }
-
-  @override
-  void didUpdateWidget(covariant CodeEditorTab oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.code != widget.code && _controller.text != widget.code) {
-      _controller.value = TextEditingValue(
-        text: widget.code,
-        selection: TextSelection.collapsed(offset: widget.code.length),
-      );
-    }
-
-    if (oldWidget.runStatusLabel != widget.runStatusLabel ||
-        oldWidget.statusMessage != widget.statusMessage) {
-      if (widget.runStatusLabel == 'Running') {
-        _appendTerminalLine('rl-studio\$ run ${widget.lesson.id}.py');
-      }
-      _appendTerminalLine('[${_clockNow()}] ${widget.runStatusLabel}: ${widget.statusMessage}');
-    }
-  }
-
-  @override
-  void dispose() {
-    _terminalScrollController.dispose();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final editorStatus = _workspaceStatusLabel(editorConnectionStatus);
+    final consoleStatus = _workspaceStatusLabel(consoleConnectionStatus);
+
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.surfaceWhite,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.borderLight),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -89,282 +56,147 @@ class _CodeEditorTabState extends State<CodeEditorTab> {
               children: [
                 Expanded(
                   child: Text(
-                    '${widget.lesson.title} Exercise',
+                    lesson.exercise.title,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
                   ),
                 ),
-                Text(
-                  'Settings are defined in code constants',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppTheme.textSecondary,
-                      ),
+                _StatusChip(
+                  label: editorStatus.label,
+                  color: editorStatus.color,
+                ),
+                const SizedBox(width: 8),
+                _StatusChip(
+                  label: 'Console ${consoleStatus.label.toLowerCase()}',
+                  color: consoleStatus.color,
                 ),
               ],
             ),
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppConstants.defaultPadding,
-                0,
-                AppConstants.defaultPadding,
-                AppConstants.defaultPadding,
-              ),
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
               child: Container(
                 decoration: BoxDecoration(
                   color: const Color(0xFF111827),
                   borderRadius: BorderRadius.circular(18),
                   border: Border.all(color: const Color(0xFF1F2937)),
                 ),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final availableHeight = constraints.maxHeight - 12;
-                    final minCodeHeight = availableHeight > 360 ? 200.0 : 140.0;
-                    final minTerminalHeight =
-                        availableHeight > 360 ? 130.0 : 110.0;
-                    final maxTerminalHeight =
-                        (availableHeight - minCodeHeight).clamp(minTerminalHeight, availableHeight);
-                    final terminalHeight = (availableHeight * _terminalRatio)
-                        .clamp(minTerminalHeight, maxTerminalHeight);
-                    final codeHeight = availableHeight - terminalHeight;
-
-                    return Column(
-                      children: [
-                        SizedBox(
-                          height: codeHeight,
-                          child: _buildCodeWorkspace(context),
-                        ),
-                        GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onVerticalDragUpdate: (details) {
-                            setState(() {
-                              final nextRatio = _terminalRatio +
-                                  (details.delta.dy / availableHeight);
-                              _terminalRatio = nextRatio.clamp(0.18, 0.55);
-                            });
-                          },
-                          child: Container(
-                            height: 12,
-                            alignment: Alignment.center,
-                            child: Container(
-                              width: 56,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF475569),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
+                child: Column(
+                  children: [
+                    Container(
+                      height: 54,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF0F172A),
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(18)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 7,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1F2937),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              'script.py',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: const Color(0xFFE5E7EB),
+                                    fontWeight: FontWeight.w700,
+                                  ),
                             ),
                           ),
-                        ),
-                        SizedBox(
-                          height: terminalHeight,
-                          child: _buildTerminalPane(context),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCodeWorkspace(BuildContext context) {
-    final statusVisual = _statusVisualFor(widget.runStatusLabel);
-    return Container(
-      margin: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0B1220),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF1F2937)),
-      ),
-      child: Column(
-        children: [
-          Container(
-            height: 50,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: const BoxDecoration(
-              color: Color(0xFF111827),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 7,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1F2937),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    '${widget.lesson.id}.py',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFFE5E7EB),
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                ),
-                const Spacer(),
-                _EditorActionButton(
-                  onPressed: widget.lesson.backendEnabled ? widget.onRun : null,
-                  icon: Icons.play_arrow_rounded,
-                  label: 'Run',
-                  variant: _EditorActionVariant.primary,
-                ),
-                const SizedBox(width: 8),
-                _EditorActionButton(
-                  onPressed: widget.onStop,
-                  icon: Icons.stop_rounded,
-                  label: 'Stop',
-                ),
-                const SizedBox(width: 8),
-                _EditorActionButton(
-                  onPressed: widget.onReset,
-                  icon: Icons.refresh_rounded,
-                  label: 'Reset',
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  '${_lineCount(_controller.text)} lines',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: const Color(0xFF94A3B8),
+                          const SizedBox(width: 12),
+                          Text(
+                            workspaceSessionId == null
+                                ? 'No workspace session'
+                                : 'v$scriptVersion',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: const Color(0xFF94A3B8)),
+                          ),
+                          const Spacer(),
+                          _EditorActionButton(
+                            onPressed: lesson.backendEnabled ? onSubmit : null,
+                            icon: Icons.task_alt_rounded,
+                            label: 'Submit',
+                            variant: _EditorActionVariant.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          _EditorActionButton(
+                            onPressed: onStop,
+                            icon: Icons.stop_rounded,
+                            label: 'Stop',
+                          ),
+                          const SizedBox(width: 8),
+                          _EditorActionButton(
+                            onPressed: onReset,
+                            icon: Icons.refresh_rounded,
+                            label: 'Reset',
+                          ),
+                        ],
                       ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: const BoxDecoration(
-              color: Color(0xFF0F172A),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  statusVisual.icon,
-                  size: 15,
-                  color: statusVisual.color,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '${widget.runStatusLabel}: ${widget.statusMessage}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: statusVisual.color,
-                          fontWeight: FontWeight.w600,
-                        ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(color: Color(0xFF1F2937), height: 1),
-          Expanded(
-            child: TextField(
-              controller: _controller,
-              expands: true,
-              maxLines: null,
-              minLines: null,
-              onChanged: widget.onChanged,
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.all(14),
-              ),
-              style: const TextStyle(
-                fontFamily: 'Courier',
-                fontSize: 14,
-                color: Color(0xFFE5E7EB),
-                height: 1.5,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTerminalPane(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF040B17),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF1E293B)),
-      ),
-      child: Column(
-        children: [
-          Container(
-            height: 34,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: const BoxDecoration(
-              color: Color(0xFF0F172A),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.terminal_rounded,
-                  size: 16,
-                  color: Color(0xFF7DD3FC),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Execution Terminal',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFFE2E8F0),
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-                const Spacer(),
-                IconButton(
-                  tooltip: 'Clear terminal',
-                  onPressed: () {
-                    setState(() {
-                      _terminalLines.clear();
-                      _appendTerminalLine(
-                        'rl-studio\$ terminal cleared',
-                        autoScroll: false,
-                      );
-                    });
-                  },
-                  icon: const Icon(
-                    Icons.delete_sweep_outlined,
-                    color: Color(0xFF94A3B8),
-                    size: 18,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              controller: _terminalScrollController,
-              padding: const EdgeInsets.all(12),
-              itemCount: _terminalLines.length,
-              itemBuilder: (context, index) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Text(
-                    _terminalLines[index],
-                    style: const TextStyle(
-                      fontFamily: 'Courier',
-                      fontSize: 12.8,
-                      color: Color(0xFFCFD9E8),
-                      height: 1.45,
                     ),
-                  ),
-                );
-              },
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF0B1220),
+                        border: Border(
+                          bottom: BorderSide(color: Color(0xFF1F2937)),
+                        ),
+                      ),
+                      child: Text(
+                        '$runStatusLabel: $statusMessage',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: const Color(0xFFCBD5E1),
+                              fontWeight: FontWeight.w600,
+                            ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: WorkspaceShellHost(
+                          url: editorShellUrl,
+                          workspaceReady: workspaceReady,
+                          fallbackMessage: workspaceReady
+                              ? 'Workspace host unavailable for this platform.'
+                              : 'Preparing the lesson workspace for ${lesson.title}...',
+                        ),
+                      ),
+                    ),
+                    if (!workspaceReady)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                        child: Text(
+                          code.trim().isEmpty
+                              ? 'Starter code will appear when the workspace session is ready.'
+                              : 'Latest starter snapshot loaded while the remote workspace connects.',
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: const Color(0xFF94A3B8),
+                                  ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
@@ -372,77 +204,57 @@ class _CodeEditorTabState extends State<CodeEditorTab> {
     );
   }
 
-  void _appendTerminalLine(String message, {bool autoScroll = true}) {
-    _terminalLines.add(message);
-    if (!autoScroll || !_terminalScrollController.hasClients) {
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_terminalScrollController.hasClients) {
-        return;
-      }
-      _terminalScrollController.animateTo(
-        _terminalScrollController.position.maxScrollExtent + 44,
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-      );
-    });
-  }
-
-  String _clockNow() {
-    final now = DateTime.now();
-    final h = now.hour.toString().padLeft(2, '0');
-    final m = now.minute.toString().padLeft(2, '0');
-    final s = now.second.toString().padLeft(2, '0');
-    return '$h:$m:$s';
-  }
-
-  int _lineCount(String source) {
-    return source.isEmpty ? 0 : source.split('\n').length;
-  }
-
-  _RunVisual _statusVisualFor(String status) {
+  _WorkspaceVisual _workspaceStatusLabel(WorkspaceConnectionStatus status) {
     switch (status) {
-      case 'Running':
-        return const _RunVisual(
-          color: Color(0xFF60A5FA),
-          icon: Icons.autorenew_rounded,
-        );
-      case 'Complete':
-        return const _RunVisual(
-          color: Color(0xFF34D399),
-          icon: Icons.check_circle_outline_rounded,
-        );
-      case 'Failed':
-        return const _RunVisual(
-          color: Color(0xFFFCA5A5),
-          icon: Icons.error_outline_rounded,
-        );
-      case 'Stopped':
-        return const _RunVisual(
-          color: Color(0xFFD8B4FE),
-          icon: Icons.stop_circle_outlined,
-        );
-      default:
-        return const _RunVisual(
-          color: Color(0xFFCBD5E1),
-          icon: Icons.hourglass_empty_rounded,
-        );
+      case WorkspaceConnectionStatus.connecting:
+        return const _WorkspaceVisual('Connecting', Color(0xFF1D4ED8));
+      case WorkspaceConnectionStatus.ready:
+        return const _WorkspaceVisual('Ready', Color(0xFF059669));
+      case WorkspaceConnectionStatus.failed:
+        return const _WorkspaceVisual('Failed', Color(0xFFDC2626));
+      case WorkspaceConnectionStatus.disconnected:
+        return const _WorkspaceVisual('Offline', Color(0xFF64748B));
     }
   }
 }
 
-class _RunVisual {
+class _StatusChip extends StatelessWidget {
+  final String label;
   final Color color;
-  final IconData icon;
 
-  const _RunVisual({
+  const _StatusChip({
+    required this.label,
     required this.color,
-    required this.icon,
   });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+      ),
+    );
+  }
 }
 
-enum _EditorActionVariant { primary, neutral }
+class _WorkspaceVisual {
+  final String label;
+  final Color color;
+
+  const _WorkspaceVisual(this.label, this.color);
+}
+
+enum _EditorActionVariant { normal, primary }
 
 class _EditorActionButton extends StatelessWidget {
   final VoidCallback? onPressed;
@@ -454,45 +266,22 @@ class _EditorActionButton extends StatelessWidget {
     required this.onPressed,
     required this.icon,
     required this.label,
-    this.variant = _EditorActionVariant.neutral,
+    this.variant = _EditorActionVariant.normal,
   });
 
   @override
   Widget build(BuildContext context) {
-    final bool enabled = onPressed != null;
-    final bool primary = variant == _EditorActionVariant.primary;
-    final Color background = !enabled
-        ? const Color(0xFF1E293B)
-        : (primary ? AppTheme.primaryBlue : const Color(0xFF1F2937));
-    final Color foreground = !enabled
-        ? const Color(0xFF64748B)
-        : const Color(0xFFE2E8F0);
-
-    return Material(
-      color: background,
-      borderRadius: BorderRadius.circular(9),
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(9),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 15, color: foreground),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  color: foreground,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
+    final isPrimary = variant == _EditorActionVariant.primary;
+    return FilledButton.tonalIcon(
+      onPressed: onPressed,
+      style: FilledButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        backgroundColor:
+            isPrimary ? const Color(0xFF2563EB) : const Color(0xFF1F2937),
+        foregroundColor: Colors.white,
       ),
+      icon: Icon(icon, size: 18),
+      label: Text(label),
     );
   }
 }

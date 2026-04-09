@@ -75,6 +75,47 @@ class CodeValidatorTest(unittest.TestCase):
         self.assertEqual(result.errors, [])
         self.assertTrue(all(test["passed"] for test in result.test_results))
 
+    def test_accepts_policy_improvement_function(self):
+        result = self.validator.validate_code(
+            (
+                "def policy_improvement(V, env, gamma=0.9):\n"
+                "    action_count = env.action_space.n\n"
+                "    policy = [[0.0 for _ in range(action_count)] for _ in range(len(V))]\n"
+                "    for state in range(len(V)):\n"
+                "        action_values = []\n"
+                "        for action in range(action_count):\n"
+                "            action_value = 0.0\n"
+                "            for transition_prob, next_state, reward, done in env.P[state][action]:\n"
+                "                future = 0.0 if done else V[next_state]\n"
+                "                action_value += transition_prob * (reward + gamma * future)\n"
+                "            action_values.append(action_value)\n"
+                "        best_action = max(range(action_count), key=lambda index: action_values[index])\n"
+                "        policy[state][best_action] = 1.0\n"
+                "    return policy\n"
+            ),
+            "dp_policy_improvement",
+        )
+
+        self.assertTrue(result.is_valid)
+        self.assertEqual(result.errors, [])
+        self.assertTrue(all(test["passed"] for test in result.test_results))
+
+    def test_accepts_sarsa_function(self):
+        result = self.validator.validate_code(
+            (
+                "def sarsa_update(Q, state, action, reward, next_state, next_action, alpha=0.1, gamma=0.9):\n"
+                "    bootstrap = 0.0 if next_action is None else Q[next_state][next_action]\n"
+                "    td_target = reward + gamma * bootstrap\n"
+                "    Q[state][action] = Q[state][action] + alpha * (td_target - Q[state][action])\n"
+                "    return Q\n"
+            ),
+            "td_sarsa",
+        )
+
+        self.assertTrue(result.is_valid)
+        self.assertEqual(result.errors, [])
+        self.assertTrue(all(test["passed"] for test in result.test_results))
+
 
 if __name__ == "__main__":
     unittest.main()

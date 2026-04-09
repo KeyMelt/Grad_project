@@ -54,6 +54,8 @@ QuizPhase _parseQuizPhase(String? value) {
 
 enum ExecutionTaskStatus { queued, running, succeeded, failed }
 
+enum WorkspaceConnectionStatus { disconnected, connecting, ready, failed }
+
 ExecutionTaskStatus _parseTaskStatus(String? value) {
   switch (value) {
     case 'queued':
@@ -415,6 +417,142 @@ class SubmittedExecutionTask {
   }
 }
 
+class WorkspaceSessionData {
+  final String sessionId;
+  final String lessonId;
+  final List<String> visibleFiles;
+  final bool consoleReady;
+
+  const WorkspaceSessionData({
+    required this.sessionId,
+    required this.lessonId,
+    required this.visibleFiles,
+    required this.consoleReady,
+  });
+
+  factory WorkspaceSessionData.fromJson(Map<String, dynamic> json) {
+    return WorkspaceSessionData(
+      sessionId: json['session_id'] as String? ?? '',
+      lessonId: json['lesson_id'] as String? ?? '',
+      visibleFiles: (json['visible_files'] as List<dynamic>? ?? const [])
+          .map((value) => value.toString())
+          .toList(growable: false),
+      consoleReady: json['console_ready'] as bool? ?? false,
+    );
+  }
+}
+
+class WorkspaceFileSnapshot {
+  final String path;
+  final String content;
+  final int version;
+  final List<WorkspaceDiagnostic> diagnostics;
+
+  const WorkspaceFileSnapshot({
+    required this.path,
+    required this.content,
+    required this.version,
+    required this.diagnostics,
+  });
+
+  factory WorkspaceFileSnapshot.fromJson(Map<String, dynamic> json) {
+    return WorkspaceFileSnapshot(
+      path: json['path'] as String? ?? 'script.py',
+      content: json['content'] as String? ?? '',
+      version: (json['version'] as num?)?.toInt() ?? 1,
+      diagnostics: (json['diagnostics'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(WorkspaceDiagnostic.fromJson)
+          .toList(growable: false),
+    );
+  }
+}
+
+class WorkspaceDiagnostic {
+  final String message;
+  final int line;
+  final int column;
+  final String severity;
+
+  const WorkspaceDiagnostic({
+    required this.message,
+    required this.line,
+    required this.column,
+    required this.severity,
+  });
+
+  factory WorkspaceDiagnostic.fromJson(Map<String, dynamic> json) {
+    return WorkspaceDiagnostic(
+      message: json['message'] as String? ?? 'Unknown workspace diagnostic.',
+      line: (json['line'] as num?)?.toInt() ?? 1,
+      column: (json['column'] as num?)?.toInt() ?? 1,
+      severity: json['severity'] as String? ?? 'error',
+    );
+  }
+}
+
+class WorkspaceRunData {
+  final String runId;
+  final String status;
+  final int? exitCode;
+  final String? startedAt;
+  final String? finishedAt;
+
+  const WorkspaceRunData({
+    required this.runId,
+    required this.status,
+    required this.exitCode,
+    required this.startedAt,
+    required this.finishedAt,
+  });
+
+  bool get isTerminal => status == 'completed' || status == 'failed';
+
+  factory WorkspaceRunData.fromJson(Map<String, dynamic> json) {
+    return WorkspaceRunData(
+      runId: json['run_id'] as String? ?? '',
+      status: json['status'] as String? ?? 'running',
+      exitCode: (json['exit_code'] as num?)?.toInt(),
+      startedAt: json['started_at'] as String?,
+      finishedAt: json['finished_at'] as String?,
+    );
+  }
+}
+
+class WorkspaceHealthData {
+  final bool ready;
+  final bool workerReachable;
+  final bool dockerCliAvailable;
+  final bool dockerDaemonReachable;
+  final String runtimeMode;
+  final String message;
+  final List<String> issues;
+
+  const WorkspaceHealthData({
+    required this.ready,
+    required this.workerReachable,
+    required this.dockerCliAvailable,
+    required this.dockerDaemonReachable,
+    required this.runtimeMode,
+    required this.message,
+    required this.issues,
+  });
+
+  factory WorkspaceHealthData.fromJson(Map<String, dynamic> json) {
+    return WorkspaceHealthData(
+      ready: json['ready'] as bool? ?? false,
+      workerReachable: json['worker_reachable'] as bool? ?? false,
+      dockerCliAvailable: json['docker_cli_available'] as bool? ?? false,
+      dockerDaemonReachable: json['docker_daemon_reachable'] as bool? ?? false,
+      runtimeMode: json['runtime_mode'] as String? ?? 'docker',
+      message: json['message'] as String? ?? 'Workspace runtime unavailable.',
+      issues: (json['issues'] as List<dynamic>? ?? const [])
+          .map((issue) => issue.toString())
+          .toList(growable: false),
+    );
+  }
+}
+
 class ExecutionTaskSnapshot {
   final String taskId;
   final ExecutionTaskStatus status;
@@ -461,6 +599,8 @@ class NGainMetricsExport {
 abstract class BackendApi {
   Future<LearnerDashboard> signIn({
     required String displayName,
+    required String password,
+    String? firebaseIdToken,
   });
 
   Future<LearnerDashboard> getDashboard({
@@ -487,6 +627,36 @@ abstract class BackendApi {
   Future<ExecutionTaskSnapshot> getTaskStatus(String taskId);
 
   Future<NGainMetricsExport> exportNGainMetrics();
+
+  Future<WorkspaceSessionData> createWorkspaceSession({
+    required String lessonId,
+  });
+
+  Future<WorkspaceHealthData> getWorkspaceHealth();
+
+  Future<WorkspaceSessionData> getWorkspaceSession(String sessionId);
+
+  Future<WorkspaceFileSnapshot> getWorkspaceFile({
+    required String sessionId,
+    String path = 'script.py',
+  });
+
+  Future<WorkspaceFileSnapshot> updateWorkspaceFile({
+    required String sessionId,
+    String path = 'script.py',
+    required String content,
+  });
+
+  Future<WorkspaceRunData> runWorkspaceScript({
+    required String sessionId,
+  });
+
+  Future<WorkspaceRunData> getWorkspaceRun({
+    required String sessionId,
+    required String runId,
+  });
+
+  String workspaceEditorShellUrl(String sessionId);
 
   Future<ExecutionResult> executeCode({
     required String lessonId,
@@ -532,11 +702,15 @@ class HttpBackendApi extends BackendApi {
   @override
   Future<LearnerDashboard> signIn({
     required String displayName,
+    required String password,
+    String? firebaseIdToken,
   }) async {
     final responseJson = await _postJson(
       '/auth/sign-in',
       {
         'display_name': displayName,
+        'password': password,
+        if (firebaseIdToken != null) 'firebase_id_token': firebaseIdToken,
       },
     );
     return LearnerDashboard.fromJson(responseJson);
@@ -631,6 +805,81 @@ class HttpBackendApi extends BackendApi {
     );
   }
 
+  @override
+  Future<WorkspaceSessionData> createWorkspaceSession({
+    required String lessonId,
+  }) async {
+    final responseJson = await _postJson(
+      '/workspace/sessions',
+      {'lesson_id': lessonId},
+    );
+    return WorkspaceSessionData.fromJson(responseJson);
+  }
+
+  @override
+  Future<WorkspaceHealthData> getWorkspaceHealth() async {
+    final responseJson = await _getJson('/workspace/health');
+    return WorkspaceHealthData.fromJson(responseJson);
+  }
+
+  @override
+  Future<WorkspaceSessionData> getWorkspaceSession(String sessionId) async {
+    final responseJson = await _getJson('/workspace/sessions/$sessionId');
+    return WorkspaceSessionData.fromJson(responseJson);
+  }
+
+  @override
+  Future<WorkspaceFileSnapshot> getWorkspaceFile({
+    required String sessionId,
+    String path = 'script.py',
+  }) async {
+    final responseJson = await _getJson(
+      '/workspace/sessions/$sessionId/files/$path',
+    );
+    return WorkspaceFileSnapshot.fromJson(responseJson);
+  }
+
+  @override
+  Future<WorkspaceFileSnapshot> updateWorkspaceFile({
+    required String sessionId,
+    String path = 'script.py',
+    required String content,
+  }) async {
+    final responseJson = await _putJson(
+      '/workspace/sessions/$sessionId/files/$path',
+      {'content': content},
+    );
+    return WorkspaceFileSnapshot.fromJson(responseJson);
+  }
+
+  @override
+  Future<WorkspaceRunData> runWorkspaceScript({
+    required String sessionId,
+  }) async {
+    final responseJson = await _postJson(
+      '/workspace/sessions/$sessionId/run',
+      const {},
+    );
+    return WorkspaceRunData.fromJson(responseJson);
+  }
+
+  @override
+  Future<WorkspaceRunData> getWorkspaceRun({
+    required String sessionId,
+    required String runId,
+  }) async {
+    final responseJson = await _getJson(
+      '/workspace/sessions/$sessionId/runs/$runId',
+    );
+    return WorkspaceRunData.fromJson(responseJson);
+  }
+
+  @override
+  String workspaceEditorShellUrl(String sessionId) {
+    final encodedSession = Uri.encodeComponent(sessionId);
+    return '$baseUrl/workspace/editor-shell?session_id=$encodedSession';
+  }
+
   Future<Map<String, dynamic>> _postJson(
     String path,
     Map<String, dynamic> payload,
@@ -645,6 +894,18 @@ class HttpBackendApi extends BackendApi {
 
   Future<Map<String, dynamic>> _getJson(String path) async {
     final response = await _client.get(Uri.parse('$baseUrl$path'));
+    return _decodeAndValidateResponse(response);
+  }
+
+  Future<Map<String, dynamic>> _putJson(
+    String path,
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl$path'),
+      headers: _jsonHeaders,
+      body: jsonEncode(payload),
+    );
     return _decodeAndValidateResponse(response);
   }
 

@@ -6,6 +6,7 @@ import '../core/onboarding_prefs.dart';
 import '../core/theme.dart';
 import '../core/workbench_state.dart';
 import '../features/admin/admin_console.dart';
+import '../features/flashcards/flashcards_section.dart';
 import '../features/home/home_dashboard.dart';
 import '../features/lessons/lesson_browser.dart';
 import '../features/onboarding/onboarding_tutorial.dart';
@@ -71,12 +72,13 @@ class _MainLayoutState extends State<MainLayout> {
           learner: state.learner,
           progress: state.progress,
           sections: state.sections,
-          flashcards: state.flashcards,
           isSigningIn: state.isSigningIn,
           message: state.homeMessage,
           onSignIn: _cubit.signIn,
           onOpenLesson: _cubit.openLesson,
           onOpenQuiz: () => _cubit.navigateTo(AppSection.quiz),
+          onOpenFlashcards: () => _cubit.navigateTo(AppSection.flashcards),
+          onSignOut: _cubit.signOut,
         );
       case AppSection.workspace:
         return LayoutBuilder(
@@ -90,8 +92,16 @@ class _MainLayoutState extends State<MainLayout> {
             final workspace = WorkspaceTabs(
               lesson: state.selectedLesson,
               code: state.code,
-              onCodeChanged: _cubit.updateCode,
-              onRun: _cubit.run,
+              workspaceSessionId: state.workspaceSessionId,
+              workspaceReady: state.workspaceReady,
+              editorConnectionStatus: state.editorConnectionStatus,
+              consoleConnectionStatus: state.consoleConnectionStatus,
+              editorShellUrl: state.workspaceSessionId == null
+                  ? null
+                  : (_cubit.api)
+                      .workspaceEditorShellUrl(state.workspaceSessionId!),
+              scriptVersion: state.scriptVersion,
+              onSubmit: () => _cubit.submit(),
               onStop: _cubit.stop,
               onReset: _cubit.reset,
               statusMessage: state.statusMessage,
@@ -136,6 +146,11 @@ class _MainLayoutState extends State<MainLayout> {
               ],
             );
           },
+        );
+      case AppSection.flashcards:
+        return FlashcardsSection(
+          flashcards: state.flashcards,
+          onBackHome: () => _cubit.navigateTo(AppSection.home),
         );
       case AppSection.quiz:
         return QuizSection(
@@ -188,16 +203,14 @@ class _MainLayoutState extends State<MainLayout> {
     return AppBar(
       backgroundColor: AppTheme.surfaceWhite,
       elevation: 0,
-      title: const Row(
+      toolbarHeight: 88,
+      title: Row(
         children: [
-          Icon(Icons.school_outlined, color: AppTheme.textPrimary),
-          SizedBox(width: 12),
-          Text(
-            'RL Learning Platform',
-            style: TextStyle(
-              color: AppTheme.textPrimary,
-              fontWeight: FontWeight.bold,
-            ),
+          Image.asset(
+            'assets/branding/rl_logo_trimmed.png',
+            width: 300,
+            height: 68,
+            fit: BoxFit.contain,
           ),
         ],
       ),
