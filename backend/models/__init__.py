@@ -1,2 +1,1 @@
 """SQLModel persistence models."""
-

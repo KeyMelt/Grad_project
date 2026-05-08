@@ -5,6 +5,7 @@ import asyncio
 import pytest
 
 from backend.services.workspace_service import WorkspaceRuntimeError, WorkspaceSessionService
+from backend.workspace_store_sqlite import SqliteWorkspaceStore
 
 
 async def _cleanup_service(service: WorkspaceSessionService) -> None:
@@ -28,6 +29,10 @@ async def test_workspace_session_creates_visible_and_hidden_files(tmp_path):
 
         file_snapshot = await service.read_file(session["session_id"], "script.py")
         assert "def policy_evaluation" in file_snapshot["content"]
+        assert any(
+            "Bellman expectation update" in diagnostic["message"]
+            for diagnostic in file_snapshot["diagnostics"]
+        )
 
         session_record = service._sessions[session["session_id"]]  # noqa: SLF001
         assert (session_record.workspace_dir / "tests.py").exists()
@@ -52,7 +57,11 @@ async def test_workspace_service_requires_docker_when_enabled(
 
 @pytest.mark.anyio
 async def test_workspace_run_executes_script_and_tracks_completion(tmp_path):
-    service = WorkspaceSessionService(base_dir=str(tmp_path), use_docker=False)
+    service = WorkspaceSessionService(
+        base_dir=str(tmp_path),
+        use_docker=False,
+        store=SqliteWorkspaceStore(str(tmp_path / "workspace_state.db")),
+    )
 
     try:
         session = await service.create_session("dp_policy_eval")
@@ -72,5 +81,37 @@ async def test_workspace_run_executes_script_and_tracks_completion(tmp_path):
             raise AssertionError("Workspace run did not reach completion in time.")
 
         assert snapshot["exit_code"] == 0
+        persisted_session = service.persisted_session_snapshot(session["session_id"])
+        assert persisted_session is not None
+        assert persisted_session["lesson_id"] == "dp_policy_eval"
+
+        persisted_run = service.persisted_run_snapshot(session["session_id"], run["run_id"])
+        assert persisted_run is not None
+        assert persisted_run["status"] == "completed"
+    finally:
+        await _cleanup_service(service)
+
+
+@pytest.mark.anyio
+async def test_workspace_store_records_artifact_references(tmp_path):
+    service = WorkspaceSessionService(
+        base_dir=str(tmp_path),
+        use_docker=False,
+        store=SqliteWorkspaceStore(str(tmp_path / "workspace_state.db")),
+    )
+
+    try:
+        session = await service.create_session("dp_policy_eval")
+        service.record_artifact_reference(
+            owner_kind="session",
+            owner_id=session["session_id"],
+            artifact_kind="replay_video",
+            artifact_path="/tmp/replay.mp4",
+        )
+
+        artifacts = service.list_artifact_references("session", session["session_id"])
+
+        assert artifacts[0]["artifact_kind"] == "replay_video"
+        assert artifacts[0]["artifact_path"] == "/tmp/replay.mp4"
     finally:
         await _cleanup_service(service)

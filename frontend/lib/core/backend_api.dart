@@ -3,17 +3,138 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:multicast_dns/multicast_dns.dart';
+
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'constants.dart';
+import 'lesson_models.dart';
+
+class BackendConnectionManager extends ChangeNotifier {
+  static final BackendConnectionManager _instance =
+      BackendConnectionManager._internal();
+  factory BackendConnectionManager() => _instance;
+  BackendConnectionManager._internal();
+
+  String _baseUrl = defaultBackendBaseUrl;
+  WorkspaceConnectionStatus _status = WorkspaceConnectionStatus.disconnected;
+  String? _lastError;
+  Timer? _healthTimer;
+  MDnsClient? _mDnsClient;
+
+  String get baseUrl => _baseUrl;
+  WorkspaceConnectionStatus get status => _status;
+  String? get lastError => _lastError;
+
+  Future<void> init() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedUrl = prefs.getString(AppConstants.backendUrlPreferenceKey);
+    if (savedUrl != null && savedUrl.isNotEmpty) {
+      _baseUrl = savedUrl;
+    }
+    notifyListeners();
+    unawaited(checkHealth());
+    _healthTimer = Timer.periodic(
+      AppConstants.backendHealthInterval,
+      (_) => checkHealth(),
+    );
+    unawaited(_autoDiscover());
+  }
+
+  Future<void> _autoDiscover() async {
+    try {
+      _mDnsClient = MDnsClient();
+      await _mDnsClient!.start();
+      await for (final PtrResourceRecord ptr in _mDnsClient!
+          .lookup<PtrResourceRecord>(
+              ResourceRecordQuery.serverPointer('_rl-ide._tcp.local'))) {
+        await for (final SrvResourceRecord srv in _mDnsClient!
+            .lookup<SrvResourceRecord>(
+                ResourceRecordQuery.service(ptr.domainName))) {
+          await for (final IPAddressResourceRecord ip in _mDnsClient!
+              .lookup<IPAddressResourceRecord>(
+                  ResourceRecordQuery.addressIPv4(srv.target))) {
+            final discoveredUrl = 'http://${ip.address.address}:${srv.port}';
+            if (discoveredUrl != _baseUrl) {
+              await updateUrl(discoveredUrl);
+            }
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('mDNS discovery failed: $e');
+    } finally {
+      _mDnsClient?.stop();
+    }
+  }
+
+  Future<void> updateUrl(String newUrl) async {
+    final sanitized = _normalizeBackendUrl(newUrl);
+    _baseUrl = sanitized;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(AppConstants.backendUrlPreferenceKey, sanitized);
+    notifyListeners();
+    await checkHealth();
+  }
+
+  Future<void> checkHealth() async {
+    try {
+      final response = await http.get(Uri.parse('$_baseUrl/')).timeout(
+            AppConstants.backendHealthTimeout,
+          );
+      if (response.statusCode == 200) {
+        _status = WorkspaceConnectionStatus.ready;
+        _lastError = null;
+      } else {
+        _status = WorkspaceConnectionStatus.failed;
+        _lastError = 'Server returned ${response.statusCode}';
+      }
+    } catch (e) {
+      _status = WorkspaceConnectionStatus.failed;
+      _lastError = e.toString();
+    }
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _healthTimer?.cancel();
+    _mDnsClient?.stop();
+    super.dispose();
+  }
+}
 
 const String defaultBackendBaseUrl = String.fromEnvironment(
   'BACKEND_BASE_URL',
-  defaultValue: kIsWeb ? 'http://127.0.0.1:8000' : 'http://127.0.0.1:8000',
+  defaultValue: AppConstants.defaultBackendLocalUrl,
 );
+
+String _normalizeBackendUrl(String rawUrl) {
+  var sanitized = rawUrl.trim();
+  if (!sanitized.startsWith('http')) {
+    sanitized = 'http://$sanitized';
+  }
+  if (sanitized.endsWith('/')) {
+    sanitized = sanitized.substring(0, sanitized.length - 1);
+  }
+  return sanitized;
+}
 
 class BackendApiException implements Exception {
   final String message;
   final List<ExecutionTestCaseResult> testResults;
+  final String? failureKind;
+  final List<String> unresolvedBlanks;
+  final ExecutionStudentFeedback? studentFeedback;
 
-  const BackendApiException(this.message, {this.testResults = const []});
+  const BackendApiException(
+    this.message, {
+    this.testResults = const [],
+    this.failureKind,
+    this.unresolvedBlanks = const [],
+    this.studentFeedback,
+  });
 
   @override
   String toString() => message;
@@ -98,6 +219,11 @@ class LearnerProgress {
   final double? posttestScore;
   final double? nGain;
   final Map<String, int> quizAttempts;
+  final int totalSubmissionAttempts;
+  final int passedSubmissionAttempts;
+  final int validationFailures;
+  final int runtimeFailures;
+  final int testFailures;
 
   const LearnerProgress({
     required this.completedLessonIds,
@@ -107,6 +233,11 @@ class LearnerProgress {
     required this.posttestScore,
     required this.nGain,
     required this.quizAttempts,
+    this.totalSubmissionAttempts = 0,
+    this.passedSubmissionAttempts = 0,
+    this.validationFailures = 0,
+    this.runtimeFailures = 0,
+    this.testFailures = 0,
   });
 
   const LearnerProgress.empty()
@@ -119,7 +250,12 @@ class LearnerProgress {
         quizAttempts = const {
           'pretest': 0,
           'posttest': 0,
-        };
+        },
+        totalSubmissionAttempts = 0,
+        passedSubmissionAttempts = 0,
+        validationFailures = 0,
+        runtimeFailures = 0,
+        testFailures = 0;
 
   int get lessonsCompleted => completedLessonIds.length;
 
@@ -139,6 +275,13 @@ class LearnerProgress {
       quizAttempts: rawQuizAttempts.map(
         (key, value) => MapEntry(key, (value as num).toInt()),
       ),
+      totalSubmissionAttempts:
+          (json['total_submission_attempts'] as num?)?.toInt() ?? 0,
+      passedSubmissionAttempts:
+          (json['passed_submission_attempts'] as num?)?.toInt() ?? 0,
+      validationFailures: (json['validation_failures'] as num?)?.toInt() ?? 0,
+      runtimeFailures: (json['runtime_failures'] as num?)?.toInt() ?? 0,
+      testFailures: (json['test_failures'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -357,6 +500,40 @@ class ExecutionTraceStep {
   }
 }
 
+class ExecutionStudentFeedback {
+  final String status;
+  final String summary;
+  final String likelyIssue;
+  final List<String> affectedBlankIds;
+  final List<String> nextSteps;
+  final String hintLevel;
+
+  const ExecutionStudentFeedback({
+    required this.status,
+    required this.summary,
+    required this.likelyIssue,
+    required this.affectedBlankIds,
+    required this.nextSteps,
+    required this.hintLevel,
+  });
+
+  factory ExecutionStudentFeedback.fromJson(Map<String, dynamic> json) {
+    return ExecutionStudentFeedback(
+      status: json['status'] as String? ?? 'validation_error',
+      summary: json['summary'] as String? ?? '',
+      likelyIssue: json['likely_issue'] as String? ?? '',
+      affectedBlankIds:
+          (json['affected_blank_ids'] as List<dynamic>? ?? const [])
+              .map((value) => value.toString())
+              .toList(growable: false),
+      nextSteps: (json['next_steps'] as List<dynamic>? ?? const [])
+          .map((value) => value.toString())
+          .toList(growable: false),
+      hintLevel: json['hint_level'] as String? ?? 'light',
+    );
+  }
+}
+
 class ExecutionResult {
   final String message;
   final String lessonTitle;
@@ -559,6 +736,9 @@ class ExecutionTaskSnapshot {
   final ExecutionResult? result;
   final String? errorMessage;
   final List<ExecutionTestCaseResult> testResults;
+  final String? failureKind;
+  final List<String> unresolvedBlanks;
+  final ExecutionStudentFeedback? studentFeedback;
 
   const ExecutionTaskSnapshot({
     required this.taskId,
@@ -566,6 +746,9 @@ class ExecutionTaskSnapshot {
     this.result,
     this.errorMessage,
     this.testResults = const [],
+    this.failureKind,
+    this.unresolvedBlanks = const [],
+    this.studentFeedback,
   });
 
   bool get isTerminal =>
@@ -582,6 +765,9 @@ class ExecutionTaskSnapshot {
           : null,
       errorMessage: _extractTaskErrorMessage(json['error']),
       testResults: _extractTaskTestResults(json['error']),
+      failureKind: _extractTaskFailureKind(json['error']),
+      unresolvedBlanks: _extractTaskUnresolvedBlanks(json['error']),
+      studentFeedback: _extractTaskStudentFeedback(json['error']),
     );
   }
 }
@@ -597,6 +783,8 @@ class NGainMetricsExport {
 }
 
 abstract class BackendApi {
+  Future<List<LessonSection>> fetchLessonSections();
+
   Future<LearnerDashboard> signIn({
     required String displayName,
     required String password,
@@ -679,6 +867,9 @@ abstract class BackendApi {
         throw BackendApiException(
           snapshot.errorMessage ?? 'Execution task failed.',
           testResults: snapshot.testResults,
+          failureKind: snapshot.failureKind,
+          unresolvedBlanks: snapshot.unresolvedBlanks,
+          studentFeedback: snapshot.studentFeedback,
         );
       }
 
@@ -687,17 +878,55 @@ abstract class BackendApi {
   }
 }
 
+List<LessonSection> _groupLessonsByCategory(List<LessonDefinition> lessons) {
+  final grouped = <String, List<LessonDefinition>>{};
+  for (final lesson in lessons) {
+    grouped
+        .putIfAbsent(lesson.category, () => <LessonDefinition>[])
+        .add(lesson);
+  }
+  return grouped.entries
+      .map((entry) => LessonSection(title: entry.key, lessons: entry.value))
+      .toList(growable: false);
+}
+
 class HttpBackendApi extends BackendApi {
   final http.Client _client;
-  final String baseUrl;
+  String get baseUrl => BackendConnectionManager().baseUrl;
   static const Map<String, String> _jsonHeaders = {
     'Content-Type': 'application/json',
   };
 
   HttpBackendApi({
     http.Client? client,
-    this.baseUrl = defaultBackendBaseUrl,
   }) : _client = client ?? http.Client();
+
+  @override
+  Future<List<LessonSection>> fetchLessonSections() async {
+    final responseJson = await _getJson('/lessons');
+    final sections = responseJson['sections'];
+    if (sections is List) {
+      return sections
+          .whereType<Map<String, dynamic>>()
+          .map(LessonSection.fromJson)
+          .where((section) => section.lessons.isNotEmpty)
+          .toList(growable: false);
+    }
+
+    final lessons = responseJson['lessons'];
+    if (lessons is List) {
+      return _groupLessonsByCategory(
+        lessons
+            .whereType<Map<String, dynamic>>()
+            .map(LessonDefinition.fromJson)
+            .toList(growable: false),
+      );
+    }
+
+    throw const BackendApiException(
+      'Backend returned an invalid lesson catalog.',
+    );
+  }
 
   @override
   Future<LearnerDashboard> signIn({
@@ -899,12 +1128,13 @@ class HttpBackendApi extends BackendApi {
 
   Future<Map<String, dynamic>> _putJson(
     String path,
-    Map<String, dynamic> payload,
+    Map<String, dynamic> body,
   ) async {
+    final uri = Uri.parse('$baseUrl$path');
     final response = await _client.put(
-      Uri.parse('$baseUrl$path'),
+      uri,
       headers: _jsonHeaders,
-      body: jsonEncode(payload),
+      body: jsonEncode(body),
     );
     return _decodeAndValidateResponse(response);
   }
@@ -952,6 +1182,9 @@ BackendApiException _buildBackendException(Map<String, dynamic> responseJson) {
   return BackendApiException(
     _extractApiErrorMessage(responseJson),
     testResults: _extractTestResults(responseJson),
+    failureKind: _extractFailureKind(responseJson),
+    unresolvedBlanks: _extractUnresolvedBlanks(responseJson),
+    studentFeedback: _extractStudentFeedback(responseJson),
   );
 }
 
@@ -1012,6 +1245,32 @@ List<ExecutionTestCaseResult> _extractTaskTestResults(Object? error) {
   return const [];
 }
 
+String? _extractTaskFailureKind(Object? error) {
+  if (error is Map<String, dynamic>) {
+    return error['failure_kind'] as String?;
+  }
+  return null;
+}
+
+List<String> _extractTaskUnresolvedBlanks(Object? error) {
+  if (error is Map<String, dynamic>) {
+    return (error['unresolved_blanks'] as List<dynamic>? ?? const [])
+        .map((value) => value.toString())
+        .toList(growable: false);
+  }
+  return const [];
+}
+
+ExecutionStudentFeedback? _extractTaskStudentFeedback(Object? error) {
+  if (error is Map<String, dynamic>) {
+    final feedback = error['student_feedback'];
+    if (feedback is Map<String, dynamic>) {
+      return ExecutionStudentFeedback.fromJson(feedback);
+    }
+  }
+  return null;
+}
+
 List<ExecutionTestCaseResult> _extractTestResults(
   Map<String, dynamic> response,
 ) {
@@ -1027,4 +1286,35 @@ List<ExecutionTestCaseResult> _extractTestResults(
   }
 
   return const [];
+}
+
+String? _extractFailureKind(Map<String, dynamic> response) {
+  final detail = response['detail'];
+  if (detail is Map<String, dynamic>) {
+    return detail['failure_kind'] as String?;
+  }
+  return null;
+}
+
+List<String> _extractUnresolvedBlanks(Map<String, dynamic> response) {
+  final detail = response['detail'];
+  if (detail is Map<String, dynamic>) {
+    return (detail['unresolved_blanks'] as List<dynamic>? ?? const [])
+        .map((value) => value.toString())
+        .toList(growable: false);
+  }
+  return const [];
+}
+
+ExecutionStudentFeedback? _extractStudentFeedback(
+  Map<String, dynamic> response,
+) {
+  final detail = response['detail'];
+  if (detail is Map<String, dynamic>) {
+    final feedback = detail['student_feedback'];
+    if (feedback is Map<String, dynamic>) {
+      return ExecutionStudentFeedback.fromJson(feedback);
+    }
+  }
+  return null;
 }

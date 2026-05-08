@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../core/backend_api.dart';
 import '../../core/workbench_state.dart';
 import 'code_editor.dart';
-import 'exercise_brief_panel.dart';
 import 'trace_replay_panel.dart';
 import 'video_player.dart';
 
@@ -21,6 +20,9 @@ class WorkspaceTabs extends StatelessWidget {
   final VoidCallback onReset;
   final String statusMessage;
   final String runStatusLabel;
+  final String? failureKind;
+  final List<String> unresolvedBlanks;
+  final ExecutionStudentFeedback? studentFeedback;
   final double totalReward;
   final double averageReward;
   final double bestEpisodeReward;
@@ -45,6 +47,9 @@ class WorkspaceTabs extends StatelessWidget {
     required this.onReset,
     required this.statusMessage,
     required this.runStatusLabel,
+    required this.failureKind,
+    required this.unresolvedBlanks,
+    required this.studentFeedback,
     required this.totalReward,
     required this.averageReward,
     required this.bestEpisodeReward,
@@ -60,33 +65,9 @@ class WorkspaceTabs extends StatelessWidget {
     return DefaultTabController(
       length: 3,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
         child: Column(
           children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
-              ),
-              child: const TabBar(
-                indicatorColor: Color(0xFF1A73E8),
-                labelColor: Color(0xFF1A73E8),
-                unselectedLabelColor: Color(0xFF6B7280),
-                tabs: [
-                  Tab(text: 'Concept'),
-                  Tab(text: 'Code'),
-                  Tab(text: 'Replay'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            _RunStatusStrip(
-              runStatusLabel: runStatusLabel,
-              statusMessage: statusMessage,
-            ),
-            const SizedBox(height: 10),
             Expanded(
               child: TabBarView(
                 children: [
@@ -102,6 +83,10 @@ class WorkspaceTabs extends StatelessWidget {
                     scriptVersion: scriptVersion,
                     statusMessage: statusMessage,
                     runStatusLabel: runStatusLabel,
+                    failureKind: failureKind,
+                    unresolvedBlanks: unresolvedBlanks,
+                    studentFeedback: studentFeedback,
+                    testResults: testResults,
                     onSubmit: onSubmit,
                     onStop: onStop,
                     onReset: onReset,
@@ -121,110 +106,31 @@ class WorkspaceTabs extends StatelessWidget {
                 ],
               ),
             ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              child: const TabBar(
+                indicatorColor: Color(0xFF1A73E8),
+                labelColor: Color(0xFF1A73E8),
+                unselectedLabelColor: Color(0xFF6B7280),
+                indicatorSize: TabBarIndicatorSize.tab,
+                tabs: [
+                  Tab(height: 36, text: 'Concept'),
+                  Tab(height: 36, text: 'Code'),
+                  Tab(height: 36, text: 'Replay'),
+                ],
+              ),
+            ),
           ],
         ),
       ),
     );
   }
-}
-
-class _RunStatusStrip extends StatelessWidget {
-  final String runStatusLabel;
-  final String statusMessage;
-
-  const _RunStatusStrip({
-    required this.runStatusLabel,
-    required this.statusMessage,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final style = _statusStyleFor(runStatusLabel);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: style.background,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: style.border),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            style.icon,
-            color: style.foreground,
-            size: 19,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              '$runStatusLabel: $statusMessage',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: style.foreground,
-                    fontWeight: FontWeight.w600,
-                    height: 1.4,
-                  ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  _RunStatusVisual _statusStyleFor(String status) {
-    switch (status) {
-      case 'Running':
-        return const _RunStatusVisual(
-          foreground: Color(0xFF1D4ED8),
-          background: Color(0xFFEFF6FF),
-          border: Color(0xFFBFDBFE),
-          icon: Icons.autorenew_rounded,
-        );
-      case 'Complete':
-        return const _RunStatusVisual(
-          foreground: Color(0xFF047857),
-          background: Color(0xFFECFDF5),
-          border: Color(0xFFA7F3D0),
-          icon: Icons.task_alt_rounded,
-        );
-      case 'Failed':
-        return const _RunStatusVisual(
-          foreground: Color(0xFFB91C1C),
-          background: Color(0xFFFEF2F2),
-          border: Color(0xFFFECACA),
-          icon: Icons.error_outline_rounded,
-        );
-      case 'Stopped':
-        return const _RunStatusVisual(
-          foreground: Color(0xFF7C3AED),
-          background: Color(0xFFF5F3FF),
-          border: Color(0xFFDDD6FE),
-          icon: Icons.stop_circle_outlined,
-        );
-      default:
-        return const _RunStatusVisual(
-          foreground: Color(0xFF334155),
-          background: Color(0xFFF8FAFC),
-          border: Color(0xFFE2E8F0),
-          icon: Icons.hourglass_empty_rounded,
-        );
-    }
-  }
-}
-
-class _RunStatusVisual {
-  final Color foreground;
-  final Color background;
-  final Color border;
-  final IconData icon;
-
-  const _RunStatusVisual({
-    required this.foreground,
-    required this.background,
-    required this.border,
-    required this.icon,
-  });
 }
 
 class _CodeExercisePane extends StatelessWidget {
@@ -238,6 +144,10 @@ class _CodeExercisePane extends StatelessWidget {
   final int scriptVersion;
   final String statusMessage;
   final String runStatusLabel;
+  final String? failureKind;
+  final List<String> unresolvedBlanks;
+  final ExecutionStudentFeedback? studentFeedback;
+  final List<ExecutionTestCaseResult> testResults;
   final VoidCallback onSubmit;
   final VoidCallback onStop;
   final VoidCallback onReset;
@@ -253,6 +163,10 @@ class _CodeExercisePane extends StatelessWidget {
     required this.scriptVersion,
     required this.statusMessage,
     required this.runStatusLabel,
+    required this.failureKind,
+    required this.unresolvedBlanks,
+    required this.studentFeedback,
+    required this.testResults,
     required this.onSubmit,
     required this.onStop,
     required this.onReset,
@@ -263,60 +177,45 @@ class _CodeExercisePane extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < 1100) {
-          return Column(
-            children: [
-              SizedBox(
-                height: 340,
-                child: ExerciseBriefPanel(lesson: lesson),
-              ),
-              const SizedBox(height: 20),
-              Expanded(
-                child: CodeEditorTab(
-                  lesson: lesson,
-                  code: code,
-                  workspaceSessionId: workspaceSessionId,
-                  workspaceReady: workspaceReady,
-                  editorConnectionStatus: editorConnectionStatus,
-                  consoleConnectionStatus: consoleConnectionStatus,
-                  editorShellUrl: editorShellUrl,
-                  statusMessage: statusMessage,
-                  runStatusLabel: runStatusLabel,
-                  scriptVersion: scriptVersion,
-                  onSubmit: onSubmit,
-                  onStop: onStop,
-                  onReset: onReset,
-                ),
-              ),
-            ],
+          return CodeEditorTab(
+            lesson: lesson,
+            code: code,
+            workspaceSessionId: workspaceSessionId,
+            workspaceReady: workspaceReady,
+            editorConnectionStatus: editorConnectionStatus,
+            consoleConnectionStatus: consoleConnectionStatus,
+            editorShellUrl: editorShellUrl,
+            statusMessage: statusMessage,
+            runStatusLabel: runStatusLabel,
+            scriptVersion: scriptVersion,
+            failureKind: failureKind,
+            unresolvedBlanks: unresolvedBlanks,
+            studentFeedback: studentFeedback,
+            testResults: testResults,
+            onSubmit: onSubmit,
+            onStop: onStop,
+            onReset: onReset,
           );
         }
 
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              width: 360,
-              child: ExerciseBriefPanel(lesson: lesson),
-            ),
-            const SizedBox(width: 20),
-            Expanded(
-              child: CodeEditorTab(
-                lesson: lesson,
-                code: code,
-                workspaceSessionId: workspaceSessionId,
-                workspaceReady: workspaceReady,
-                editorConnectionStatus: editorConnectionStatus,
-                consoleConnectionStatus: consoleConnectionStatus,
-                editorShellUrl: editorShellUrl,
-                statusMessage: statusMessage,
-                runStatusLabel: runStatusLabel,
-                scriptVersion: scriptVersion,
-                onSubmit: onSubmit,
-                onStop: onStop,
-                onReset: onReset,
-              ),
-            ),
-          ],
+        return CodeEditorTab(
+          lesson: lesson,
+          code: code,
+          workspaceSessionId: workspaceSessionId,
+          workspaceReady: workspaceReady,
+          editorConnectionStatus: editorConnectionStatus,
+          consoleConnectionStatus: consoleConnectionStatus,
+          editorShellUrl: editorShellUrl,
+          statusMessage: statusMessage,
+          runStatusLabel: runStatusLabel,
+          scriptVersion: scriptVersion,
+          failureKind: failureKind,
+          unresolvedBlanks: unresolvedBlanks,
+          studentFeedback: studentFeedback,
+          testResults: testResults,
+          onSubmit: onSubmit,
+          onStop: onStop,
+          onReset: onReset,
         );
       },
     );

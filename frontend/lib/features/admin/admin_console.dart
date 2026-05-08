@@ -18,7 +18,7 @@ class AdminConsole extends StatefulWidget {
     required String title,
     required String category,
     required String description,
-    required String conceptVideoAssetPath,
+    required String conceptVideoStreamPath,
     required String conceptVideoDuration,
     required String conceptVideoSummary,
     required List<String> conceptHighlights,
@@ -54,7 +54,7 @@ class _AdminConsoleState extends State<AdminConsole> {
   late final TextEditingController _titleController;
   late final TextEditingController _categoryController;
   late final TextEditingController _descriptionController;
-  late final TextEditingController _videoAssetController;
+  late final TextEditingController _videoPathController;
   late final TextEditingController _videoDurationController;
   late final TextEditingController _videoSummaryController;
   late final TextEditingController _videoHighlightsController;
@@ -74,7 +74,7 @@ class _AdminConsoleState extends State<AdminConsole> {
     _titleController = TextEditingController();
     _categoryController = TextEditingController();
     _descriptionController = TextEditingController();
-    _videoAssetController = TextEditingController();
+    _videoPathController = TextEditingController();
     _videoDurationController = TextEditingController();
     _videoSummaryController = TextEditingController();
     _videoHighlightsController = TextEditingController();
@@ -106,7 +106,7 @@ class _AdminConsoleState extends State<AdminConsole> {
     _titleController.dispose();
     _categoryController.dispose();
     _descriptionController.dispose();
-    _videoAssetController.dispose();
+    _videoPathController.dispose();
     _videoDurationController.dispose();
     _videoSummaryController.dispose();
     _videoHighlightsController.dispose();
@@ -184,20 +184,41 @@ class _AdminConsoleState extends State<AdminConsole> {
     List<LessonDefinition> lessons,
     LessonDefinition? selectedLesson,
   ) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(
-          width: 300,
-          child: _buildLessonList(context, lessons),
-        ),
-        const SizedBox(width: AppConstants.defaultPadding),
-        Expanded(
-          child: selectedLesson == null
-              ? _emptyState(context)
-              : _buildEditor(context, selectedLesson),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 800) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                height: 300,
+                child: _buildLessonList(context, lessons),
+              ),
+              const SizedBox(height: AppConstants.defaultPadding),
+              Expanded(
+                child: selectedLesson == null
+                    ? _emptyState(context)
+                    : _buildEditor(context, selectedLesson),
+              ),
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              width: 300,
+              child: _buildLessonList(context, lessons),
+            ),
+            const SizedBox(width: AppConstants.defaultPadding),
+            Expanded(
+              child: selectedLesson == null
+                  ? _emptyState(context)
+                  : _buildEditor(context, selectedLesson),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -419,7 +440,8 @@ class _AdminConsoleState extends State<AdminConsole> {
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(child: _field('Asset path', _videoAssetController)),
+                Expanded(
+                    child: _field('Backend video path', _videoPathController)),
                 const SizedBox(width: 14),
                 SizedBox(
                   width: 160,
@@ -499,7 +521,7 @@ class _AdminConsoleState extends State<AdminConsole> {
                     title: _titleController.text,
                     category: _categoryController.text,
                     description: _descriptionController.text,
-                    conceptVideoAssetPath: _videoAssetController.text,
+                    conceptVideoStreamPath: _videoPathController.text,
                     conceptVideoDuration: _videoDurationController.text,
                     conceptVideoSummary: _videoSummaryController.text,
                     conceptHighlights:
@@ -575,7 +597,7 @@ class _AdminConsoleState extends State<AdminConsole> {
     _titleController.text = lesson.title;
     _categoryController.text = lesson.category;
     _descriptionController.text = lesson.description;
-    _videoAssetController.text = lesson.conceptVideo.assetPath;
+    _videoPathController.text = lesson.conceptVideo.effectiveStreamPath;
     _videoDurationController.text = lesson.conceptVideo.durationLabel;
     _videoSummaryController.text = lesson.conceptVideo.summary;
     _videoHighlightsController.text = lesson.conceptVideo.highlights.join('\n');

@@ -26,6 +26,11 @@ class StudentProgressRecord(SQLModel, table=True):
     quiz_attempts_pretest: int = Field(default=0)
     quiz_attempts_posttest: int = Field(default=0)
     question_history_json: str = Field(default="[]")
+    total_submission_attempts: int = Field(default=0)
+    passed_submission_attempts: int = Field(default=0)
+    validation_failures: int = Field(default=0)
+    runtime_failures: int = Field(default=0)
+    test_failures: int = Field(default=0)
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from typing import Any
 
 from fastapi.testclient import TestClient
@@ -11,11 +12,33 @@ from backend.execution_runtime import ExecutionPipelineError
 
 @dataclass
 class _FakeLessonCatalogService:
-    def list_lessons(self) -> list[dict[str, str]]:
-        return [{"id": "dp_policy_eval", "title": "Policy Evaluation"}]
+    def list_lesson_sections(self) -> list[dict[str, Any]]:
+        lesson = {
+            "id": "dp_policy_eval",
+            "title": "Policy Evaluation",
+            "category": "Dynamic Programming",
+            "description": "Evaluate a fixed policy.",
+            "starter_code": "def policy_evaluation(): pass",
+            "backend_enabled": True,
+            "concept_video": {
+                "stream_path": "/media/concept-videos/dp_policy_eval_concept.mp4",
+                "duration_label": "03:30",
+                "summary": "Bellman expectation backup walkthrough.",
+                "highlights": ["Policy weighting"],
+            },
+            "exercise": {
+                "title": "Implement iterative policy evaluation",
+                "overview": "Complete the Bellman update.",
+                "tasks": ["Fill the backup loop."],
+                "template_blanks": [],
+                "success_criteria": ["The function returns values."],
+                "code_tip": "Tune DISCOUNT_FACTOR in code.",
+            },
+        }
+        return [{"title": "Dynamic Programming", "lessons": [lesson]}]
 
 
-class _FakeProgressService:
+class _FakeUserEvaluationService:
     def __init__(self) -> None:
         self._dashboards = {
             "student-1": {
@@ -33,6 +56,7 @@ class _FakeProgressService:
         }
 
     def sign_in(self, display_name: str, password: str, firebase_id_token: str | None = None):
+        del firebase_id_token
         if password == "bad":
             raise ValueError("Invalid display name or password.")
         return self._dashboards["student-1"]
@@ -56,21 +80,8 @@ class _FakeProgressService:
             }
         ]
 
-    def record_quiz_result(self, student_id: str, phase: str, percentage: float, question_ids: list[str]):
-        del phase, percentage, question_ids
-        return self._dashboards.get(student_id)
-
-    def get_question_history(self, student_id: str) -> list[str]:
-        del student_id
-        return []
-
-
-class _FakeQuizService:
-    def __init__(self, progress: _FakeProgressService) -> None:
-        self.progress = progress
-
-    def start_session(self, student_id: str, phase: str):
-        if self.progress.get_dashboard(student_id) is None:
+    def start_quiz(self, student_id: str, phase: str):
+        if self.get_dashboard(student_id) is None:
             raise ValueError("Unknown student_id.")
         if phase not in {"pretest", "posttest"}:
             raise ValueError(f"Unsupported quiz phase '{phase}'.")
@@ -88,9 +99,9 @@ class _FakeQuizService:
             ],
         }
 
-    def submit_session(self, student_id: str, session_id: str, answers: list[dict[str, int]]):
+    def submit_quiz(self, student_id: str, session_id: str, answers: list[dict[str, int]]):
         del session_id, answers
-        if self.progress.get_dashboard(student_id) is None:
+        if self.get_dashboard(student_id) is None:
             raise ValueError("Unknown student_id.")
         return {
             "phase": "pretest",
@@ -98,7 +109,7 @@ class _FakeQuizService:
             "total_questions": 1,
             "percentage": 100.0,
             "n_gain": None,
-            "progress": self.progress.get_dashboard(student_id)["progress"],
+            "progress": self.get_dashboard(student_id)["progress"],
         }
 
 
@@ -143,6 +154,15 @@ class _FakeExecutionService:
                 detail={
                     "message": "Code validation failed.",
                     "issues": ["q_learning_update not found"],
+                    "failure_kind": "validation_error",
+                    "student_feedback": {
+                        "status": "validation_error",
+                        "summary": "The required function body is incomplete.",
+                        "likely_issue": "The update rule is still missing.",
+                        "affected_blank_ids": [],
+                        "next_steps": ["Keep the required function signature."],
+                        "hint_level": "light",
+                    },
                 },
             )
         return {
@@ -242,17 +262,52 @@ class _FakeWorkspaceService:
 
 
 def _make_client() -> TestClient:
-    progress = _FakeProgressService()
+    user_evaluation = _FakeUserEvaluationService()
     services = ServiceContainer(
         lesson_catalog=_FakeLessonCatalogService(),
-        progress=progress,
-        quiz=_FakeQuizService(progress),
+        user_evaluation=user_evaluation,
         execution=_FakeExecutionService(),
         workspace=_FakeWorkspaceService(),
         metrics_export=_FakeMetricsExportService(),
     )
     app = create_app(services=services)
     return TestClient(app)
+
+
+def test_lessons_returns_grouped_frontend_catalog():
+    client = _make_client()
+    response = client.get("/lessons")
+
+    assert response.status_code == 200
+    body = response.json()
+    lesson = body["sections"][0]["lessons"][0]
+    assert body["sections"][0]["title"] == "Dynamic Programming"
+    assert body["lessons"][0]["id"] == "dp_policy_eval"
+    assert lesson["starter_code"]
+    assert lesson["backend_enabled"] is True
+    assert lesson["concept_video"]["stream_path"].endswith(".mp4")
+    assert lesson["exercise"]["template_blanks"] == []
+    assert lesson["exercise"]["success_criteria"]
+
+
+def test_concept_video_serves_backend_media(tmp_path, monkeypatch):
+    monkeypatch.setenv("RL_IDE_CONCEPT_VIDEO_DIR", str(tmp_path))
+    video_path = tmp_path / "dp_policy_eval_concept.mp4"
+    video_path.write_bytes(b"mp4-data")
+    client = _make_client()
+
+    response = client.get("/media/concept-videos/dp_policy_eval_concept.mp4")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("video/mp4")
+    assert response.content == b"mp4-data"
+
+    range_response = client.get(
+        "/media/concept-videos/dp_policy_eval_concept.mp4",
+        headers={"Range": "bytes=0-2"},
+    )
+    assert range_response.status_code == 206
+    assert range_response.content == b"mp4"
 
 
 def test_execute_success():
@@ -313,6 +368,8 @@ def test_execute_returns_validation_400():
     )
     assert response.status_code == 400
     assert response.json()["detail"]["message"] == "Code validation failed."
+    assert response.json()["detail"]["failure_kind"] == "validation_error"
+    assert response.json()["detail"]["student_feedback"]["hint_level"] == "light"
 
 
 def test_submit_and_task_snapshot_flow():
@@ -370,6 +427,72 @@ def test_workspace_health_reports_ready():
     payload = response.json()
     assert payload["ready"] is True
     assert payload["worker_reachable"] is True
+
+
+def test_visualization_frame_serves_png_under_output_root(tmp_path, monkeypatch):
+    frame_dir = tmp_path / "captures"
+    frame_dir.mkdir()
+    frame_path = frame_dir / "frame.png"
+    frame_path.write_bytes(b"png-data")
+    monkeypatch.setenv("RL_IDE_VISUALIZATION_OUTPUT_DIR", str(tmp_path))
+
+    client = _make_client()
+    response = client.get(
+        "/visualization/frame",
+        params={"path": str(frame_path)},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.content == b"png-data"
+
+
+def test_visualization_frame_rejects_paths_outside_output_root(tmp_path, monkeypatch):
+    outside_path = tmp_path.parent / "outside.png"
+    outside_path.write_bytes(b"png-data")
+    monkeypatch.setenv("RL_IDE_VISUALIZATION_OUTPUT_DIR", str(tmp_path))
+
+    client = _make_client()
+    response = client.get(
+        "/visualization/frame",
+        params={"path": str(outside_path)},
+    )
+
+    assert response.status_code == 403
+    os.remove(outside_path)
+
+
+def test_visualization_video_serves_mp4_under_output_root(tmp_path, monkeypatch):
+    video_dir = tmp_path / "videos"
+    video_dir.mkdir()
+    video_path = video_dir / "replay.mp4"
+    video_path.write_bytes(b"mp4-data")
+    monkeypatch.setenv("RL_IDE_VISUALIZATION_OUTPUT_DIR", str(tmp_path))
+
+    client = _make_client()
+    response = client.get(
+        "/visualization/video",
+        params={"path": str(video_path)},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "video/mp4"
+    assert response.content == b"mp4-data"
+
+
+def test_visualization_video_rejects_paths_outside_output_root(tmp_path, monkeypatch):
+    outside_path = tmp_path.parent / "outside.mp4"
+    outside_path.write_bytes(b"mp4-data")
+    monkeypatch.setenv("RL_IDE_VISUALIZATION_OUTPUT_DIR", str(tmp_path))
+
+    client = _make_client()
+    response = client.get(
+        "/visualization/video",
+        params={"path": str(outside_path)},
+    )
+
+    assert response.status_code == 403
+    os.remove(outside_path)
 
 
 def test_sign_in_error_maps_to_http_400():

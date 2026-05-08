@@ -3,13 +3,19 @@
 *.log
 *.pyc
 *.swp
+.env
+.env.*
+!.env.example
 .DS_Store
+.coverage
+.ruff_cache/
 .atom/
 .build/
 .buildlog/
 .history
 .svn/
 .swiftpm/
+AGENTS.md
 migrate_working_dir/
 
 # IntelliJ related
@@ -28,26 +34,50 @@ migrate_working_dir/
 **/ios/Flutter/.last_build_id
 .dart_tool/
 .flutter-plugins-dependencies
+.metadata
 .pub-cache/
 .pub/
 /build/
 /coverage/
 coverage.xml
-.coverage
+**/GeneratedPluginRegistrant.*
+**/Flutter/Generated.xcconfig
+**/Flutter/flutter_export_environment.sh
+**/Flutter/ephemeral/
+**/.symlinks/
+**/Pods/
+**/local.properties
+frontend/ios/Podfile.lock
 
 # Generated media and runtime artifacts
-frontend/assets/videos/*.mp4
-backend/visualization/_concept_media/
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+backend/media/concept_videos/*.mp4
+backend/concept_videos/_manim_media/
+backend/concept_videos/scenes/media/
 backend/visualization/animations/
 backend/data/
+backend/logger/logs/
+backend/**/__pycache__/
 output/runtime_logs/
+output/
 
 # Local-only research and scratch directories
+.codex-skills/
+.codex_artifacts/
 RL_manim/
-VidDemo/
 _tmp_grad1/
-media/
-tmp/
+/media/
+/tmp/
+/docs/
+/grad_project_archive_*/
+
+!backend/media/
+!backend/media/concept_videos/
+!backend/media/concept_videos/.gitkeep
 
 # Symbolication related
 app.*.symbols

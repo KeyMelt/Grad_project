@@ -5,550 +5,16 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'backend_api.dart';
 import 'export_file_saver.dart';
+import 'flashcard_catalog.dart';
+import 'lesson_models.dart';
+import 'local_lesson_catalog.dart';
+export 'lesson_models.dart';
 
+/// Current run lifecycle shown in the workspace controls and status strip.
 enum RunStatus { idle, running, success, failed, stopped }
 
+/// Top-level application destinations owned by [MainLayout].
 enum AppSection { home, workspace, flashcards, quiz, admin }
-
-@immutable
-class StudyFlashcard {
-  final String term;
-  final String category;
-  final String explanation;
-
-  const StudyFlashcard({
-    required this.term,
-    required this.category,
-    required this.explanation,
-  });
-}
-
-@immutable
-class LessonConceptVideo {
-  final String assetPath;
-  final String durationLabel;
-  final String summary;
-  final List<String> highlights;
-
-  const LessonConceptVideo({
-    required this.assetPath,
-    required this.durationLabel,
-    required this.summary,
-    required this.highlights,
-  });
-
-  LessonConceptVideo copyWith({
-    String? assetPath,
-    String? durationLabel,
-    String? summary,
-    List<String>? highlights,
-  }) {
-    return LessonConceptVideo(
-      assetPath: assetPath ?? this.assetPath,
-      durationLabel: durationLabel ?? this.durationLabel,
-      summary: summary ?? this.summary,
-      highlights: highlights ?? this.highlights,
-    );
-  }
-}
-
-@immutable
-class LessonExerciseBrief {
-  final String title;
-  final String overview;
-  final List<String> tasks;
-  final List<String> successCriteria;
-  final String codeTip;
-
-  const LessonExerciseBrief({
-    required this.title,
-    required this.overview,
-    required this.tasks,
-    required this.successCriteria,
-    required this.codeTip,
-  });
-
-  LessonExerciseBrief copyWith({
-    String? title,
-    String? overview,
-    List<String>? tasks,
-    List<String>? successCriteria,
-    String? codeTip,
-  }) {
-    return LessonExerciseBrief(
-      title: title ?? this.title,
-      overview: overview ?? this.overview,
-      tasks: tasks ?? this.tasks,
-      successCriteria: successCriteria ?? this.successCriteria,
-      codeTip: codeTip ?? this.codeTip,
-    );
-  }
-}
-
-@immutable
-class LessonDefinition {
-  final String id;
-  final String title;
-  final String description;
-  final String category;
-  final String starterCode;
-  final LessonConceptVideo conceptVideo;
-  final LessonExerciseBrief exercise;
-  final bool backendEnabled;
-
-  const LessonDefinition({
-    required this.id,
-    required this.title,
-    required this.description,
-    required this.category,
-    required this.starterCode,
-    required this.conceptVideo,
-    required this.exercise,
-    this.backendEnabled = true,
-  });
-
-  bool get hasVideo => conceptVideo.assetPath.isNotEmpty;
-
-  LessonDefinition copyWith({
-    String? id,
-    String? title,
-    String? description,
-    String? category,
-    String? starterCode,
-    LessonConceptVideo? conceptVideo,
-    LessonExerciseBrief? exercise,
-    bool? backendEnabled,
-  }) {
-    return LessonDefinition(
-      id: id ?? this.id,
-      title: title ?? this.title,
-      description: description ?? this.description,
-      category: category ?? this.category,
-      starterCode: starterCode ?? this.starterCode,
-      conceptVideo: conceptVideo ?? this.conceptVideo,
-      exercise: exercise ?? this.exercise,
-      backendEnabled: backendEnabled ?? this.backendEnabled,
-    );
-  }
-}
-
-@immutable
-class LessonSection {
-  final String title;
-  final List<LessonDefinition> lessons;
-
-  const LessonSection({
-    required this.title,
-    required this.lessons,
-  });
-
-  LessonSection copyWith({
-    String? title,
-    List<LessonDefinition>? lessons,
-  }) {
-    return LessonSection(
-      title: title ?? this.title,
-      lessons: lessons ?? this.lessons,
-    );
-  }
-}
-
-const List<LessonSection> _lessonSections = [
-  LessonSection(
-    title: 'Dynamic Programming',
-    lessons: [
-      LessonDefinition(
-        id: 'dp_policy_eval',
-        title: 'Policy Evaluation',
-        description:
-            'Evaluate a fixed policy over FrozenLake using Bellman expectation backups and iterative sweeps.',
-        category: 'Dynamic Programming',
-        starterCode: '''
-DISCOUNT_FACTOR = 0.95
-
-def policy_evaluation(V, policy, env, gamma=DISCOUNT_FACTOR, theta=1e-8):
-    delta = float("inf")
-    while delta > theta:
-        delta = 0.0
-        for state in range(len(V)):
-            old_value = V[state]
-            new_value = 0.0
-            for action, action_prob in enumerate(policy[state]):
-                for transition_prob, next_state, reward, done in env.P[state][action]:
-                    future = 0.0 if done else V[next_state]
-                    new_value += action_prob * transition_prob * (reward + gamma * future)
-            V[state] = new_value
-            delta = max(delta, abs(old_value - new_value))
-    return V
-''',
-        conceptVideo: LessonConceptVideo(
-          assetPath: 'assets/videos/dp_policy_eval_concept.mp4',
-          durationLabel: '00:11',
-          summary:
-              'This lesson video walks through one Bellman expectation sweep with the FrozenLake grid, the update loop, and the numerical backup shown together.',
-          highlights: [
-            'How a fixed policy weights each action.',
-            'How transition probabilities and discounted future values combine.',
-            'Why repeated sweeps converge to stable state values.',
-          ],
-        ),
-        exercise: LessonExerciseBrief(
-          title: 'Implement iterative policy evaluation',
-          overview:
-              'Complete the Bellman expectation update so each state value is replaced by the expected return under the supplied policy. The lesson video gives the conceptual walkthrough; this exercise asks you to express that reasoning in code.',
-          tasks: [
-            'Keep the sweep over every state until the largest value change is smaller than theta.',
-            'For each state, combine the policy probability and the environment transition probability for every possible outcome.',
-            'Use the discounted future value for non-terminal transitions.',
-            'Edit the code constants at the top when you want a different discount factor.',
-          ],
-          successCriteria: [
-            'The function returns a value table that passes the sample Bellman backup checks.',
-            'The backend step replay can show the grid state, code trace, and expectation equation for the generated run.',
-            'The implementation remains inside the provided function signature.',
-          ],
-          codeTip:
-              'Set lesson configuration inside the code itself. For this lesson, the main editable constant is DISCOUNT_FACTOR at the top of the file.',
-        ),
-      ),
-      LessonDefinition(
-        id: 'dp_value_iteration',
-        title: 'Value Iteration',
-        description:
-            'Compute optimal FrozenLake state values by repeatedly taking the best Bellman backup at each state.',
-        category: 'Dynamic Programming',
-        starterCode: '''
-DISCOUNT_FACTOR = 0.95
-
-def value_iteration(V, env, gamma=DISCOUNT_FACTOR, theta=1e-8):
-    delta = float("inf")
-    action_count = env.action_space.n
-    while delta > theta:
-        delta = 0.0
-        for state in range(len(V)):
-            old_value = V[state]
-            action_values = []
-            for action in range(action_count):
-                action_value = 0.0
-                for transition_prob, next_state, reward, done in env.P[state][action]:
-                    future = 0.0 if done else V[next_state]
-                    action_value += transition_prob * (reward + gamma * future)
-                action_values.append(action_value)
-            V[state] = max(action_values)
-            delta = max(delta, abs(old_value - V[state]))
-    return V
-''',
-        conceptVideo: LessonConceptVideo(
-          assetPath: 'assets/videos/dp_value_iteration_concept.mp4',
-          durationLabel: '00:07',
-          summary:
-              'The concept video contrasts action backups for the same state so the learner can see why value iteration keeps only the best action value.',
-          highlights: [
-            'How the environment branches for each action.',
-            'Why the maximum action backup replaces the policy-weighted sum.',
-            'How the optimal value function emerges across repeated sweeps.',
-          ],
-        ),
-        exercise: LessonExerciseBrief(
-          title: 'Implement Bellman optimality backups',
-          overview:
-              'Update each state by computing every action backup and keeping the maximum. The exercise mirrors the concept video, but now the student must express the optimality update directly in code.',
-          tasks: [
-            'Loop over all available actions for each state.',
-            'Compute the expected return for each action using transition probabilities and discounted future values.',
-            'Choose the maximum action value and store it in the state value table.',
-            'Use the DISCOUNT_FACTOR constant in the code when exploring different behaviours.',
-          ],
-          successCriteria: [
-            'The returned value table passes the toy optimal-backup sample test.',
-            'The generated replay shows which action won the backup for the highlighted state.',
-            'The function preserves the supplied signature and returns the updated table.',
-          ],
-          codeTip:
-              'There is no slider for gamma anymore. Change DISCOUNT_FACTOR directly in the code to alter the backups.',
-        ),
-      ),
-      LessonDefinition(
-        id: 'dp_policy_improvement',
-        title: 'Policy Improvement',
-        description:
-            'Turn a state-value table into a greedy FrozenLake policy by backing up each available action.',
-        category: 'Dynamic Programming',
-        starterCode: '''
-DISCOUNT_FACTOR = 0.95
-
-def policy_improvement(V, env, gamma=DISCOUNT_FACTOR):
-    action_count = env.action_space.n
-    policy = [[0.0 for _ in range(action_count)] for _ in range(len(V))]
-
-    for state in range(len(V)):
-        action_values = []
-        for action in range(action_count):
-            action_value = 0.0
-            for transition_prob, next_state, reward, done in env.P[state][action]:
-                future = 0.0 if done else V[next_state]
-                action_value += transition_prob * (reward + gamma * future)
-            action_values.append(action_value)
-
-        best_action = max(range(action_count), key=lambda index: action_values[index])
-        policy[state][best_action] = 1.0
-
-    return policy
-''',
-        conceptVideo: LessonConceptVideo(
-          assetPath: 'assets/videos/dp_policy_improvement_concept.mp4',
-          durationLabel: '00:10',
-          summary:
-              'This lesson focuses on one greedy improvement step: compare every action backup, then place all policy mass on the best action.',
-          highlights: [
-            'How the current value table scores each action.',
-            'Why policy improvement uses argmax instead of an expectation.',
-            'How the chosen action becomes a one-hot policy row.',
-          ],
-        ),
-        exercise: LessonExerciseBrief(
-          title: 'Implement greedy policy improvement',
-          overview:
-              'Build a greedy policy row for each state by evaluating every action backup against the current value table.',
-          tasks: [
-            'Loop through all actions available in the current state.',
-            'Compute each action backup from transition probabilities, rewards, and discounted future values.',
-            'Choose the best action and write a one-hot policy row.',
-            'Adjust DISCOUNT_FACTOR in code when you want a different improvement step.',
-          ],
-          successCriteria: [
-            'The returned policy selects the greedy action in the sample test.',
-            'Each policy row remains a valid one-hot distribution.',
-            'The generated replay can tie the chosen action to the backup values that justified it.',
-          ],
-          codeTip:
-              'Keep the output as a policy table. Each row should contain one 1.0 entry for the greedy action and 0.0 elsewhere.',
-        ),
-      ),
-    ],
-  ),
-  LessonSection(
-    title: 'Monte Carlo Methods',
-    lessons: [
-      LessonDefinition(
-        id: 'mc_first_visit',
-        title: 'First-Visit Monte Carlo',
-        description:
-            'Estimate state values from complete episodes by updating only the first occurrence of each state.',
-        category: 'Monte Carlo Methods',
-        starterCode: '''
-DISCOUNT_FACTOR = 0.95
-EPISODE_COUNT = 6
-
-def mc_first_visit_prediction(episode, V, returns, gamma=DISCOUNT_FACTOR):
-    visited_states = set()
-    for index, (state, _action, _reward) in enumerate(episode):
-        if state in visited_states:
-            continue
-        visited_states.add(state)
-        G = 0.0
-        discount = 1.0
-        for _next_state, _next_action, reward in episode[index:]:
-            G += discount * reward
-            discount *= gamma
-        returns[state].append(G)
-        V[state] = sum(returns[state]) / len(returns[state])
-    return V
-''',
-        conceptVideo: LessonConceptVideo(
-          assetPath: 'assets/videos/mc_first_visit_concept.mp4',
-          durationLabel: '00:06',
-          summary:
-              'This lesson video follows one sampled episode from start to finish, then walks backward through the return calculation for the first visit of each state.',
-          highlights: [
-            'Why Monte Carlo waits for the whole episode before updating.',
-            'How first-visit logic skips repeated states.',
-            'How the discounted return becomes a value estimate.',
-          ],
-        ),
-        exercise: LessonExerciseBrief(
-          title: 'Implement first-visit return updates',
-          overview:
-              'Process an entire sampled episode, compute the discounted return from the first occurrence of each state, and update the running averages in the value table.',
-          tasks: [
-            'Track which states have already been updated in the current episode.',
-            'Compute the discounted return from the first visit index to the end of the episode.',
-            'Append the return to the state history and recompute the state average.',
-            'Change EPISODE_COUNT or DISCOUNT_FACTOR at the top of the code to explore different rollouts.',
-          ],
-          successCriteria: [
-            'The returned value table matches the expected first-visit test values.',
-            'The replay shows a full sampled trajectory before the update step.',
-            'Repeated states are skipped after their first occurrence.',
-          ],
-          codeTip:
-              'This exercise uses DISCOUNT_FACTOR and EPISODE_COUNT constants from the code block rather than a separate parameter panel.',
-        ),
-      ),
-    ],
-  ),
-  LessonSection(
-    title: 'Temporal Difference',
-    lessons: [
-      LessonDefinition(
-        id: 'td_sarsa',
-        title: 'SARSA',
-        description:
-            'Update tabular action values with an on-policy TD target that uses the next sampled action.',
-        category: 'Temporal Difference',
-        starterCode: '''
-LEARNING_RATE = 0.10
-DISCOUNT_FACTOR = 0.95
-EXPLORATION_RATE = 0.20
-EPISODE_COUNT = 6
-
-def sarsa_update(
-    Q,
-    state,
-    action,
-    reward,
-    next_state,
-    next_action,
-    alpha=LEARNING_RATE,
-    gamma=DISCOUNT_FACTOR,
-):
-    bootstrap = 0.0 if next_action is None else Q[next_state][next_action]
-    td_target = reward + gamma * bootstrap
-    Q[state][action] = Q[state][action] + alpha * (td_target - Q[state][action])
-    return Q
-''',
-        conceptVideo: LessonConceptVideo(
-          assetPath: 'assets/videos/td_sarsa_concept.mp4',
-          durationLabel: '00:11',
-          summary:
-              'The lesson walkthrough keeps the sampled next action on screen so the learner can see why SARSA is an on-policy update.',
-          highlights: [
-            'How the sampled next action enters the TD target.',
-            'Why SARSA follows the same behaviour policy during learning.',
-            'How alpha scales the change to one Q-value.',
-          ],
-        ),
-        exercise: LessonExerciseBrief(
-          title: 'Implement the SARSA update rule',
-          overview:
-              'Complete the on-policy TD update so the bootstrap term comes from the next sampled action rather than from a max over the next-state row.',
-          tasks: [
-            'Accept the sampled next action as part of the function input.',
-            'Use a zero bootstrap when the transition is terminal.',
-            'Build the TD target from reward plus the discounted next-action value.',
-            'Change LEARNING_RATE, DISCOUNT_FACTOR, EXPLORATION_RATE, and EPISODE_COUNT directly in code when you want a different run.',
-          ],
-          successCriteria: [
-            'The update passes the sample SARSA test case.',
-            'The replay identifies the sampled next action used in the bootstrap.',
-            'The function returns the updated Q-table without changing the required signature.',
-          ],
-          codeTip:
-              'The key difference from Q-learning is the bootstrap term. Use the provided next_action rather than taking a max over the next-state row.',
-        ),
-      ),
-      LessonDefinition(
-        id: 'td_q_learning',
-        title: 'Q-Learning',
-        description:
-            'Update tabular action values with one-step TD targets over FrozenLake transitions.',
-        category: 'Temporal Difference',
-        starterCode: '''
-LEARNING_RATE = 0.10
-DISCOUNT_FACTOR = 0.95
-EXPLORATION_RATE = 0.20
-EPISODE_COUNT = 6
-
-def q_learning_update(Q, state, action, reward, next_state, alpha=LEARNING_RATE, gamma=DISCOUNT_FACTOR):
-    best_next_value = max(Q[next_state])
-    td_target = reward + gamma * best_next_value
-    Q[state][action] = Q[state][action] + alpha * (td_target - Q[state][action])
-    return Q
-''',
-        conceptVideo: LessonConceptVideo(
-          assetPath: 'assets/videos/td_q_learning_concept.mp4',
-          durationLabel: '00:07',
-          summary:
-              'The pre-rendered explainer synchronizes the agent move, the highlighted update line, and the numeric TD target so the learner can see exactly how one Q-value changes.',
-          highlights: [
-            'How the sampled FrozenLake transition drives the update.',
-            'Where the max next-state value appears in the TD target.',
-            'How alpha controls the size of the Q-value change.',
-          ],
-        ),
-        exercise: LessonExerciseBrief(
-          title: 'Implement the Q-learning update rule',
-          overview:
-              'Complete the one-step TD update that adjusts a single Q-value from a sampled transition. Your code should match the reasoning shown in the lesson video and in the generated step replay.',
-          tasks: [
-            'Find the best next-state action value using the next-state row of the Q-table.',
-            'Build the TD target from the immediate reward and the discounted bootstrap value.',
-            'Apply the incremental update using the learning-rate constant at the top of the file.',
-            'Change LEARNING_RATE, DISCOUNT_FACTOR, EXPLORATION_RATE, and EPISODE_COUNT directly in the code when you want a different run configuration.',
-          ],
-          successCriteria: [
-            'The Q-value update passes the provided TD sample test.',
-            'The generated replay shows the sampled transition probability, the update line, and the numeric TD target together.',
-            'The function returns the updated Q-table without changing the required signature.',
-          ],
-          codeTip:
-              'The run configuration now lives in code constants. The backend reads LEARNING_RATE, DISCOUNT_FACTOR, EXPLORATION_RATE, and EPISODE_COUNT from your submission.',
-        ),
-      ),
-    ],
-  ),
-];
-
-const List<StudyFlashcard> _studyFlashcards = [
-  StudyFlashcard(
-    term: 'Bellman Expectation',
-    category: 'Dynamic Programming',
-    explanation:
-        'Policy evaluation updates each state with an expectation over policy choices and transition probabilities.',
-  ),
-  StudyFlashcard(
-    term: 'Bellman Optimality',
-    category: 'Dynamic Programming',
-    explanation:
-        'Value iteration selects the largest action backup instead of averaging under a fixed policy.',
-  ),
-  StudyFlashcard(
-    term: 'Policy Improvement',
-    category: 'Dynamic Programming',
-    explanation:
-        'Policy improvement chooses the greedy action for each state using the current value table.',
-  ),
-  StudyFlashcard(
-    term: 'First-Visit Return',
-    category: 'Monte Carlo Methods',
-    explanation:
-        'First-visit Monte Carlo updates a state only once per episode, using the full discounted return from its first occurrence.',
-  ),
-  StudyFlashcard(
-    term: 'SARSA',
-    category: 'Temporal Difference',
-    explanation:
-        'SARSA is on-policy because its TD target uses the next action that the behaviour policy actually sampled.',
-  ),
-  StudyFlashcard(
-    term: 'TD Target',
-    category: 'Temporal Difference',
-    explanation:
-        'The Q-learning target is the immediate reward plus gamma times the best next-state value.',
-  ),
-  StudyFlashcard(
-    term: 'Transition Probability',
-    category: 'Environment Model',
-    explanation:
-        'Transition probability tells us how likely the environment is to move to a particular next state after a chosen action.',
-  ),
-  StudyFlashcard(
-    term: 'Normalized Gain',
-    category: 'Assessment',
-    explanation:
-        'N-gain measures conceptual growth as (post - pre) / (100 - pre).',
-  ),
-];
 
 const Object _sentinel = Object();
 
@@ -585,6 +51,9 @@ class RLWorkbenchState {
   final String videoPath;
   final List<ExecutionTestCaseResult> testResults;
   final List<ExecutionTraceStep> stepTrace;
+  final String? failureKind;
+  final List<String> unresolvedBlanks;
+  final ExecutionStudentFeedback? studentFeedback;
   final bool sidebarVisible;
   final String? adminSelectedLessonId;
   final String adminMessage;
@@ -622,6 +91,9 @@ class RLWorkbenchState {
     required this.videoPath,
     required this.testResults,
     required this.stepTrace,
+    required this.failureKind,
+    required this.unresolvedBlanks,
+    required this.studentFeedback,
     required this.sidebarVisible,
     required this.adminSelectedLessonId,
     required this.adminMessage,
@@ -629,10 +101,10 @@ class RLWorkbenchState {
   });
 
   factory RLWorkbenchState.initial() {
-    final selectedLesson = _lessonSections.first.lessons.first;
+    final selectedLesson = fallbackLessonSections.first.lessons.first;
     return RLWorkbenchState(
-      sections: _lessonSections,
-      flashcards: _studyFlashcards,
+      sections: fallbackLessonSections,
+      flashcards: studyFlashcards,
       currentSection: AppSection.home,
       learner: null,
       progress: const LearnerProgress.empty(),
@@ -663,6 +135,9 @@ class RLWorkbenchState {
       videoPath: '',
       testResults: const [],
       stepTrace: const [],
+      failureKind: null,
+      unresolvedBlanks: const [],
+      studentFeedback: null,
       sidebarVisible: true,
       adminSelectedLessonId: selectedLesson.id,
       adminMessage: 'Edit lessons in this session.',
@@ -717,6 +192,9 @@ class RLWorkbenchState {
     String? videoPath,
     List<ExecutionTestCaseResult>? testResults,
     List<ExecutionTraceStep>? stepTrace,
+    Object? failureKind = _sentinel,
+    List<String>? unresolvedBlanks,
+    Object? studentFeedback = _sentinel,
     bool? sidebarVisible,
     Object? adminSelectedLessonId = _sentinel,
     String? adminMessage,
@@ -766,6 +244,13 @@ class RLWorkbenchState {
       videoPath: videoPath ?? this.videoPath,
       testResults: testResults ?? this.testResults,
       stepTrace: stepTrace ?? this.stepTrace,
+      failureKind: identical(failureKind, _sentinel)
+          ? this.failureKind
+          : failureKind as String?,
+      unresolvedBlanks: unresolvedBlanks ?? this.unresolvedBlanks,
+      studentFeedback: identical(studentFeedback, _sentinel)
+          ? this.studentFeedback
+          : studentFeedback as ExecutionStudentFeedback?,
       sidebarVisible: sidebarVisible ?? this.sidebarVisible,
       adminSelectedLessonId: identical(adminSelectedLessonId, _sentinel)
           ? this.adminSelectedLessonId
@@ -776,11 +261,14 @@ class RLWorkbenchState {
   }
 }
 
+/// Coordinates learner actions across auth, lesson selection, execution,
+/// workspace sync, quizzes, and admin editing.
 class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   RLWorkbenchCubit({
     BackendApi? api,
   })  : _api = api ?? HttpBackendApi(),
         super(RLWorkbenchState.initial()) {
+    unawaited(loadBackendLessonCatalog());
     if (state.selectedLesson.backendEnabled) {
       unawaited(
           _attachWorkspaceSession(state.selectedLesson, announceStatus: false));
@@ -792,6 +280,79 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   String? _activeWorkspaceRunId;
 
   BackendApi get api => _api;
+
+  Future<void> loadBackendLessonCatalog() async {
+    try {
+      final backendSections = await _api.fetchLessonSections();
+      if (backendSections.isEmpty ||
+          backendSections.every((section) => section.lessons.isEmpty)) {
+        return;
+      }
+
+      var mergedSections = backendSections;
+      for (final section in state.sections) {
+        for (final lesson in section.lessons) {
+          if (!_isCoreLessonId(lesson.id)) {
+            mergedSections = _upsertLessonInSections(mergedSections, lesson);
+          }
+        }
+      }
+
+      final previousLesson = state.selectedLesson;
+      final selectedLesson =
+          _findLessonById(mergedSections, previousLesson.id) ??
+              mergedSections.first.lessons.first;
+      final selectedChanged = selectedLesson.id != previousLesson.id;
+      final codeIsUntouchedStarter = state.code == previousLesson.starterCode;
+      final shouldReplaceCode = selectedChanged || codeIsUntouchedStarter;
+
+      emit(
+        state.copyWith(
+          sections: mergedSections,
+          selectedLesson: selectedLesson,
+          code: shouldReplaceCode ? selectedLesson.starterCode : state.code,
+          adminSelectedLessonId:
+              _findLessonById(mergedSections, state.adminSelectedLessonId ?? '')
+                          ?.id !=
+                      null
+                  ? state.adminSelectedLessonId
+                  : selectedLesson.id,
+          homeMessage: state.learner == null
+              ? 'Using backend lesson catalog. Sign in to save quiz results and lesson progress.'
+              : state.homeMessage,
+        ),
+      );
+
+      if (shouldReplaceCode && state.workspaceSessionId != null) {
+        unawaited(_syncWorkspaceCode(
+          state.workspaceSessionId!,
+          selectedLesson.starterCode,
+        ));
+      }
+      if (selectedChanged && selectedLesson.backendEnabled) {
+        unawaited(_attachWorkspaceSession(
+          selectedLesson,
+          announceStatus: false,
+        ));
+      }
+    } on BackendApiException {
+      _retainFallbackLessonCatalog();
+    } catch (_) {
+      _retainFallbackLessonCatalog();
+    }
+  }
+
+  void _retainFallbackLessonCatalog() {
+    if (state.learner != null) {
+      return;
+    }
+    emit(
+      state.copyWith(
+        homeMessage:
+            'Using local fallback lessons. Start the backend to refresh lesson content.',
+      ),
+    );
+  }
 
   void navigateTo(AppSection section) {
     emit(state.copyWith(currentSection: section));
@@ -934,6 +495,9 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         videoPath: '',
         testResults: const [],
         stepTrace: const [],
+        failureKind: null,
+        unresolvedBlanks: const [],
+        studentFeedback: null,
         statusMessage: preserveWorkspace
             ? state.statusMessage
             : lesson.backendEnabled
@@ -1143,7 +707,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         state.copyWith(
           activeRunId: null,
           statusMessage:
-              'Workspace runtime unavailable at $defaultBackendBaseUrl.',
+              'Workspace runtime unavailable at ${BackendConnectionManager().baseUrl}.',
           editorConnectionStatus: WorkspaceConnectionStatus.failed,
           consoleConnectionStatus: WorkspaceConnectionStatus.failed,
         ),
@@ -1184,6 +748,9 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         videoPath: '',
         testResults: const [],
         stepTrace: const [],
+        failureKind: null,
+        unresolvedBlanks: const [],
+        studentFeedback: null,
         statusMessage:
             'Submitting ${state.selectedLesson.title} for grading...',
       ),
@@ -1216,6 +783,9 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
           videoPath: '',
           testResults: error.testResults,
           stepTrace: const [],
+          failureKind: error.failureKind,
+          unresolvedBlanks: error.unresolvedBlanks,
+          studentFeedback: error.studentFeedback,
           statusMessage: error.message,
         ),
       );
@@ -1232,7 +802,11 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
           videoPath: '',
           testResults: const [],
           stepTrace: const [],
-          statusMessage: 'Backend unavailable at $defaultBackendBaseUrl.',
+          failureKind: null,
+          unresolvedBlanks: const [],
+          studentFeedback: null,
+          statusMessage:
+              'Backend unavailable at ${BackendConnectionManager().baseUrl}.',
         ),
       );
     }
@@ -1273,6 +847,9 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         videoPath: '',
         testResults: const [],
         stepTrace: const [],
+        failureKind: null,
+        unresolvedBlanks: const [],
+        studentFeedback: null,
         statusMessage:
             'Reset ${state.selectedLesson.title} to its starter template.',
       ),
@@ -1308,7 +885,7 @@ def lesson_function(*args, **kwargs):
     return None
 ''',
       conceptVideo: const LessonConceptVideo(
-        assetPath: 'assets/videos/draft_placeholder.mp4',
+        streamPath: '/media/concept-videos/draft_placeholder.mp4',
         durationLabel: '00:45',
         summary: 'Add a concept video.',
         highlights: [
@@ -1349,7 +926,7 @@ def lesson_function(*args, **kwargs):
     required String title,
     required String category,
     required String description,
-    required String conceptVideoAssetPath,
+    required String conceptVideoStreamPath,
     required String conceptVideoDuration,
     required String conceptVideoSummary,
     required List<String> conceptHighlights,
@@ -1380,9 +957,9 @@ def lesson_function(*args, **kwargs):
           starterCode.trim().isEmpty ? existingLesson.starterCode : starterCode,
       backendEnabled: backendEnabled,
       conceptVideo: existingLesson.conceptVideo.copyWith(
-        assetPath: conceptVideoAssetPath.trim().isEmpty
-            ? existingLesson.conceptVideo.assetPath
-            : conceptVideoAssetPath.trim(),
+        streamPath: conceptVideoStreamPath.trim().isEmpty
+            ? existingLesson.conceptVideo.streamPath
+            : conceptVideoStreamPath.trim(),
         durationLabel: conceptVideoDuration.trim().isEmpty
             ? existingLesson.conceptVideo.durationLabel
             : conceptVideoDuration.trim(),
@@ -1672,6 +1249,9 @@ def lesson_function(*args, **kwargs):
       videoPath: '',
       testResults: const [],
       stepTrace: const [],
+      failureKind: null,
+      unresolvedBlanks: const [],
+      studentFeedback: null,
       statusMessage: message,
     );
   }
@@ -1719,6 +1299,9 @@ def lesson_function(*args, **kwargs):
               videoPath: result.videoPath,
               testResults: result.testResults,
               stepTrace: result.stepTrace,
+              failureKind: null,
+              unresolvedBlanks: const [],
+              studentFeedback: null,
               statusMessage: result.visualizationReady
                   ? '${result.message} Replay ready.'
                   : '${result.message} No replay video generated.',
@@ -1739,6 +1322,9 @@ def lesson_function(*args, **kwargs):
               videoPath: '',
               testResults: snapshot.testResults,
               stepTrace: const [],
+              failureKind: snapshot.failureKind,
+              unresolvedBlanks: snapshot.unresolvedBlanks,
+              studentFeedback: snapshot.studentFeedback,
               statusMessage: snapshot.errorMessage ?? 'Execution task failed.',
             ),
           );
@@ -1801,7 +1387,7 @@ def lesson_function(*args, **kwargs):
   }
 
   bool _isCoreLessonId(String lessonId) {
-    for (final section in _lessonSections) {
+    for (final section in fallbackLessonSections) {
       for (final lesson in section.lessons) {
         if (lesson.id == lessonId) {
           return true;

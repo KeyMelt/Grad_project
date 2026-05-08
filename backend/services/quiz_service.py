@@ -261,10 +261,7 @@ class QuizService:
         if session.student_id != student_id:
             raise ValueError("Quiz session does not belong to this student.")
 
-        answer_map = {
-            answer["question_id"]: answer["selected_index"]
-            for answer in answers
-        }
+        answer_map = {answer["question_id"]: answer["selected_index"] for answer in answers}
         score = 0
         for question_id in session.question_ids:
             if answer_map.get(question_id) == session.correct_indices[question_id]:

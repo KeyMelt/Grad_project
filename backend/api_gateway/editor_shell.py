@@ -196,8 +196,14 @@ def build_editor_shell_html() -> str:
 
       function applyDiagnostics(diagnostics) {
         if (!editor || !window.monaco) return;
+        const severityMap = {
+          error: monaco.MarkerSeverity.Error,
+          warning: monaco.MarkerSeverity.Warning,
+          info: monaco.MarkerSeverity.Info,
+          hint: monaco.MarkerSeverity.Hint,
+        };
         const markers = diagnostics.map((item) => ({
-          severity: monaco.MarkerSeverity.Error,
+          severity: severityMap[item.severity] || monaco.MarkerSeverity.Error,
           message: item.message,
           startLineNumber: item.line || 1,
           startColumn: item.column || 1,

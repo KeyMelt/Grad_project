@@ -12,6 +12,9 @@ class FakeBackendApi extends BackendApi {
   String _workspaceContent = 'print("workspace")\n';
 
   @override
+  Future<List<LessonSection>> fetchLessonSections() async => const [];
+
+  @override
   Future<LearnerDashboard> signIn({
     required String displayName,
     required String password,

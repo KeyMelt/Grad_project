@@ -1,0 +1,37 @@
+FROM python:3.11-slim
+
+ARG DOCKER_CLI_VERSION=27.5.1
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      build-essential \
+      pkg-config \
+      libcairo2-dev \
+      libpango1.0-dev \
+      ffmpeg \
+      ca-certificates \
+      curl \
+      libsdl2-2.0-0 \
+      libsdl2-ttf-2.0-0 && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN set -eux; \
+    arch="$(uname -m)"; \
+    case "${arch}" in \
+      x86_64) docker_arch="x86_64" ;; \
+      aarch64|arm64) docker_arch="aarch64" ;; \
+      *) echo "Unsupported Docker CLI architecture: ${arch}" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://download.docker.com/linux/static/stable/${docker_arch}/docker-${DOCKER_CLI_VERSION}.tgz" -o /tmp/docker.tgz; \
+    tar -xzf /tmp/docker.tgz -C /tmp; \
+    install -m 0755 /tmp/docker/docker /usr/local/bin/docker; \
+    rm -rf /tmp/docker /tmp/docker.tgz; \
+    docker --version
+
+WORKDIR /app
+
+COPY backend/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt

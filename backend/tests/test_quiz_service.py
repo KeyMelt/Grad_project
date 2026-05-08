@@ -50,9 +50,11 @@ class _FakeProgressService:
             progress["n_gain"] = (
                 None
                 if pretest_score is None
-                else round((percentage - pretest_score) / (100 - pretest_score), 3)
-                if pretest_score < 100
-                else 1.0
+                else (
+                    round((percentage - pretest_score) / (100 - pretest_score), 3)
+                    if pretest_score < 100
+                    else 1.0
+                )
             )
         self._question_history.setdefault(student_id, []).extend(question_ids)
         return dashboard

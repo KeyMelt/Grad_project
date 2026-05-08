@@ -105,8 +105,7 @@ class SqliteExecutionJobStore:
 
     def _init_schema(self) -> None:
         with self._connection() as conn:
-            conn.execute(
-                """
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS execution_jobs (
                     task_id TEXT PRIMARY KEY,
                     status TEXT NOT NULL,
@@ -114,8 +113,7 @@ class SqliteExecutionJobStore:
                     error_json TEXT NULL,
                     created_at_utc TEXT NOT NULL DEFAULT (datetime('now'))
                 )
-                """
-            )
+                """)
             conn.commit()
 
     @contextmanager

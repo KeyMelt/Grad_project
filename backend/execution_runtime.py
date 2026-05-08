@@ -1,14 +1,23 @@
+"""Submission execution pipeline for guided RL lessons.
+
+The gateway and task services call this module when a learner submits code.
+The pipeline keeps learner code in a spawned subprocess, validates the lesson
+contract first, then runs the RL engine and returns replay-ready trace data.
+"""
+
+import ast
 import json
+import multiprocessing
 import os
 import uuid
-import multiprocessing
-import ast
 from typing import Any
 
 from backend.lessons import get_lesson_definition
 from backend.logger.event_logger import EventLogger, NpEncoder
 from backend.rl_engine.engine import EnvironmentAdapter, RLEngine
+from backend.services.student_feedback_service import StudentFeedbackService
 from backend.services.visualization_service import VisualizationService
+from backend.settings import ExecutionSettings
 from backend.user_code import load_user_context
 from backend.validation.validator import CodeValidator
 
@@ -24,7 +33,10 @@ def run_submission_with_timeout(
     submission_payload: dict[str, Any],
     timeout_seconds: int | None = None,
 ) -> dict[str, Any]:
+    """Run one lesson submission in a spawned process with a hard timeout."""
     effective_timeout = timeout_seconds or _derive_timeout_seconds(submission_payload)
+    lesson = get_lesson_definition(submission_payload["lesson_id"])
+    feedback_service = StudentFeedbackService()
     ctx = multiprocessing.get_context("spawn")
     queue: multiprocessing.Queue = ctx.Queue()
     process = ctx.Process(
@@ -38,20 +50,32 @@ def run_submission_with_timeout(
     if process.is_alive():
         process.terminate()
         process.join()
+        issues = [
+            f"The lesson execution exceeded the {effective_timeout}-second limit.",
+        ]
         raise ExecutionPipelineError(
             status_code=408,
-            detail={
-                "message": "Execution timed out.",
-                "issues": [
-                    f"The lesson execution exceeded the {effective_timeout}-second limit.",
-                ],
-            },
+            detail=_failure_detail(
+                lesson=lesson,
+                submitted_code=submission_payload.get("code", ""),
+                failure_kind="runtime_error",
+                message="Execution timed out.",
+                issues=issues,
+                feedback_service=feedback_service,
+            ),
         )
 
     if queue.empty():
         raise ExecutionPipelineError(
             status_code=500,
-            detail="Execution process exited without returning a result.",
+            detail=_failure_detail(
+                lesson=lesson,
+                submitted_code=submission_payload.get("code", ""),
+                failure_kind="runtime_error",
+                message="Execution process exited without returning a result.",
+                issues=["The execution subprocess stopped before producing a result."],
+                feedback_service=feedback_service,
+            ),
         )
 
     outcome = queue.get()
@@ -64,6 +88,8 @@ def run_submission_with_timeout(
 
 
 def _execution_worker(submission_payload: dict[str, Any], queue: multiprocessing.Queue) -> None:
+    lesson = get_lesson_definition(submission_payload["lesson_id"])
+    feedback_service = StudentFeedbackService()
     try:
         queue.put(
             {
@@ -84,16 +110,23 @@ def _execution_worker(submission_payload: dict[str, Any], queue: multiprocessing
             {
                 "ok": False,
                 "status_code": 500,
-                "detail": {
-                    "message": "Unhandled execution failure.",
-                    "issues": [str(error)],
-                },
+                "detail": _failure_detail(
+                    lesson=lesson,
+                    submitted_code=submission_payload.get("code", ""),
+                    failure_kind="runtime_error",
+                    message="Unhandled execution failure.",
+                    issues=[str(error)],
+                    feedback_service=feedback_service,
+                ),
             },
         )
 
 
 def _run_execution_pipeline(submission_payload: dict[str, Any]) -> dict[str, Any]:
+    """Validate code, execute the lesson environment, and package replay output."""
     validator = CodeValidator()
+    feedback_service = StudentFeedbackService()
+    settings = ExecutionSettings.from_env()
     lesson = get_lesson_definition(submission_payload["lesson_id"])
     if lesson is None:
         raise ExecutionPipelineError(
@@ -101,39 +134,102 @@ def _run_execution_pipeline(submission_payload: dict[str, Any]) -> dict[str, Any
             detail=f"Unknown lesson '{submission_payload['lesson_id']}'.",
         )
 
-    adapter = None
-    logger = EventLogger(log_dir="backend/logger/logs")
-    visualizer = VisualizationService(output_dir="backend/visualization/animations")
+    logger = EventLogger(log_dir=settings.logger_dir)
+    visualization_output_dir = os.path.abspath(settings.visualization_output_dir)
+    visualizer = VisualizationService(output_dir=visualization_output_dir)
+    adapter = _create_environment_adapter(
+        lesson=lesson,
+        lesson_id=submission_payload["lesson_id"],
+        visualization_output_dir=visualization_output_dir,
+    )
+
+    try:
+        validation_result = _validate_submission_code(
+            validator=validator,
+            feedback_service=feedback_service,
+            lesson=lesson,
+            submission_payload=submission_payload,
+        )
+        _run_lesson_engine(
+            adapter=adapter,
+            logger=logger,
+            feedback_service=feedback_service,
+            lesson=lesson,
+            submission_payload=submission_payload,
+        )
+    finally:
+        adapter.close()
+
+    log_data = logger.get_logs()
+    video_path = visualizer.generate_animation(log_data, submission_payload["lesson_id"])
+    return _build_success_response(
+        lesson=lesson,
+        log_data=log_data,
+        validation_result=validation_result,
+        video_path=video_path,
+    )
+
+
+def _create_environment_adapter(
+    *,
+    lesson: Any,
+    lesson_id: str,
+    visualization_output_dir: str,
+) -> EnvironmentAdapter:
     capture_dir = os.path.join(
-        "backend/visualization/animations",
+        visualization_output_dir,
         "captures",
-        submission_payload["lesson_id"],
+        lesson_id,
         uuid.uuid4().hex,
     )
 
     try:
-        adapter = EnvironmentAdapter(
+        return EnvironmentAdapter(
             env_name=lesson.environment_name,
             frame_dir=capture_dir,
         )
     except Exception as error:
         raise ExecutionPipelineError(status_code=400, detail=str(error)) from error
 
-    try:
-        validation_result = validator.validate_code(
-            submission_payload["code"],
-            submission_payload["lesson_id"],
-        )
-        if not validation_result.is_valid:
-            raise ExecutionPipelineError(
-                status_code=400,
-                detail={
-                    "message": "Code validation failed.",
-                    "issues": validation_result.errors,
-                    "test_results": validation_result.test_results,
-                },
-            )
 
+def _validate_submission_code(
+    *,
+    validator: CodeValidator,
+    feedback_service: StudentFeedbackService,
+    lesson: Any,
+    submission_payload: dict[str, Any],
+):
+    validation_result = validator.validate_code(
+        submission_payload["code"],
+        submission_payload["lesson_id"],
+    )
+    if validation_result.is_valid:
+        return validation_result
+
+    raise ExecutionPipelineError(
+        status_code=400,
+        detail=_failure_detail(
+            lesson=lesson,
+            submitted_code=submission_payload["code"],
+            failure_kind=validation_result.failure_kind or "validation_error",
+            message="Code validation failed.",
+            issues=validation_result.errors,
+            test_results=validation_result.test_results,
+            unresolved_blanks=validation_result.unresolved_blanks or [],
+            feedback_service=feedback_service,
+        ),
+    )
+
+
+def _run_lesson_engine(
+    *,
+    adapter: EnvironmentAdapter,
+    logger: EventLogger,
+    feedback_service: StudentFeedbackService,
+    lesson: Any,
+    submission_payload: dict[str, Any],
+) -> None:
+    try:
         user_context = load_user_context(submission_payload["code"])
         hyperparameters = _extract_hyperparameters(submission_payload, user_context)
         engine = RLEngine(adapter=adapter, logger=logger)
@@ -143,20 +239,31 @@ def _run_execution_pipeline(submission_payload: dict[str, Any]) -> dict[str, Any
             num_episodes=hyperparameters["episodes"],
             hyperparameters=hyperparameters,
         )
-    finally:
-        if adapter is not None:
-            adapter.close()
+    except ExecutionPipelineError:
+        raise
+    except Exception as error:
+        raise ExecutionPipelineError(
+            status_code=500,
+            detail=_failure_detail(
+                lesson=lesson,
+                submitted_code=submission_payload["code"],
+                failure_kind="runtime_error",
+                message="Execution failed while running your lesson code.",
+                issues=[f"{type(error).__name__}: {error}"],
+                feedback_service=feedback_service,
+            ),
+        ) from error
 
-    log_data = logger.get_logs()
-    episode_rewards = [
-        sum(step.get("reward", 0) for step in episode)
-        for episode in log_data
-    ]
-    latest_episode = (
-        json.loads(json.dumps(log_data[-1], cls=NpEncoder)) if log_data else []
-    )
-    video_path = visualizer.generate_animation(log_data, submission_payload["lesson_id"])
 
+def _build_success_response(
+    *,
+    lesson: Any,
+    log_data: list[list[dict[str, Any]]],
+    validation_result: Any,
+    video_path: str,
+) -> dict[str, Any]:
+    episode_rewards = [sum(step.get("reward", 0) for step in episode) for episode in log_data]
+    latest_episode = json.loads(json.dumps(log_data[-1], cls=NpEncoder)) if log_data else []
     return {
         "status": "success",
         "message": "Execution pipeline completed.",
@@ -169,12 +276,44 @@ def _run_execution_pipeline(submission_payload: dict[str, Any]) -> dict[str, Any
             "episodes_completed": len(log_data),
             "steps_recorded": sum(len(episode) for episode in log_data),
             "total_reward": sum(episode_rewards),
-            "average_reward": round(sum(episode_rewards) / len(episode_rewards), 4)
-            if episode_rewards
-            else 0.0,
+            "average_reward": (
+                round(sum(episode_rewards) / len(episode_rewards), 4) if episode_rewards else 0.0
+            ),
             "best_episode_reward": max(episode_rewards, default=0),
         },
     }
+
+
+def _failure_detail(
+    *,
+    lesson: Any,
+    submitted_code: str,
+    failure_kind: str,
+    message: str,
+    issues: list[str],
+    feedback_service: StudentFeedbackService,
+    test_results: list[dict[str, Any]] | None = None,
+    unresolved_blanks: list[str] | None = None,
+) -> dict[str, Any]:
+    unresolved = unresolved_blanks or []
+    detail = {
+        "message": message,
+        "issues": issues,
+        "failure_kind": failure_kind,
+        "test_results": test_results or [],
+    }
+    if unresolved:
+        detail["unresolved_blanks"] = unresolved
+    if lesson is not None:
+        detail["student_feedback"] = feedback_service.build_feedback(
+            lesson=lesson,
+            submitted_code=submitted_code,
+            failure_kind=failure_kind,
+            issues=issues,
+            unresolved_blanks=unresolved,
+            test_results=test_results or [],
+        )
+    return detail
 
 
 def _extract_hyperparameters(
@@ -209,6 +348,15 @@ def _extract_hyperparameters(
             min_value=1,
             max_value=500,
             label="EPISODE_COUNT",
+        ),
+        "max_steps_per_episode": _coerce_int(
+            user_context.get(
+                "MAX_STEPS_PER_EPISODE", submission_payload.get("max_steps_per_episode")
+            ),
+            default=80,
+            min_value=1,
+            max_value=500,
+            label="MAX_STEPS_PER_EPISODE",
         ),
     }
 
@@ -247,9 +395,7 @@ def _coerce_float(
 
 def _derive_timeout_seconds(submission_payload: dict[str, Any]) -> int:
     """Choose a practical timeout window based on lesson workload hints."""
-    base_seconds = 90
-    per_episode_seconds = 2
-    max_seconds = 600
+    settings = ExecutionSettings.from_env()
 
     episodes = _extract_episode_count_from_source(submission_payload.get("code", ""))
     if episodes is None:
@@ -262,7 +408,10 @@ def _derive_timeout_seconds(submission_payload: dict[str, Any]) -> int:
             episodes = 5
 
     bounded_episodes = max(1, min(episodes, 500))
-    return min(max_seconds, base_seconds + bounded_episodes * per_episode_seconds)
+    return min(
+        settings.timeout_max_seconds,
+        settings.timeout_base_seconds + bounded_episodes * settings.timeout_per_episode_seconds,
+    )
 
 
 def _extract_episode_count_from_source(source: str) -> int | None:
@@ -282,7 +431,9 @@ def _extract_episode_count_from_source(source: str) -> int | None:
                     if isinstance(value, ast.Constant) and isinstance(value.value, (int, float)):
                         return int(value.value)
                     if isinstance(value, ast.UnaryOp) and isinstance(value.op, ast.USub):
-                        if isinstance(value.operand, ast.Constant) and isinstance(value.operand.value, (int, float)):
+                        if isinstance(value.operand, ast.Constant) and isinstance(
+                            value.operand.value, (int, float)
+                        ):
                             return int(-value.operand.value)
     return None
 

@@ -1,21 +1,15 @@
 from __future__ import annotations
 
-import os
-
 import uvicorn
 
+from backend.settings import RuntimeSettings
 
 if __name__ == "__main__":
-    port = int(os.getenv("RL_IDE_EXECUTION_WORKER_PORT", "8100"))
-    reload_enabled = os.getenv("RL_IDE_BACKEND_RELOAD", "").lower() in {
-        "1",
-        "true",
-        "yes",
-    }
+    settings = RuntimeSettings.from_env()
     uvicorn.run(
         "backend.execution_worker.base:create_app",
-        host="127.0.0.1",
-        port=port,
-        reload=reload_enabled,
+        host=settings.backend_host,
+        port=settings.execution_worker_port,
+        reload=settings.backend_reload,
         factory=True,
     )

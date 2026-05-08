@@ -1,0 +1,71 @@
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    working_dir: ${PROJECT_ROOT:-/Users/ultramarine/Desktop/grad_project}
+    command: python -m backend.main
+    environment:
+      RL_IDE_BACKEND_HOST: 0.0.0.0
+      RL_IDE_EXECUTION_MODE: remote
+      RL_IDE_EXECUTION_WORKER_URL: http://execution-service:8100
+      RL_IDE_USER_SERVICE_MODE: remote
+      RL_IDE_USER_SERVICE_URL: http://user-evaluation-service:8200
+      RL_IDE_INTERNAL_TOKEN: ${RL_IDE_INTERNAL_TOKEN:-local-dev-internal-token}
+    volumes:
+      - .:${PROJECT_ROOT:-/Users/ultramarine/Desktop/grad_project}
+    ports:
+      - "8000:8000"
+    depends_on:
+      execution-service:
+        condition: service_healthy
+      user-evaluation-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  execution-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    working_dir: ${PROJECT_ROOT:-/Users/ultramarine/Desktop/grad_project}
+    command: python -m backend.execution_worker.main
+    environment:
+      RL_IDE_BACKEND_HOST: 0.0.0.0
+      RL_IDE_INTERNAL_TOKEN: ${RL_IDE_INTERNAL_TOKEN:-local-dev-internal-token}
+      RL_IDE_EXECUTION_WORKER_PORT: 8100
+      RL_IDE_WORKSPACE_BASE_DIR: ${PROJECT_ROOT:-/Users/ultramarine/Desktop/grad_project}/backend/data/workspaces
+      RL_IDE_JOB_STORE_PATH: ${PROJECT_ROOT:-/Users/ultramarine/Desktop/grad_project}/backend/data/execution_jobs.db
+      RL_IDE_WORKSPACE_STORE_PATH: ${PROJECT_ROOT:-/Users/ultramarine/Desktop/grad_project}/backend/data/workspace_state.db
+      RL_IDE_ARTIFACT_STORE_PATH: ${PROJECT_ROOT:-/Users/ultramarine/Desktop/grad_project}/backend/data/execution_artifacts.db
+      RL_IDE_WORKSPACE_USE_DOCKER: ${RL_IDE_WORKSPACE_USE_DOCKER:-1}
+    volumes:
+      - .:${PROJECT_ROOT:-/Users/ultramarine/Desktop/grad_project}
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8100/"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  user-evaluation-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    working_dir: ${PROJECT_ROOT:-/Users/ultramarine/Desktop/grad_project}
+    command: python -m backend.user_evaluation_service.main
+    environment:
+      RL_IDE_BACKEND_HOST: 0.0.0.0
+      RL_IDE_PROGRESS_BACKEND: ${RL_IDE_PROGRESS_BACKEND:-sql}
+      RL_IDE_FIREBASE_CREDENTIALS_PATH: ${RL_IDE_FIREBASE_CREDENTIALS_PATH:-}
+      RL_IDE_FIREBASE_APP_NAME: ${RL_IDE_FIREBASE_APP_NAME:-rl-ide-backend}
+    volumes:
+      - .:${PROJECT_ROOT:-/Users/ultramarine/Desktop/grad_project}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8200/"]
+      interval: 5s
+      timeout: 5s
+      retries: 20

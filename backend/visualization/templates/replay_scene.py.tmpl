@@ -1,0 +1,328 @@
+from manim import *
+import json
+import os
+
+DATA_PATH = __DATA_PATH__
+LESSON_ID = __LESSON_ID__
+
+BG = "#020617"
+PANEL = "#0f172a"
+PANEL_DARK = "#111827"
+TEXT = "#f8fafc"
+MUTED = "#94a3b8"
+ACCENT = "#38bdf8"
+MATH = "#facc15"
+UPDATE = "#34d399"
+ERROR = "#f87171"
+
+LEFT_CENTER = LEFT * 3.75 + UP * 0.35
+EQUATION_CENTER = RIGHT * 2.85 + UP * 2.15
+BACKUP_CENTER = RIGHT * 2.85 + UP * 0.25
+UPDATE_CENTER = RIGHT * 2.85 + DOWN * 1.75
+CAPTION_CENTER = DOWN * 3.35
+
+
+def get_env_state(step):
+    return (
+        step.get("frame_path"),
+        step.get("state"),
+        step.get("action"),
+        step.get("next_state"),
+    )
+
+
+def get_equation_state(step):
+    code_focus = step.get("equation_update", {}).get("code_focus")
+    if not code_focus:
+        code_lines = step.get("code_lines", [])
+        code_focus = code_lines[-1] if code_lines else "update value from target"
+    return (step.get("math_equation"), code_focus)
+
+
+def get_backup_state(step):
+    update = step.get("equation_update", {})
+    if update:
+        return (
+            update.get("reward"),
+            update.get("gamma"),
+            update.get("bootstrap_value"),
+            update.get("td_target"),
+            update.get("bootstrap_label"),
+        )
+    return tuple(step.get("math_lines", [])[:3])
+
+
+def get_update_state(step):
+    update = step.get("equation_update", {})
+    if update:
+        return (
+            update.get("lhs"),
+            update.get("old_value"),
+            update.get("alpha"),
+            update.get("td_target"),
+            update.get("new_value"),
+        )
+    updated_values = step.get("updated_values", {})
+    if isinstance(updated_values, dict) and updated_values:
+        return tuple(updated_values.items())
+    return None
+
+
+def fmt(value):
+    try:
+        return f"{float(value):.3f}"
+    except (TypeError, ValueError):
+        return "0.000"
+
+
+def safe_tex_text(value):
+    return str(value).replace("_", r"\_")
+
+
+def panel(width, height, stroke=ACCENT, fill=PANEL):
+    return RoundedRectangle(
+        corner_radius=0.16,
+        width=width,
+        height=height,
+        stroke_color=stroke,
+        stroke_width=1.4,
+        fill_color=fill,
+        fill_opacity=0.92,
+    )
+
+
+def fit_inside(mobject, width, height):
+    if mobject.width > width:
+        mobject.scale_to_fit_width(width)
+    if mobject.height > height:
+        mobject.scale_to_fit_height(height)
+    return mobject
+
+
+def build_environment(step):
+    frame_path = step.get("frame_path", "")
+    box = panel(5.4, 4.7, stroke=ACCENT, fill="#06111f")
+    title = Text("Agent movement", font_size=24, weight=BOLD, color=TEXT)
+    state_line = Text(
+        f"s={step.get('state', 0)}   a={step.get('action', 0)}   s'={step.get('next_state', 0)}",
+        font_size=20,
+        color=MUTED,
+    )
+    if frame_path and os.path.exists(frame_path):
+        visual = ImageMobject(frame_path)
+        visual.scale_to_fit_height(3.35)
+        visual.scale_to_fit_width(4.8)
+    else:
+        visual = VGroup(
+            Rectangle(width=4.4, height=3.2, color=ERROR),
+            Text("Frame unavailable", font_size=22, color=TEXT),
+        )
+    stack = Group(title, state_line, visual).arrange(DOWN, buff=0.18)
+    stack.move_to(box.get_center())
+    return Group(box, stack).move_to(LEFT_CENTER)
+
+
+def build_equation(step):
+    equation = (
+        step.get("math_equation")
+        or r"Q(s,a)\leftarrow Q(s,a)+\alpha\,[r+\gamma B-Q(s,a)]"
+    )
+    eq = MathTex(equation, font_size=32, color=TEXT)
+    fit_inside(eq, 4.75, 0.78)
+    code_line = step.get("equation_update", {}).get("code_focus")
+    if not code_line:
+        code_lines = step.get("code_lines", [])
+        code_line = code_lines[-1] if code_lines else "update value from target"
+    code = Text(code_line, font_size=16, color=ACCENT, font="Menlo")
+    fit_inside(code, 4.75, 0.42)
+    title = Text("Equation and code focus", font_size=22, weight=BOLD, color=MATH)
+    stack = VGroup(title, eq, code).arrange(DOWN, buff=0.14)
+    box = panel(5.15, 1.65, stroke=MATH, fill=PANEL)
+    stack.move_to(box.get_center())
+    return VGroup(box, stack).move_to(EQUATION_CENTER)
+
+
+def build_backup(step):
+    update = step.get("equation_update", {})
+    if update:
+        reward = fmt(update.get("reward", 0))
+        gamma = fmt(update.get("gamma", 0))
+        bootstrap = fmt(update.get("bootstrap_value", 0))
+        target = fmt(update.get("td_target", 0))
+        label = safe_tex_text(update.get("bootstrap_label", "B"))
+        lines = VGroup(
+            MathTex(r"\text{target}=r+\gamma B", font_size=30, color=TEXT),
+            MathTex(
+                rf"\text{{target}}={reward}+{gamma}\cdot {bootstrap}",
+                font_size=30,
+                color=TEXT,
+            ),
+            MathTex(rf"\text{{target}}={target}", font_size=34, color=MATH),
+            Text(f"B = {label}", font_size=18, color=MUTED),
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.16)
+    else:
+        lines = VGroup(
+            Text("Numeric backup", font_size=24, weight=BOLD, color=MATH),
+            *[
+                Text(line, font_size=18, color=TEXT)
+                for line in step.get("math_lines", [])[:3]
+            ],
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.16)
+    fit_inside(lines, 4.65, 1.85)
+    box = panel(5.15, 2.15, stroke=MATH, fill=PANEL_DARK)
+    lines.move_to(box.get_center())
+    return VGroup(box, lines).move_to(BACKUP_CENTER)
+
+
+def build_update(step):
+    update = step.get("equation_update", {})
+    if update:
+        lhs = safe_tex_text(update.get("lhs", "Q(s,a)"))
+        if update.get("kind") == "policy_improvement":
+            rows = VGroup(
+                MathTex(
+                    rf"{lhs}\leftarrow \text{{greedy}}(V)",
+                    font_size=32,
+                    color=TEXT,
+                ),
+                MathTex(
+                    rf"{lhs} = \text{{{update.get('new_value', 'action')}}}",
+                    font_size=36,
+                    color=UPDATE,
+                ),
+            ).arrange(DOWN, aligned_edge=LEFT, buff=0.22)
+        else:
+            old = fmt(update.get("old_value", 0))
+            alpha = fmt(update.get("alpha", 0))
+            target = fmt(update.get("td_target", 0))
+            new = fmt(update.get("new_value", 0))
+            rows = VGroup(
+                MathTex(
+                    rf"{lhs}\leftarrow {old}+{alpha}({target}-{old})",
+                    font_size=31,
+                    color=TEXT,
+                ),
+                MathTex(rf"{lhs}={new}", font_size=36, color=UPDATE),
+            ).arrange(DOWN, aligned_edge=LEFT, buff=0.22)
+    else:
+        updated_values = step.get("updated_values", {})
+        rows = VGroup(
+            *[
+                Text(f"{key} = {value}", font_size=24, color=UPDATE)
+                for key, value in list(updated_values.items())[:3]
+            ]
+        )
+        if len(rows) == 0:
+            rows = VGroup(Text("No value update recorded", font_size=22, color=TEXT))
+        rows.arrange(DOWN, aligned_edge=LEFT, buff=0.16)
+    fit_inside(rows, 4.65, 1.35)
+    box = panel(5.15, 1.7, stroke=UPDATE, fill="#052e2b")
+    rows.move_to(box.get_center())
+    return VGroup(box, rows).move_to(UPDATE_CENTER)
+
+
+def build_caption(step, index, total):
+    text = step.get("agent_caption", "Step update")
+    caption = Text(f"Step {index}/{total}: {text}", font_size=20, color=TEXT)
+    fit_inside(caption, 11.8, 0.42)
+    return caption.move_to(CAPTION_CENTER)
+
+
+class RLEpisodeScene(Scene):
+    def construct(self):
+        self.camera.background_color = BG
+        with open(DATA_PATH, "r", encoding="utf-8") as file_handle:
+            log_data = json.load(file_handle)
+
+        if not log_data:
+            empty = Text("No replay trace data available.", font_size=28, color=TEXT)
+            self.play(FadeIn(empty))
+            self.wait(1)
+            return
+
+        title = Text(
+            "Manim replay: agent step to Bellman update",
+            font_size=30,
+            color=TEXT,
+        )
+        title.to_edge(UP, buff=0.22)
+        self.play(FadeIn(title), run_time=0.4)
+
+        total = len(log_data)
+        current_env = build_environment(log_data[0])
+        current_equation = build_equation(log_data[0])
+        current_backup = build_backup(log_data[0])
+        current_update = build_update(log_data[0])
+        current_caption = build_caption(log_data[0], 1, total)
+
+        env_hash = get_env_state(log_data[0])
+        eq_hash = get_equation_state(log_data[0])
+        bk_hash = get_backup_state(log_data[0])
+        up_hash = get_update_state(log_data[0])
+
+        self.play(
+            FadeIn(current_env),
+            FadeIn(current_equation),
+            FadeIn(current_backup),
+            FadeIn(current_update),
+            FadeIn(current_caption),
+            run_time=0.8,
+        )
+        self.play(Circumscribe(current_env, color=ACCENT, run_time=0.55))
+        self.play(Circumscribe(current_backup, color=MATH, run_time=0.55))
+        self.play(Circumscribe(current_update, color=UPDATE, run_time=0.55))
+        self.wait(0.45)
+
+        for index, step in enumerate(log_data[1:], start=2):
+            next_env_hash = get_env_state(step)
+            next_eq_hash = get_equation_state(step)
+            next_bk_hash = get_backup_state(step)
+            next_up_hash = get_update_state(step)
+
+            anims = []
+            circs = []
+
+            next_env = current_env
+            if next_env_hash != env_hash:
+                next_env = build_environment(step)
+                anims.append(ReplacementTransform(current_env, next_env))
+                circs.append(Circumscribe(next_env, color=ACCENT, run_time=0.5))
+                env_hash = next_env_hash
+
+            next_equation = current_equation
+            if next_eq_hash != eq_hash:
+                next_equation = build_equation(step)
+                anims.append(ReplacementTransform(current_equation, next_equation))
+                eq_hash = next_eq_hash
+
+            next_backup = current_backup
+            if next_bk_hash != bk_hash:
+                next_backup = build_backup(step)
+                anims.append(ReplacementTransform(current_backup, next_backup))
+                circs.append(Circumscribe(next_backup, color=MATH, run_time=0.5))
+                bk_hash = next_bk_hash
+
+            next_update = current_update
+            if next_up_hash != up_hash:
+                next_update = build_update(step)
+                anims.append(ReplacementTransform(current_update, next_update))
+                circs.append(Circumscribe(next_update, color=UPDATE, run_time=0.5))
+                up_hash = next_up_hash
+
+            next_caption = build_caption(step, index, total)
+            anims.append(ReplacementTransform(current_caption, next_caption))
+
+            if anims:
+                self.play(*anims, run_time=0.75)
+            if circs:
+                self.play(*circs)
+
+            self.wait(0.35)
+
+            current_env = next_env
+            current_equation = next_equation
+            current_backup = next_backup
+            current_update = next_update
+            current_caption = next_caption
+
+        self.wait(1)

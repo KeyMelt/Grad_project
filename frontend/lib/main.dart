@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:rl_ide/core/backend_api.dart';
 import 'package:rl_ide/core/theme.dart';
 import 'package:rl_ide/core/onboarding_prefs.dart';
 import 'package:rl_ide/features/onboarding/splash_screen.dart';
 import 'package:rl_ide/layout/main_layout.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await BackendConnectionManager().init();
   runApp(const RLSimulationIDE());
 }
 

@@ -10,7 +10,10 @@ Widget buildWorkspaceShellHost({
   required bool workspaceReady,
   required String fallbackMessage,
 }) {
-  if (kIsWeb || defaultTargetPlatform != TargetPlatform.macOS || url == null) {
+  if (kIsWeb ||
+      (defaultTargetPlatform != TargetPlatform.macOS &&
+          defaultTargetPlatform != TargetPlatform.iOS) ||
+      url == null) {
     return stub.buildWorkspaceShellHost(
       context: context,
       url: url,

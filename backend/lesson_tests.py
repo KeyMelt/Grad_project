@@ -99,22 +99,27 @@ def _test_sarsa(lesson_function: Callable[..., Any]) -> list[LessonTestCaseResul
 
 def _test_mc_first_visit(lesson_function: Callable[..., Any]) -> list[LessonTestCaseResult]:
     episode = [
-        (0, 0, 1.0),
-        (1, 0, 2.0),
+        ((16, 10, False), 1, 1.0),
+        ((18, 10, False), 0, 2.0),
     ]
-    values = [0.0, 0.0]
-    returns = {0: [], 1: []}
+    values: dict[tuple[int, int, bool], float] = {}
+    returns: dict[tuple[int, int, bool], list[float]] = {}
     lesson_function(episode, values, returns, 1.0)
 
-    first_state_ok = math.isclose(values[0], 3.0, rel_tol=1e-6, abs_tol=1e-6)
-    second_state_ok = math.isclose(values[1], 2.0, rel_tol=1e-6, abs_tol=1e-6)
+    first_state = (16, 10, False)
+    second_state = (18, 10, False)
+    first_state_ok = math.isclose(values[first_state], 3.0, rel_tol=1e-6, abs_tol=1e-6)
+    second_state_ok = math.isclose(values[second_state], 2.0, rel_tol=1e-6, abs_tol=1e-6)
     return [
         LessonTestCaseResult(
             name="mc_first_visit_returns",
             passed=first_state_ok and second_state_ok,
             message="Computes first-visit returns over a short episode.",
-            expected="V[0] = 3.0 and V[1] = 2.0",
-            actual=f"V[0] = {round(values[0], 6)} and V[1] = {round(values[1], 6)}",
+            expected="V[(16, 10, False)] = 3.0 and V[(18, 10, False)] = 2.0",
+            actual=(
+                f"V[(16, 10, False)] = {round(values[first_state], 6)} and "
+                f"V[(18, 10, False)] = {round(values[second_state], 6)}"
+            ),
         ),
     ]
 

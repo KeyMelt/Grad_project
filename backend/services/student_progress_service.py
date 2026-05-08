@@ -62,10 +62,7 @@ class StudentProgressService:
                     session.commit()
                     session.refresh(record)
                 else:
-                    if (
-                        not record.password_hash
-                        or not record.password_salt
-                    ):
+                    if not record.password_hash or not record.password_salt:
                         # Upgrade legacy account rows that predate password auth.
                         password_salt, password_hash = self._hash_password(password)
                         record.password_salt = password_salt
@@ -101,15 +98,11 @@ class StudentProgressService:
                 if record is None:
                     return None
 
-                completed_lesson_ids = self._decode_list(
-                    record.completed_lesson_ids_json
-                )
+                completed_lesson_ids = self._decode_list(record.completed_lesson_ids_json)
                 if lesson_id not in completed_lesson_ids:
                     completed_lesson_ids.append(lesson_id)
 
-                record.completed_lesson_ids_json = self._encode_list(
-                    completed_lesson_ids
-                )
+                record.completed_lesson_ids_json = self._encode_list(completed_lesson_ids)
                 record.successful_runs += 1
                 record.latest_lesson_id = lesson_id
                 record.updated_at = datetime.now(timezone.utc)
@@ -154,6 +147,35 @@ class StudentProgressService:
                 session.refresh(record)
                 return self._dashboard_payload(record)
 
+    def record_submission_outcome(
+        self,
+        student_id: str,
+        *,
+        passed: bool,
+        failure_kind: Optional[str] = None,
+    ) -> Optional[dict]:
+        with self._lock:
+            with self._database.session() as session:
+                record = session.get(StudentProgressRecord, student_id)
+                if record is None:
+                    return None
+
+                record.total_submission_attempts += 1
+                if passed:
+                    record.passed_submission_attempts += 1
+                elif failure_kind == "validation_error":
+                    record.validation_failures += 1
+                elif failure_kind == "runtime_error":
+                    record.runtime_failures += 1
+                elif failure_kind in {"test_failure", "incomplete_template"}:
+                    record.test_failures += 1
+
+                record.updated_at = datetime.now(timezone.utc)
+                session.add(record)
+                session.commit()
+                session.refresh(record)
+                return self._dashboard_payload(record)
+
     def get_question_history(self, student_id: str) -> list[str]:
         with self._lock:
             record = self._get_record(student_id)
@@ -165,9 +187,7 @@ class StudentProgressService:
         with self._lock:
             with self._database.session() as session:
                 records = session.exec(
-                    select(StudentProgressRecord).order_by(
-                        StudentProgressRecord.display_name
-                    )
+                    select(StudentProgressRecord).order_by(StudentProgressRecord.display_name)
                 ).all()
 
                 rows: list[dict] = []
@@ -210,6 +230,11 @@ class StudentProgressService:
                     "pretest": record.quiz_attempts_pretest,
                     "posttest": record.quiz_attempts_posttest,
                 },
+                "total_submission_attempts": record.total_submission_attempts,
+                "passed_submission_attempts": record.passed_submission_attempts,
+                "validation_failures": record.validation_failures,
+                "runtime_failures": record.runtime_failures,
+                "test_failures": record.test_failures,
             },
         }
 
@@ -294,5 +319,30 @@ class StudentProgressService:
                 connection.exec_driver_sql(
                     "ALTER TABLE student_progress "
                     "ADD COLUMN password_salt TEXT NOT NULL DEFAULT ''"
+                )
+            if "total_submission_attempts" not in existing_columns:
+                connection.exec_driver_sql(
+                    "ALTER TABLE student_progress "
+                    "ADD COLUMN total_submission_attempts INTEGER NOT NULL DEFAULT 0"
+                )
+            if "passed_submission_attempts" not in existing_columns:
+                connection.exec_driver_sql(
+                    "ALTER TABLE student_progress "
+                    "ADD COLUMN passed_submission_attempts INTEGER NOT NULL DEFAULT 0"
+                )
+            if "validation_failures" not in existing_columns:
+                connection.exec_driver_sql(
+                    "ALTER TABLE student_progress "
+                    "ADD COLUMN validation_failures INTEGER NOT NULL DEFAULT 0"
+                )
+            if "runtime_failures" not in existing_columns:
+                connection.exec_driver_sql(
+                    "ALTER TABLE student_progress "
+                    "ADD COLUMN runtime_failures INTEGER NOT NULL DEFAULT 0"
+                )
+            if "test_failures" not in existing_columns:
+                connection.exec_driver_sql(
+                    "ALTER TABLE student_progress "
+                    "ADD COLUMN test_failures INTEGER NOT NULL DEFAULT 0"
                 )
             session.commit()

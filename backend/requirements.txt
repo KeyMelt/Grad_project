@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-gymnasium
+gymnasium[toy-text]
 numpy
 manim
 pytest
@@ -12,3 +12,7 @@ psycopg[binary]
 firebase-admin
 pytest-cov
 websockets
+google-genai
+zeroconf
+black
+ruff

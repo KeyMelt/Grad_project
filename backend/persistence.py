@@ -1,31 +1,19 @@
 from __future__ import annotations
 
-import os
+from collections.abc import Iterator
 from contextlib import contextmanager
-from pathlib import Path
-from typing import Iterator
 
 from sqlalchemy.pool import NullPool, StaticPool
-from sqlmodel import SQLModel, Session, create_engine
+from sqlmodel import Session, SQLModel, create_engine
 
-
-def _default_database_url() -> str:
-    configured = os.getenv("RL_IDE_DB_URL")
-    if configured:
-        return configured
-
-    database_path = (
-        Path(__file__).resolve().parent / "data" / "rl_learning_platform.db"
-    )
-    database_path.parent.mkdir(parents=True, exist_ok=True)
-    return f"sqlite:///{database_path}"
+from backend.settings import DatabaseSettings
 
 
 class Database:
     """Thin SQLModel wrapper with sensible local defaults."""
 
     def __init__(self, database_url: str | None = None) -> None:
-        self.database_url = database_url or _default_database_url()
+        self.database_url = database_url or DatabaseSettings.from_env().database_url
         self._closed = False
         engine_kwargs: dict = {}
 

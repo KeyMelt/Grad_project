@@ -1,15 +1,28 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rl_ide/core/backend_api.dart';
+import 'package:rl_ide/core/local_lesson_catalog.dart';
 import 'package:rl_ide/core/workbench_state.dart';
 
 class _FakeBackendApi extends BackendApi {
   _FakeBackendApi({
     this.shouldFailRun = false,
+    this.shouldFailLessonFetch = false,
+    this.lessonSections = const [],
   });
 
   final bool shouldFailRun;
+  final bool shouldFailLessonFetch;
+  final List<LessonSection> lessonSections;
   int _pollCount = 0;
   int _workspacePollCount = 0;
+
+  @override
+  Future<List<LessonSection>> fetchLessonSections() async {
+    if (shouldFailLessonFetch) {
+      throw const BackendApiException('Lesson catalog unavailable.');
+    }
+    return lessonSections;
+  }
 
   @override
   Future<LearnerDashboard> signIn({
@@ -75,6 +88,16 @@ class _FakeBackendApi extends BackendApi {
         taskId: 'task-1',
         status: ExecutionTaskStatus.failed,
         errorMessage: 'Code validation failed.',
+        failureKind: 'incomplete_template',
+        unresolvedBlanks: ['policy_eval_expectation'],
+        studentFeedback: ExecutionStudentFeedback(
+          status: 'incomplete_template',
+          summary: 'The submission still contains guided blanks.',
+          likelyIssue: 'One or more placeholder sections were left unchanged.',
+          affectedBlankIds: ['policy_eval_expectation'],
+          nextSteps: ['Complete the expectation backup block.'],
+          hintLevel: 'light',
+        ),
       );
     }
 
@@ -207,6 +230,47 @@ class _FakeBackendApi extends BackendApi {
 }
 
 void main() {
+  test('cubit replaces fallback catalog with backend lesson sections',
+      () async {
+    final backendLesson = fallbackLessonSections.first.lessons.first.copyWith(
+      title: 'Backend Policy Evaluation',
+      starterCode: 'def policy_evaluation():\n    return []\n',
+    );
+    final cubit = RLWorkbenchCubit(
+      api: _FakeBackendApi(
+        lessonSections: [
+          LessonSection(
+            title: 'Dynamic Programming',
+            lessons: [backendLesson],
+          ),
+        ],
+      ),
+    );
+
+    await cubit.loadBackendLessonCatalog();
+
+    expect(cubit.state.sections.first.lessons.first.title,
+        'Backend Policy Evaluation');
+    expect(cubit.state.selectedLesson.title, 'Backend Policy Evaluation');
+    expect(cubit.state.code, contains('def policy_evaluation'));
+
+    await cubit.close();
+  });
+
+  test('cubit keeps fallback lessons when backend lesson fetch fails',
+      () async {
+    final cubit = RLWorkbenchCubit(
+      api: _FakeBackendApi(shouldFailLessonFetch: true),
+    );
+
+    await cubit.loadBackendLessonCatalog();
+
+    expect(cubit.state.sections.first.lessons.first.id, 'dp_policy_eval');
+    expect(cubit.state.homeMessage, contains('Using local fallback lessons'));
+
+    await cubit.close();
+  });
+
   test('cubit sign-in then sign-out updates auth state', () async {
     final cubit = RLWorkbenchCubit(api: _FakeBackendApi());
 
@@ -242,6 +306,12 @@ void main() {
 
     expect(cubit.state.runStatus, RunStatus.failed);
     expect(cubit.state.statusMessage, contains('Code validation failed.'));
+    expect(cubit.state.failureKind, 'incomplete_template');
+    expect(cubit.state.unresolvedBlanks, contains('policy_eval_expectation'));
+    expect(
+      cubit.state.studentFeedback?.summary,
+      'The submission still contains guided blanks.',
+    );
 
     await cubit.close();
   });

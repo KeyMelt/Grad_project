@@ -60,9 +60,9 @@ class _WorkspaceShellPlaceholder extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                _PlaceholderChip(label: 'Editor'),
+                const _PlaceholderChip(label: 'Editor'),
                 const SizedBox(width: 8),
-                _PlaceholderChip(label: 'Console'),
+                const _PlaceholderChip(label: 'Console'),
               ],
             ),
           ),
@@ -70,6 +70,7 @@ class _WorkspaceShellPlaceholder extends StatelessWidget {
             child: Column(
               children: [
                 Expanded(
+                  flex: 3,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
                     child: DecoratedBox(
@@ -96,8 +97,8 @@ class _WorkspaceShellPlaceholder extends StatelessWidget {
                     ),
                   ),
                 ),
-                SizedBox(
-                  height: 168,
+                Expanded(
+                  flex: 2,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
                     child: DecoratedBox(
@@ -108,37 +109,48 @@ class _WorkspaceShellPlaceholder extends StatelessWidget {
                       ),
                       child: Padding(
                         padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Interactive Python console',
-                              style: textTheme.bodyMedium?.copyWith(
-                                color: const Color(0xFFE5E7EB),
-                                fontWeight: FontWeight.w700,
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            return SingleChildScrollView(
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  minHeight: constraints.maxHeight,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Interactive Python console',
+                                      style: textTheme.bodyMedium?.copyWith(
+                                        color: const Color(0xFFE5E7EB),
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      message,
+                                      style: textTheme.bodySmall?.copyWith(
+                                        color: const Color(0xFF94A3B8),
+                                        height: 1.45,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      '>>> ',
+                                      style: textTheme.bodyMedium?.copyWith(
+                                        color: const Color(0xFF86EFAC),
+                                        fontFamily: 'Menlo',
+                                        fontFamilyFallback: const [
+                                          'Monaco',
+                                          'Consolas'
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              message,
-                              style: textTheme.bodySmall?.copyWith(
-                                color: const Color(0xFF94A3B8),
-                                height: 1.45,
-                              ),
-                            ),
-                            const Spacer(),
-                            Text(
-                              '>>> ',
-                              style: textTheme.bodyMedium?.copyWith(
-                                color: const Color(0xFF86EFAC),
-                                fontFamily: 'Menlo',
-                                fontFamilyFallback: const [
-                                  'Monaco',
-                                  'Consolas'
-                                ],
-                              ),
-                            ),
-                          ],
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -195,11 +207,16 @@ class _PlaceholderLines extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        final availableHeight = (constraints.maxHeight - padding.vertical)
+            .clamp(0.0, double.infinity);
+        final visibleLineCount = availableHeight <= 0
+            ? 0
+            : (availableHeight / 22).floor().clamp(1, lineCount);
         return Padding(
           padding: padding,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: List.generate(lineCount, (index) {
+            children: List.generate(visibleLineCount, (index) {
               final scale =
                   index < lineWidthScale.length ? lineWidthScale[index] : 0.7;
               return Padding(

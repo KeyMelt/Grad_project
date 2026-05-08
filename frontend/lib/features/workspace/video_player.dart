@@ -1,10 +1,8 @@
-import 'dart:io';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../core/backend_api.dart';
 import '../../core/theme.dart';
 import '../../core/workbench_state.dart';
 
@@ -38,8 +36,8 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
   @override
   void didUpdateWidget(covariant VideoPlayerTab oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.lesson.conceptVideo.assetPath !=
-        widget.lesson.conceptVideo.assetPath) {
+    if (oldWidget.lesson.conceptVideo.effectiveStreamPath !=
+        widget.lesson.conceptVideo.effectiveStreamPath) {
       _disposeController();
       _initializeVideo();
     }
@@ -62,8 +60,8 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
     });
 
     try {
-      final controller = await _buildControllerWithFallback(
-        widget.lesson.conceptVideo.assetPath,
+      final controller = await _buildBackendVideoController(
+        widget.lesson.conceptVideo.effectiveStreamPath,
       );
       if (!mounted) {
         await controller.dispose();
@@ -87,48 +85,39 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
     }
   }
 
-  Future<VideoPlayerController> _buildControllerWithFallback(
-    String assetPath,
+  Future<VideoPlayerController> _buildBackendVideoController(
+    String streamPath,
   ) async {
-    try {
-      final controller = VideoPlayerController.asset(assetPath);
-      await controller.initialize().timeout(const Duration(seconds: 45));
-      await controller.setLooping(false);
-      controller.addListener(_onControllerChanged);
-      return controller;
-    } catch (_) {
-      if (kIsWeb) {
-        rethrow;
-      }
-
-      final fallbackController = await _buildFileBackedController(assetPath);
-      await fallbackController
-          .initialize()
-          .timeout(const Duration(seconds: 45));
-      await fallbackController.setLooping(false);
-      fallbackController.addListener(_onControllerChanged);
-      return fallbackController;
+    if (streamPath.trim().isEmpty) {
+      throw StateError('No backend concept video path is configured.');
     }
-  }
 
-  Future<VideoPlayerController> _buildFileBackedController(
-      String assetPath) async {
-    final ByteData data = await rootBundle.load(assetPath);
-    final bytes =
-        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-    final safeName =
-        assetPath.split('/').last.replaceAll(RegExp(r'[^A-Za-z0-9_.-]'), '_');
-    final file = File('${Directory.systemTemp.path}/rl_ide_$safeName');
-    await file.writeAsBytes(bytes, flush: true);
-    return VideoPlayerController.file(file);
+    final controller = VideoPlayerController.networkUrl(
+      _conceptVideoUri(streamPath),
+    );
+    await controller.initialize().timeout(const Duration(seconds: 45));
+    await controller.setLooping(false);
+    controller.addListener(_onControllerChanged);
+    return controller;
   }
 
   String _extractVideoErrorDetails(Object error, StackTrace stackTrace) {
     final raw = error.toString();
-    final message = raw.length > 180 ? '${raw.substring(0, 180)}...' : raw;
     debugPrint('Concept video load failure: $raw');
     debugPrint(stackTrace.toString());
-    return 'Video failed to load: $message';
+    return 'Concept video asset unavailable';
+  }
+
+  Uri _conceptVideoUri(String streamPath) {
+    final parsed = Uri.tryParse(streamPath);
+    if (parsed != null && parsed.hasScheme) {
+      return parsed;
+    }
+
+    final base = Uri.parse(BackendConnectionManager().baseUrl);
+    final normalizedPath =
+        streamPath.startsWith('/') ? streamPath : '/$streamPath';
+    return base.replace(path: normalizedPath);
   }
 
   void _onControllerChanged() {
@@ -182,121 +171,136 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Concept lesson video',
-                        style:
-                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Concept lesson video',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
                                   fontWeight: FontWeight.w700,
                                 ),
-                      ),
-                    ),
-                    _InfoPill(
-                      label: lessonVideo.durationLabel,
-                      icon: Icons.ondemand_video_outlined,
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: SizedBox(
-                    height: heroHeight,
-                    child: Container(
-                      color: const Color(0xFF07111F),
-                      child: _buildVideoSurface(
-                        context,
-                        isInitialized: isInitialized,
-                        isPlaying: isPlaying,
-                      ),
+                          ),
+                        ),
+                        _InfoPill(
+                          label: lessonVideo.durationLabel,
+                          icon: Icons.ondemand_video_outlined,
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-                child: _buildControlBar(
-                  context,
-                  controller: controller,
-                  isInitialized: isInitialized,
-                  isPlaying: isPlaying,
-                ),
-              ),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    child: ExpansionTile(
-                  maintainState: true,
-                  tilePadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                  collapsedBackgroundColor: const Color(0xFFF8FAFC),
-                  backgroundColor: const Color(0xFFF8FAFC),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: const BorderSide(color: AppTheme.borderLight),
-                  ),
-                  collapsedShape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: const BorderSide(color: AppTheme.borderLight),
-                  ),
-                  title: const Text(
-                    'Lesson notes',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  subtitle: Text(
-                    lessonVideo.summary,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  children: [
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxHeight: 190),
-                            child: SingleChildScrollView(
-                              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  ...lessonVideo.highlights.map(
-                                    (highlight) => Padding(
-                                      padding: const EdgeInsets.only(bottom: 8),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Padding(
-                                      padding: EdgeInsets.only(top: 4),
-                                      child: Icon(
-                                        Icons.circle,
-                                        size: 7,
-                                        color: AppTheme.primaryBlue,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        highlight,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                              color: AppTheme.textPrimary,
-                                              height: 1.4,
-                                            ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: SizedBox(
+                        height: heroHeight,
+                        child: Container(
+                          color: const Color(0xFF07111F),
+                          child: _buildVideoSurface(
+                            context,
+                            isInitialized: isInitialized,
+                            isPlaying: isPlaying,
+                          ),
                         ),
                       ),
                     ),
-                  ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+                    child: _buildControlBar(
+                      context,
+                      controller: controller,
+                      isInitialized: isInitialized,
+                      isPlaying: isPlaying,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: ExpansionTile(
+                      maintainState: true,
+                      tilePadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 2),
+                      collapsedBackgroundColor: const Color(0xFFF8FAFC),
+                      backgroundColor: const Color(0xFFF8FAFC),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: AppTheme.borderLight),
+                      ),
+                      collapsedShape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: AppTheme.borderLight),
+                      ),
+                      title: const Text(
+                        'Lesson notes',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      subtitle: Text(
+                        lessonVideo.summary,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      children: [
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 190),
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                ...lessonVideo.highlights.map(
+                                  (highlight) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Padding(
+                                          padding: EdgeInsets.only(top: 4),
+                                          child: Icon(
+                                            Icons.circle,
+                                            size: 7,
+                                            color: AppTheme.primaryBlue,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            highlight,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.copyWith(
+                                                  color: AppTheme.textPrimary,
+                                                  height: 1.4,
+                                                ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                if (lessonVideo.theoryEquation.isNotEmpty ||
+                                    lessonVideo.workedExample.isNotEmpty ||
+                                    lessonVideo
+                                        .misconceptionToPrevent.isNotEmpty ||
+                                    lessonVideo.takeawayLine.isNotEmpty ||
+                                    lessonVideo.theoryVerification.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                        16, 0, 16, 16),
+                                    child:
+                                        _buildTheoryPanel(context, lessonVideo),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -305,6 +309,134 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
           ),
         );
       },
+    );
+  }
+
+  Widget _buildTheoryPanel(
+    BuildContext context,
+    LessonConceptVideo lessonVideo,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Theory framing',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          if (lessonVideo.theoryEquation.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.borderLight),
+              ),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Math.tex(
+                  lessonVideo.theoryEquation,
+                  textStyle: const TextStyle(
+                    color: Color(0xFF0F172A),
+                    fontSize: 18,
+                  ),
+                ),
+              ),
+            ),
+          ],
+          if (lessonVideo.workedExample.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            _TheoryBlock(
+              title: 'Worked example',
+              body: lessonVideo.workedExample,
+            ),
+          ],
+          if (lessonVideo.misconceptionToPrevent.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            _TheoryBlock(
+              title: 'Misconception to avoid',
+              body: lessonVideo.misconceptionToPrevent,
+            ),
+          ],
+          if (lessonVideo.takeawayLine.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            _TheoryBlock(
+              title: 'Key takeaway',
+              body: lessonVideo.takeawayLine,
+            ),
+          ],
+          if (lessonVideo.theoryVerification.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text(
+              'Source checks',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF0F172A),
+                  ),
+            ),
+            const SizedBox(height: 8),
+            ...lessonVideo.theoryVerification.map(
+              (verification) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.borderLight),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        verification.claim,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: const Color(0xFF0F172A),
+                              fontWeight: FontWeight.w700,
+                              height: 1.4,
+                            ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        verification.validationNote,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppTheme.textSecondary,
+                              height: 1.4,
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      SelectableText(
+                        verification.sourceUrl,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: const Color(0xFF1A73E8),
+                            ),
+                      ),
+                      if (verification.isInference) ...[
+                        const SizedBox(height: 8),
+                        const _InfoPill(
+                          label: 'Interpretive link',
+                          icon: Icons.link_rounded,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -459,6 +591,40 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
   }
 }
 
+class _TheoryBlock extends StatelessWidget {
+  final String title;
+  final String body;
+
+  const _TheoryBlock({
+    required this.title,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF0F172A),
+              ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          body,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppTheme.textSecondary,
+                height: 1.45,
+              ),
+        ),
+      ],
+    );
+  }
+}
+
 class _VideoPlaceholder extends StatelessWidget {
   final String title;
   final bool isLoading;
@@ -522,8 +688,9 @@ class _VideoPlaceholder extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                errorMessage ??
-                    'Watch lesson video here. Replay is in Replay tab.',
+                errorMessage == null
+                    ? 'Watch lesson video here. Replay is in Replay tab.'
+                    : 'The lesson still works without the generated MP4. Use the notes below, then continue with the code and replay tabs.',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: const Color(0xFFD7E3F4),
                       height: 1.45,

@@ -51,4 +51,3 @@ class MetricsExportService:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         filename = f"n_gain_metrics_{timestamp}.xlsx"
         return filename, content.getvalue()
-

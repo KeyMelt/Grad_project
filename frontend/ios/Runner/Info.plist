@@ -66,5 +66,16 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>The RL IDE needs access to the local network to connect to the simulation backend running on your Mac.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_rl-ide._tcp</string>
+	</array>
 </dict>
 </plist>

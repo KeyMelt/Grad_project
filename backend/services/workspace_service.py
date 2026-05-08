@@ -14,7 +14,9 @@ from tempfile import mkdtemp
 from typing import Any, Optional
 from uuid import uuid4
 
+from backend.exercise_templates import build_blank_diagnostics
 from backend.lessons import get_lesson_definition
+from backend.workspace_store_sqlite import SqliteWorkspaceStore
 
 
 class WorkspaceRuntimeError(Exception):
@@ -29,9 +31,7 @@ class WorkspaceRunRecord:
     run_id: str
     status: str
     exit_code: Optional[int] = None
-    started_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    started_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     finished_at: Optional[str] = None
 
 
@@ -151,12 +151,14 @@ class WorkspaceSessionService:
         base_dir: str | None = None,
         sandbox_image: str = "python:3.11-slim",
         use_docker: bool = True,
+        store: SqliteWorkspaceStore | None = None,
     ) -> None:
         workspace_root = base_dir or "backend/data/workspaces"
         self._base_dir = Path(workspace_root)
         self._base_dir.mkdir(parents=True, exist_ok=True)
         self._sandbox_image = sandbox_image
         self._use_docker = use_docker
+        self._store = store
         self._sessions: dict[str, WorkspaceSessionRecord] = {}
         self._lock = asyncio.Lock()
         self._runtime_prepare_lock = asyncio.Lock()
@@ -187,9 +189,7 @@ class WorkspaceSessionService:
                     status_code=503,
                     detail={
                         "message": "Docker is required for the workspace runtime.",
-                        "issues": [
-                            "Install Docker Desktop and ensure `docker` is on PATH."
-                        ],
+                        "issues": ["Install Docker Desktop and ensure `docker` is on PATH."],
                     },
                 )
 
@@ -245,9 +245,7 @@ class WorkspaceSessionService:
                 "docker_cli_available": False,
                 "docker_daemon_reachable": False,
                 "message": "Docker CLI is not installed.",
-                "issues": [
-                    "Install Docker Desktop and ensure `docker` is available on PATH."
-                ],
+                "issues": ["Install Docker Desktop and ensure `docker` is available on PATH."],
             }
 
         try:
@@ -288,9 +286,7 @@ class WorkspaceSessionService:
                 "docker_daemon_reachable": True,
                 "docker_server_version": result.stdout.strip(),
                 "message": "Workspace runtime is warming the Docker image.",
-                "issues": [
-                    f"Preparing {self._sandbox_image}. Try again in a moment."
-                ],
+                "issues": [f"Preparing {self._sandbox_image}. Try again in a moment."],
             }
 
         return {
@@ -330,6 +326,7 @@ class WorkspaceSessionService:
 
         async with self._lock:
             self._sessions[session_id] = session
+        self._persist_session(session)
 
         # Give the helper process a short chance to emit its ready event.
         for _ in range(5):
@@ -351,7 +348,7 @@ class WorkspaceSessionService:
             "path": path,
             "content": content,
             "version": session.file_versions.get(path, 1),
-            "diagnostics": self._syntax_diagnostics(content),
+            "diagnostics": self._diagnostics_for_content(content, session.lesson_id),
         }
 
     async def write_file(self, session_id: str, path: str, content: str) -> dict[str, Any]:
@@ -359,7 +356,8 @@ class WorkspaceSessionService:
         target_path = self._resolve_visible_file(session, path)
         target_path.write_text(content, encoding="utf-8")
         session.file_versions[path] = session.file_versions.get(path, 1) + 1
-        diagnostics = self._syntax_diagnostics(content)
+        self._persist_session(session)
+        diagnostics = self._diagnostics_for_content(content, session.lesson_id)
         event = {
             "type": "diagnostics",
             "path": path,
@@ -379,6 +377,7 @@ class WorkspaceSessionService:
         run_id = uuid4().hex
         record = WorkspaceRunRecord(run_id=run_id, status="running")
         session.runs[run_id] = record
+        self._persist_run(session.session_id, record)
         await self._send_console_command(
             session,
             {
@@ -497,9 +496,7 @@ class WorkspaceSessionService:
                     status_code=503,
                     detail={
                         "message": "Docker is required for the workspace runtime.",
-                        "issues": [
-                            "Install Docker Desktop and ensure `docker` is on PATH."
-                        ],
+                        "issues": ["Install Docker Desktop and ensure `docker` is on PATH."],
                     },
                 )
             return (
@@ -566,6 +563,7 @@ class WorkspaceSessionService:
             event_type = event.get("type")
             if event_type == "ready":
                 session.console_ready = True
+                self._persist_session(session)
             elif event_type == "prompt":
                 session.last_prompt = str(event.get("prompt", ">>> "))
             elif event_type == "run_started":
@@ -573,6 +571,7 @@ class WorkspaceSessionService:
                 record = session.runs.get(run_id)
                 if record is not None:
                     record.status = "running"
+                    self._persist_run(session.session_id, record)
             elif event_type in {"run_finished", "run_failed"}:
                 run_id = str(event.get("run_id", ""))
                 record = session.runs.get(run_id)
@@ -580,6 +579,7 @@ class WorkspaceSessionService:
                     record.status = "failed" if event_type == "run_failed" else "completed"
                     record.exit_code = int(event.get("exit_code", 0))
                     record.finished_at = datetime.now(timezone.utc).isoformat()
+                    self._persist_run(session.session_id, record)
 
             await self._broadcast(session, event)
 
@@ -639,6 +639,17 @@ class WorkspaceSessionService:
             "finished_at": record.finished_at,
         }
 
+    def _diagnostics_for_content(
+        self,
+        content: str,
+        lesson_id: str,
+    ) -> list[dict[str, Any]]:
+        diagnostics = self._syntax_diagnostics(content)
+        lesson = get_lesson_definition(lesson_id)
+        if lesson is not None:
+            diagnostics.extend(build_blank_diagnostics(content, lesson))
+        return diagnostics
+
     def _syntax_diagnostics(self, content: str) -> list[dict[str, Any]]:
         try:
             ast.parse(content)
@@ -652,6 +663,63 @@ class WorkspaceSessionService:
                 }
             ]
         return []
+
+    def persisted_session_snapshot(self, session_id: str) -> dict[str, Any] | None:
+        if self._store is None:
+            return None
+        return self._store.get_session(session_id)
+
+    def persisted_run_snapshot(self, session_id: str, run_id: str) -> dict[str, Any] | None:
+        if self._store is None:
+            return None
+        return self._store.get_run(session_id, run_id)
+
+    def record_artifact_reference(
+        self,
+        *,
+        owner_kind: str,
+        owner_id: str,
+        artifact_kind: str,
+        artifact_path: str,
+    ) -> None:
+        if self._store is None:
+            return
+        self._store.record_artifact(
+            owner_kind=owner_kind,
+            owner_id=owner_id,
+            artifact_kind=artifact_kind,
+            artifact_path=artifact_path,
+        )
+
+    def list_artifact_references(self, owner_kind: str, owner_id: str) -> list[dict[str, Any]]:
+        if self._store is None:
+            return []
+        return self._store.list_artifacts(owner_kind, owner_id)
+
+    def _persist_session(self, session: WorkspaceSessionRecord) -> None:
+        if self._store is None:
+            return
+        self._store.upsert_session(
+            session_id=session.session_id,
+            lesson_id=session.lesson_id,
+            workspace_dir=str(session.workspace_dir),
+            visible_files=session.visible_files,
+            file_versions=session.file_versions,
+            runtime_mode=session.runtime_mode,
+            console_ready=session.console_ready,
+        )
+
+    def _persist_run(self, session_id: str, record: WorkspaceRunRecord) -> None:
+        if self._store is None:
+            return
+        self._store.upsert_run(
+            session_id=session_id,
+            run_id=record.run_id,
+            status=record.status,
+            exit_code=record.exit_code,
+            started_at=record.started_at,
+            finished_at=record.finished_at,
+        )
 
     def close(self) -> None:
         for session in list(self._sessions.values()):

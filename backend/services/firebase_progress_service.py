@@ -90,6 +90,39 @@ class FirebaseProgressService:
         user_ref.set(payload)
         return self._dashboard_payload(student_id, payload)
 
+    def record_submission_outcome(
+        self,
+        student_id: str,
+        *,
+        passed: bool,
+        failure_kind: Optional[str] = None,
+    ) -> Optional[dict[str, Any]]:
+        user_ref = self._users.document(student_id)
+        snapshot = user_ref.get()
+        if not snapshot.exists:
+            return None
+
+        payload = snapshot.to_dict() or {}
+        progress = payload.get("progress", {})
+        progress["total_submission_attempts"] = (
+            int(progress.get("total_submission_attempts", 0)) + 1
+        )
+        if passed:
+            progress["passed_submission_attempts"] = (
+                int(progress.get("passed_submission_attempts", 0)) + 1
+            )
+        elif failure_kind == "validation_error":
+            progress["validation_failures"] = int(progress.get("validation_failures", 0)) + 1
+        elif failure_kind == "runtime_error":
+            progress["runtime_failures"] = int(progress.get("runtime_failures", 0)) + 1
+        elif failure_kind in {"test_failure", "incomplete_template"}:
+            progress["test_failures"] = int(progress.get("test_failures", 0)) + 1
+
+        payload["progress"] = progress
+        payload["updated_at_utc"] = datetime.now(timezone.utc).isoformat()
+        user_ref.set(payload)
+        return self._dashboard_payload(student_id, payload)
+
     def record_quiz_result(
         self,
         student_id: str,
@@ -188,6 +221,11 @@ class FirebaseProgressService:
                     "posttest": 0,
                 },
                 "question_history": [],
+                "total_submission_attempts": 0,
+                "passed_submission_attempts": 0,
+                "validation_failures": 0,
+                "runtime_failures": 0,
+                "test_failures": 0,
             },
         )
         payload["updated_at_utc"] = datetime.now(timezone.utc).isoformat()
@@ -215,6 +253,11 @@ class FirebaseProgressService:
                     "pretest": int(attempts.get("pretest", 0)),
                     "posttest": int(attempts.get("posttest", 0)),
                 },
+                "total_submission_attempts": int(progress.get("total_submission_attempts", 0)),
+                "passed_submission_attempts": int(progress.get("passed_submission_attempts", 0)),
+                "validation_failures": int(progress.get("validation_failures", 0)),
+                "runtime_failures": int(progress.get("runtime_failures", 0)),
+                "test_failures": int(progress.get("test_failures", 0)),
             },
         }
 

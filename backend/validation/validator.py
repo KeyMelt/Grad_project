@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Any
 
+from backend.exercise_templates import find_unresolved_blanks
 from backend.lessons import get_lesson_definition
 from backend.lesson_tests import run_lesson_tests
 from backend.user_code import load_user_function
@@ -11,15 +12,17 @@ class ValidationResult:
     is_valid: bool
     errors: list[str]
     test_results: list[dict[str, Any]]
+    failure_kind: str | None = None
+    unresolved_blanks: list[str] | None = None
 
 
 class CodeValidator:
     """Validates the mathematical correctness of student submitted code using unit tests."""
-    
+
     def __init__(self):
         # We would ideally load specific tests per lesson here
         pass
-        
+
     def validate_code(self, submitted_code: str, lesson_id: str) -> ValidationResult:
         """
         Executes the submitted code against lesson-specific contract checks.
@@ -30,6 +33,8 @@ class CodeValidator:
                 is_valid=False,
                 errors=[f"Unknown lesson_id '{lesson_id}'."],
                 test_results=[],
+                failure_kind="validation_error",
+                unresolved_blanks=[],
             )
 
         if not submitted_code.strip():
@@ -37,14 +42,26 @@ class CodeValidator:
                 is_valid=False,
                 errors=["Submitted code is empty."],
                 test_results=[],
+                failure_kind="validation_error",
+                unresolved_blanks=[],
+            )
+
+        unresolved_blanks = find_unresolved_blanks(submitted_code, lesson)
+        if unresolved_blanks:
+            return ValidationResult(
+                is_valid=False,
+                errors=[
+                    "Complete every guided blank before submitting.",
+                ],
+                test_results=[],
+                failure_kind="incomplete_template",
+                unresolved_blanks=unresolved_blanks,
             )
 
         try:
             function = load_user_function(submitted_code, lesson.required_function)
             test_results = run_lesson_tests(lesson_id, function)
-            failed_results = [
-                result for result in test_results if not result["passed"]
-            ]
+            failed_results = [result for result in test_results if not result["passed"]]
             if failed_results:
                 return ValidationResult(
                     is_valid=False,
@@ -52,16 +69,22 @@ class CodeValidator:
                         f"{len(failed_results)} lesson sample test(s) failed.",
                     ],
                     test_results=test_results,
+                    failure_kind="test_failure",
+                    unresolved_blanks=[],
                 )
 
             return ValidationResult(
                 is_valid=True,
                 errors=[],
                 test_results=test_results,
+                failure_kind=None,
+                unresolved_blanks=[],
             )
         except Exception as e:
             return ValidationResult(
                 is_valid=False,
                 errors=[f"{type(e).__name__}: {e}"],
                 test_results=[],
+                failure_kind="validation_error",
+                unresolved_blanks=[],
             )

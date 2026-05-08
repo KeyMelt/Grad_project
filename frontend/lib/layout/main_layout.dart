@@ -106,6 +106,9 @@ class _MainLayoutState extends State<MainLayout> {
               onReset: _cubit.reset,
               statusMessage: state.statusMessage,
               runStatusLabel: state.runStatusLabel,
+              failureKind: state.failureKind,
+              unresolvedBlanks: state.unresolvedBlanks,
+              studentFeedback: state.studentFeedback,
               totalReward: state.totalReward,
               averageReward: state.averageReward,
               bestEpisodeReward: state.bestEpisodeReward,
@@ -123,9 +126,7 @@ class _MainLayoutState extends State<MainLayout> {
                     SizedBox(
                       height: 320,
                       child: lessonBrowser,
-                    )
-                  else
-                    _CollapsedOutlineRail(onTap: _cubit.toggleSidebar),
+                    ),
                   Expanded(child: workspace),
                 ],
               );
@@ -203,114 +204,110 @@ class _MainLayoutState extends State<MainLayout> {
     return AppBar(
       backgroundColor: AppTheme.surfaceWhite,
       elevation: 0,
-      toolbarHeight: 88,
-      title: Row(
-        children: [
-          Image.asset(
-            'assets/branding/rl_logo_trimmed.png',
-            width: 300,
-            height: 68,
-            fit: BoxFit.contain,
-          ),
-        ],
+      toolbarHeight: 58,
+      title: LayoutBuilder(
+        builder: (context, constraints) {
+          final showLogo = constraints.maxWidth > 300;
+          return Row(
+            children: [
+              if (showLogo) ...[
+                Image.asset(
+                  'assets/branding/rl_logo_trimmed.png',
+                  height: 38,
+                  fit: BoxFit.contain,
+                ),
+                const SizedBox(width: 18),
+              ],
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _NavChip(
+                        label: 'Home',
+                        selected: state.currentSection == AppSection.home,
+                        onTap: () => _cubit.navigateTo(AppSection.home),
+                      ),
+                      const SizedBox(width: 8),
+                      _NavChip(
+                        label: 'Workspace',
+                        selected: state.currentSection == AppSection.workspace,
+                        onTap: () => _cubit.navigateTo(AppSection.workspace),
+                      ),
+                      const SizedBox(width: 8),
+                      _NavChip(
+                        label: 'Quiz',
+                        selected: state.currentSection == AppSection.quiz,
+                        onTap: () => _cubit.navigateTo(AppSection.quiz),
+                      ),
+                      const SizedBox(width: 8),
+                      _NavChip(
+                        label: 'Admin',
+                        selected: state.currentSection == AppSection.admin,
+                        onTap: () => _cubit.navigateTo(AppSection.admin),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
       actions: [
+        if (state.learner != null)
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8F0FE),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.person_outline,
+                  color: AppTheme.primaryBlue,
+                  size: 16,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  state.learner!.displayName,
+                  style: const TextStyle(
+                    color: AppTheme.primaryBlue,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(width: 6),
         IconButton(
           tooltip: 'Show onboarding tutorial',
           onPressed: () => _openOnboarding(markSeen: false),
           icon: const Icon(Icons.lightbulb_outline_rounded),
         ),
-        const SizedBox(width: 4),
         if (state.currentSection == AppSection.workspace)
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: OutlinedButton.icon(
-              onPressed: _cubit.toggleSidebar,
-              icon: Icon(
-                state.sidebarVisible
-                    ? Icons.menu_open_rounded
-                    : Icons.menu_rounded,
-              ),
-              label: Text(
-                state.sidebarVisible ? 'Hide Sidebar' : 'Show Sidebar',
-              ),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                 return OutlinedButton.icon(
+                  onPressed: _cubit.toggleSidebar,
+                  icon: Icon(
+                    state.sidebarVisible
+                        ? Icons.menu_open_rounded
+                        : Icons.menu_rounded,
+                  ),
+                  label: const Text('Sidebar'),
+                );
+              }
             ),
           ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 10),
       ],
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(64),
-        child: Column(
-          children: [
-            SizedBox(
-              height: 56,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    _NavChip(
-                      label: 'Home',
-                      selected: state.currentSection == AppSection.home,
-                      onTap: () => _cubit.navigateTo(AppSection.home),
-                    ),
-                    const SizedBox(width: 8),
-                    _NavChip(
-                      label: 'Workspace',
-                      selected: state.currentSection == AppSection.workspace,
-                      onTap: () => _cubit.navigateTo(AppSection.workspace),
-                    ),
-                    const SizedBox(width: 8),
-                    _NavChip(
-                      label: 'Quiz',
-                      selected: state.currentSection == AppSection.quiz,
-                      onTap: () => _cubit.navigateTo(AppSection.quiz),
-                    ),
-                    const SizedBox(width: 8),
-                    _NavChip(
-                      label: 'Admin',
-                      selected: state.currentSection == AppSection.admin,
-                      onTap: () => _cubit.navigateTo(AppSection.admin),
-                    ),
-                    if (state.learner != null) ...[
-                      const SizedBox(width: 16),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE8F0FE),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.person_outline,
-                              color: AppTheme.primaryBlue,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              state.learner!.displayName,
-                              style: const TextStyle(
-                                color: AppTheme.primaryBlue,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            const Divider(height: 1),
-          ],
-        ),
-      ),
     );
   }
 }

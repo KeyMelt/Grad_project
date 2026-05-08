@@ -21,6 +21,7 @@ class CodeValidatorTest(unittest.TestCase):
 
         self.assertFalse(result.is_valid)
         self.assertIn("q_learning_update", result.errors[0])
+        self.assertEqual(result.failure_kind, "validation_error")
 
     def test_accepts_matching_lesson_function(self):
         result = self.validator.validate_code(
@@ -37,6 +38,7 @@ class CodeValidatorTest(unittest.TestCase):
         self.assertTrue(result.is_valid)
         self.assertEqual(result.errors, [])
         self.assertTrue(all(test["passed"] for test in result.test_results))
+        self.assertEqual(result.unresolved_blanks, [])
 
     def test_rejects_forbidden_imports(self):
         result = self.validator.validate_code(
@@ -46,6 +48,43 @@ class CodeValidatorTest(unittest.TestCase):
 
         self.assertFalse(result.is_valid)
         self.assertIn("Import", result.errors[0])
+        self.assertEqual(result.failure_kind, "validation_error")
+
+    def test_rejects_incomplete_guided_template_expression_blank(self):
+        result = self.validator.validate_code(
+            (
+                "LEARNING_RATE = 0.1\n"
+                "DISCOUNT_FACTOR = 0.95\n"
+                "def q_learning_update(Q, state, action, reward, next_state, alpha=LEARNING_RATE, gamma=DISCOUNT_FACTOR):\n"
+                "    best_next_value = __BLANK_q_learning_best_next__\n"
+                "    td_target = reward + gamma * best_next_value\n"
+                "    Q[state][action] = Q[state][action] + alpha * (td_target - Q[state][action])\n"
+                "    return Q\n"
+            ),
+            "td_q_learning",
+        )
+
+        self.assertFalse(result.is_valid)
+        self.assertEqual(result.failure_kind, "incomplete_template")
+        self.assertEqual(result.unresolved_blanks, ["q_learning_best_next"])
+
+    def test_rejects_incomplete_guided_template_block_blank(self):
+        result = self.validator.validate_code(
+            (
+                "LEARNING_RATE = 0.1\n"
+                "DISCOUNT_FACTOR = 0.95\n"
+                "def q_learning_update(Q, state, action, reward, next_state, alpha=LEARNING_RATE, gamma=DISCOUNT_FACTOR):\n"
+                "    best_next_value = max(Q[next_state])\n"
+                "    td_target = reward + gamma * best_next_value\n"
+                '    raise NotImplementedError("TODO: q_learning_update_rule")\n'
+                "    return Q\n"
+            ),
+            "td_q_learning",
+        )
+
+        self.assertFalse(result.is_valid)
+        self.assertEqual(result.failure_kind, "incomplete_template")
+        self.assertEqual(result.unresolved_blanks, ["q_learning_update_rule"])
 
     def test_accepts_value_iteration_function(self):
         result = self.validator.validate_code(

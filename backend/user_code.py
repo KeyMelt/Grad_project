@@ -1,7 +1,6 @@
 import ast
 from typing import Any, Callable
 
-
 SAFE_BUILTINS = {
     "abs": abs,
     "all": all,
