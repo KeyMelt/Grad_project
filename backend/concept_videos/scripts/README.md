@@ -10,5 +10,5 @@ Use one Markdown file per video. Keep the script close to the animation plan:
 - `Narration Draft`: voiceover text that can be read aloud.
 - `Manim Notes`: reusable objects, transitions, timing, and render concerns.
 
-The Manim implementation lives in `backend/concept_videos/scenes/`.
-
+The Manim implementation lives outside this repository (archived under
+`/Users/ultramarine/Desktop/grad_support_files/grad_project/backend/concept_videos/`).

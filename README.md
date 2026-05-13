@@ -34,6 +34,56 @@ cd grad_project
 PROJECT_ROOT="$PWD" docker compose up -d gateway execution-service user-evaluation-service
 ```
 
+## Cloud Docker Image
+
+This image packages the backend platform services (gateway, execution worker, and user/evaluation service). The Flutter client is deployed separately.
+
+Build the production image:
+
+```bash
+cd grad_project
+docker build -f Dockerfile.cloud -t rl-platform:cloud .
+```
+
+Run as a single cloud container (gateway + worker + user service in one image):
+
+```bash
+docker run --rm -p 8000:8000 \
+  -e SERVICE_NAME=all-in-one \
+  -e PORT=8000 \
+  -e RL_IDE_INTERNAL_TOKEN=change-me \
+  -e RL_IDE_WORKSPACE_USE_DOCKER=0 \
+  rl-platform:cloud
+```
+
+Run as split services using the same image (recommended for scaling):
+
+```bash
+# execution worker
+docker run -d --name rl-worker -p 8100:8100 \
+  -e SERVICE_NAME=execution-worker \
+  -e RL_IDE_INTERNAL_TOKEN=change-me \
+  -e RL_IDE_WORKSPACE_USE_DOCKER=0 \
+  rl-platform:cloud
+
+# user/evaluation service
+docker run -d --name rl-user -p 8200:8200 \
+  -e SERVICE_NAME=user-evaluation \
+  -e RL_IDE_INTERNAL_TOKEN=change-me \
+  -e RL_IDE_PROGRESS_BACKEND=sql \
+  rl-platform:cloud
+
+# gateway
+docker run --rm -p 8000:8000 \
+  -e SERVICE_NAME=gateway \
+  -e RL_IDE_EXECUTION_MODE=remote \
+  -e RL_IDE_USER_SERVICE_MODE=remote \
+  -e RL_IDE_EXECUTION_WORKER_URL=http://<worker-host>:8100 \
+  -e RL_IDE_USER_SERVICE_URL=http://<user-service-host>:8200 \
+  -e RL_IDE_INTERNAL_TOKEN=change-me \
+  rl-platform:cloud
+```
+
 Start Flutter in another terminal:
 
 ```bash

@@ -8,7 +8,7 @@ explanation videos.
 - `scenes/`: one Manim scene module per concept video, plus shared helpers.
 - `scenes/helpers.py`: shared visual components used by multiple scenes.
 - `specs.py`: lesson video metadata and theory/source-check configuration.
-- `render.py`: local render helper that generates all registered concept videos.
+- `render.py`: local render helper that generates a single concept video.
 - `_manim_media/`: temporary Manim render cache/output. This is generated and ignored.
 
 ## Output Target
@@ -31,8 +31,11 @@ a backend network video, not as a bundled Flutter asset.
 ## Render Command
 
 ```bash
-python -m backend.concept_videos.render
+python -m backend.concept_videos.render /absolute/path/to/your_scene.py --lesson-id dp_value_iteration
 ```
+
+By default, renders are idempotent: if `backend/media/concept_videos/{lesson_id}_concept.mp4`
+already exists, the script exits without re-rendering. Use `--force` to overwrite.
 
 Useful environment variables:
 

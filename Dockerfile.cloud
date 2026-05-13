@@ -1,0 +1,41 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      build-essential \
+      pkg-config \
+      libcairo2-dev \
+      libpango1.0-dev \
+      ffmpeg \
+      libsdl2-2.0-0 \
+      libsdl2-ttf-2.0-0 \
+      ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN useradd --create-home --uid 10001 appuser
+
+WORKDIR /app
+
+COPY backend/requirements.txt /tmp/requirements.txt
+RUN pip install --upgrade pip && pip install -r /tmp/requirements.txt
+
+COPY backend /app/backend
+COPY docker/entrypoint.cloud.sh /app/docker/entrypoint.cloud.sh
+
+RUN mkdir -p /app/backend/data \
+    /app/backend/visualization/animations \
+    /app/backend/media/concept_videos && \
+    chmod +x /app/docker/entrypoint.cloud.sh && \
+    chown -R appuser:appuser /app
+
+EXPOSE 8000
+EXPOSE 8100
+EXPOSE 8200
+
+USER appuser
+
+ENTRYPOINT ["/app/docker/entrypoint.cloud.sh"]
