@@ -39,6 +39,8 @@ class WorkspaceRunRecord:
 class WorkspaceSessionRecord:
     session_id: str
     lesson_id: str
+    owner_user_id: str
+    owner_role: str
     workspace_dir: Path
     visible_files: list[str]
     file_versions: dict[str, int]
@@ -299,7 +301,13 @@ class WorkspaceSessionService:
             "issues": [],
         }
 
-    async def create_session(self, lesson_id: str) -> dict[str, Any]:
+    async def create_session(
+        self,
+        lesson_id: str,
+        *,
+        owner_user_id: str,
+        owner_role: str,
+    ) -> dict[str, Any]:
         lesson = get_lesson_definition(lesson_id)
         if lesson is None:
             raise WorkspaceRuntimeError(
@@ -316,6 +324,8 @@ class WorkspaceSessionService:
         session = WorkspaceSessionRecord(
             session_id=session_id,
             lesson_id=lesson_id,
+            owner_user_id=owner_user_id,
+            owner_role=owner_role,
             workspace_dir=workspace_dir,
             visible_files=["script.py"],
             file_versions={"script.py": 1},
@@ -625,6 +635,8 @@ class WorkspaceSessionService:
         return {
             "session_id": session.session_id,
             "lesson_id": session.lesson_id,
+            "owner_user_id": session.owner_user_id,
+            "owner_role": session.owner_role,
             "visible_files": session.visible_files,
             "console_ready": session.console_ready,
             "runtime_mode": session.runtime_mode,
@@ -702,6 +714,8 @@ class WorkspaceSessionService:
         self._store.upsert_session(
             session_id=session.session_id,
             lesson_id=session.lesson_id,
+            owner_user_id=session.owner_user_id,
+            owner_role=session.owner_role,
             workspace_dir=str(session.workspace_dir),
             visible_files=session.visible_files,
             file_versions=session.file_versions,

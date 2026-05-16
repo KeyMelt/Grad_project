@@ -8,10 +8,12 @@ import '../../core/workbench_state.dart';
 
 class VideoPlayerTab extends StatefulWidget {
   final LessonDefinition lesson;
+  final ValueChanged<Map<String, dynamic>>? onSessionEnded;
 
   const VideoPlayerTab({
     super.key,
     required this.lesson,
+    this.onSessionEnded,
   });
 
   @override
@@ -23,6 +25,15 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
   VideoPlayerController? _controller;
   bool _isLoading = false;
   String? _errorMessage;
+  DateTime _sessionStartedAtUtc = DateTime.now().toUtc();
+  DateTime? _playStartedAtUtc;
+  Duration _watchDuration = Duration.zero;
+  Duration _maxPosition = Duration.zero;
+  Duration _lastPosition = Duration.zero;
+  int _seekBackCount = 0;
+  int _replayCount = 0;
+  bool _completedOnce = false;
+  bool _sessionReported = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -38,13 +49,16 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.lesson.conceptVideo.effectiveStreamPath !=
         widget.lesson.conceptVideo.effectiveStreamPath) {
+      _emitSessionTelemetry();
       _disposeController();
+      _resetSessionTelemetry();
       _initializeVideo();
     }
   }
 
   @override
   void dispose() {
+    _emitSessionTelemetry();
     _disposeController();
     super.dispose();
   }
@@ -121,6 +135,10 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
   }
 
   void _onControllerChanged() {
+    final controller = _controller;
+    if (controller?.value.isInitialized ?? false) {
+      _updatePlaybackTelemetry(controller!.value);
+    }
     if (mounted) {
       setState(() {});
     }
@@ -135,6 +153,13 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
     if (controller.value.isPlaying) {
       await controller.pause();
     } else {
+      final duration = controller.value.duration;
+      final nearEnd = duration.inMilliseconds > 0 &&
+          duration - controller.value.position <= const Duration(seconds: 1);
+      if (_completedOnce &&
+          (nearEnd || controller.value.position.inSeconds <= 1)) {
+        _replayCount += 1;
+      }
       await controller.play();
     }
     if (mounted) {
@@ -146,6 +171,80 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
     _controller?.removeListener(_onControllerChanged);
     _controller?.dispose();
     _controller = null;
+  }
+
+  void _resetSessionTelemetry() {
+    _sessionStartedAtUtc = DateTime.now().toUtc();
+    _playStartedAtUtc = null;
+    _watchDuration = Duration.zero;
+    _maxPosition = Duration.zero;
+    _lastPosition = Duration.zero;
+    _seekBackCount = 0;
+    _replayCount = 0;
+    _completedOnce = false;
+    _sessionReported = false;
+  }
+
+  void _updatePlaybackTelemetry(VideoPlayerValue value) {
+    final now = DateTime.now().toUtc();
+    if (value.isPlaying && _playStartedAtUtc == null) {
+      _playStartedAtUtc = now;
+    } else if (!value.isPlaying && _playStartedAtUtc != null) {
+      _watchDuration += now.difference(_playStartedAtUtc!);
+      _playStartedAtUtc = null;
+    }
+
+    final position = value.position;
+    if (_lastPosition - position > const Duration(seconds: 2)) {
+      _seekBackCount += 1;
+    }
+    if (position > _maxPosition) {
+      _maxPosition = position;
+    }
+    final duration = value.duration;
+    if (duration.inMilliseconds > 0 &&
+        duration - position <= const Duration(seconds: 1)) {
+      _completedOnce = true;
+    }
+    _lastPosition = position;
+  }
+
+  void _emitSessionTelemetry() {
+    if (_sessionReported) {
+      return;
+    }
+    final controller = _controller;
+    if (controller?.value.isInitialized ?? false) {
+      _updatePlaybackTelemetry(controller!.value);
+    }
+    if (_playStartedAtUtc != null) {
+      _watchDuration += DateTime.now().toUtc().difference(_playStartedAtUtc!);
+      _playStartedAtUtc = null;
+    }
+
+    final duration = controller?.value.duration ?? Duration.zero;
+    final completionRatio = duration.inMilliseconds <= 0
+        ? 0.0
+        : (_maxPosition.inMilliseconds / duration.inMilliseconds)
+            .clamp(0.0, 1.0);
+    final interacted = _watchDuration.inMilliseconds > 0 ||
+        _maxPosition.inMilliseconds > 0 ||
+        _seekBackCount > 0 ||
+        _replayCount > 0;
+    if (!interacted) {
+      return;
+    }
+
+    widget.onSessionEnded?.call(
+      {
+        'watch_duration_seconds': _watchDuration.inMilliseconds / 1000,
+        'completion_ratio': completionRatio,
+        'seek_back_count': _seekBackCount,
+        'replay_count': _replayCount,
+        'started_at_utc': _sessionStartedAtUtc.toIso8601String(),
+      },
+    );
+    _sessionReported = true;
   }
 
   @override

@@ -21,11 +21,21 @@ class RemoteWorkspaceService:
         self._internal_token = internal_token
         self._timeout_seconds = timeout_seconds
 
-    def create_session(self, lesson_id: str) -> dict[str, Any]:
+    def create_session(
+        self,
+        lesson_id: str,
+        *,
+        owner_user_id: str,
+        owner_role: str,
+    ) -> dict[str, Any]:
         response = self._request(
             "POST",
             "/internal/workspace/sessions",
-            json={"lesson_id": lesson_id},
+            json={
+                "lesson_id": lesson_id,
+                "owner_user_id": owner_user_id,
+                "owner_role": owner_role,
+            },
         )
         return response.json()
 

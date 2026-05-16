@@ -195,6 +195,42 @@ class FirebaseProgressService:
         rows.sort(key=lambda item: (item.get("display_name") or "").lower())
         return rows
 
+    def ensure_student_record(self, *, student_id: str, display_name: str) -> dict[str, Any]:
+        normalized_name = " ".join((display_name or "").split()) or "Student"
+        user_ref = self._users.document(student_id)
+        snapshot = user_ref.get()
+        if snapshot.exists:
+            payload = snapshot.to_dict() or {}
+        else:
+            payload = {}
+
+        if payload.get("display_name") != normalized_name:
+            payload["display_name"] = normalized_name
+        payload.setdefault(
+            "progress",
+            {
+                "completed_lesson_ids": [],
+                "successful_runs": 0,
+                "latest_lesson_id": None,
+                "pretest_score": None,
+                "posttest_score": None,
+                "n_gain": None,
+                "quiz_attempts": {
+                    "pretest": 0,
+                    "posttest": 0,
+                },
+                "question_history": [],
+                "total_submission_attempts": 0,
+                "passed_submission_attempts": 0,
+                "validation_failures": 0,
+                "runtime_failures": 0,
+                "test_failures": 0,
+            },
+        )
+        payload["updated_at_utc"] = datetime.now(timezone.utc).isoformat()
+        user_ref.set(payload)
+        return self._dashboard_payload(student_id, payload)
+
     def close(self) -> None:
         return None
 

@@ -16,7 +16,7 @@ from backend.job_store_sqlite import SqliteExecutionJobStore
 from backend.services.execution_service import ExecutionService
 from backend.services.student_progress_service import StudentProgressService
 from backend.services.workspace_service import WorkspaceSessionService
-from backend.settings import WorkerSettings, env_bool
+from backend.settings import WorkerSettings, env_bool, require_configured_secret
 from backend.workspace_store_sqlite import SqliteWorkspaceStore
 
 
@@ -54,8 +54,11 @@ def _close_if_present(service: Any) -> None:
 
 
 def create_app(services: WorkerServiceContainer | None = None) -> FastAPI:
+    required_token = require_configured_secret(
+        "RL_IDE_INTERNAL_TOKEN",
+        "execution worker internal API authentication",
+    )
     svc = services or _build_services()
-    required_token = WorkerSettings.from_env().internal_token or ""
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -72,8 +75,6 @@ def create_app(services: WorkerServiceContainer | None = None) -> FastAPI:
     )
 
     def _assert_internal_access(x_internal_token: str | None) -> None:
-        if not required_token:
-            return
         if x_internal_token != required_token:
             raise HTTPException(status_code=401, detail="Unauthorized worker call.")
 

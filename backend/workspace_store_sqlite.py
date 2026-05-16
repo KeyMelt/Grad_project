@@ -23,6 +23,8 @@ class SqliteWorkspaceStore:
         *,
         session_id: str,
         lesson_id: str,
+        owner_user_id: str,
+        owner_role: str,
         workspace_dir: str,
         visible_files: list[str],
         file_versions: dict[str, int],
@@ -35,14 +37,18 @@ class SqliteWorkspaceStore:
                 INSERT INTO workspace_sessions (
                     session_id,
                     lesson_id,
+                    owner_user_id,
+                    owner_role,
                     workspace_dir,
                     visible_files_json,
                     file_versions_json,
                     runtime_mode,
                     console_ready
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(session_id) DO UPDATE SET
                     lesson_id = excluded.lesson_id,
+                    owner_user_id = excluded.owner_user_id,
+                    owner_role = excluded.owner_role,
                     workspace_dir = excluded.workspace_dir,
                     visible_files_json = excluded.visible_files_json,
                     file_versions_json = excluded.file_versions_json,
@@ -53,6 +59,8 @@ class SqliteWorkspaceStore:
                 (
                     session_id,
                     lesson_id,
+                    owner_user_id,
+                    owner_role,
                     workspace_dir,
                     json.dumps(visible_files),
                     json.dumps(file_versions),
@@ -66,8 +74,8 @@ class SqliteWorkspaceStore:
         with self._lock, self._connection() as conn:
             row = conn.execute(
                 """
-                SELECT session_id, lesson_id, workspace_dir, visible_files_json,
-                       file_versions_json, runtime_mode, console_ready
+                SELECT session_id, lesson_id, owner_user_id, owner_role, workspace_dir,
+                       visible_files_json, file_versions_json, runtime_mode, console_ready
                 FROM workspace_sessions
                 WHERE session_id = ?
                 """,
@@ -78,6 +86,8 @@ class SqliteWorkspaceStore:
         return {
             "session_id": row["session_id"],
             "lesson_id": row["lesson_id"],
+            "owner_user_id": row["owner_user_id"],
+            "owner_role": row["owner_role"],
             "workspace_dir": row["workspace_dir"],
             "visible_files": json.loads(row["visible_files_json"]),
             "file_versions": json.loads(row["file_versions_json"]),
@@ -187,6 +197,8 @@ class SqliteWorkspaceStore:
                 CREATE TABLE IF NOT EXISTS workspace_sessions (
                     session_id TEXT PRIMARY KEY,
                     lesson_id TEXT NOT NULL,
+                    owner_user_id TEXT NOT NULL DEFAULT '',
+                    owner_role TEXT NOT NULL DEFAULT 'student',
                     workspace_dir TEXT NOT NULL,
                     visible_files_json TEXT NOT NULL,
                     file_versions_json TEXT NOT NULL,
@@ -196,6 +208,18 @@ class SqliteWorkspaceStore:
                     updated_at_utc TEXT NOT NULL DEFAULT (datetime('now'))
                 )
                 """)
+            column_rows = conn.execute("PRAGMA table_info(workspace_sessions)").fetchall()
+            existing_columns = {row[1] for row in column_rows}
+            if "owner_user_id" not in existing_columns:
+                conn.execute(
+                    "ALTER TABLE workspace_sessions "
+                    "ADD COLUMN owner_user_id TEXT NOT NULL DEFAULT ''"
+                )
+            if "owner_role" not in existing_columns:
+                conn.execute(
+                    "ALTER TABLE workspace_sessions "
+                    "ADD COLUMN owner_role TEXT NOT NULL DEFAULT 'student'"
+                )
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS workspace_runs (
                     session_id TEXT NOT NULL,

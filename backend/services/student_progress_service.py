@@ -209,6 +209,44 @@ class StudentProgressService:
                     )
                 return rows
 
+    def ensure_student_record(self, *, student_id: str, display_name: str) -> dict:
+        normalized_name = " ".join(display_name.split()) or "Student"
+        lookup_key = normalized_name.casefold()
+        with self._lock:
+            with self._database.session() as session:
+                conflict = session.exec(
+                    select(StudentProgressRecord).where(
+                        StudentProgressRecord.normalized_name == lookup_key
+                    )
+                ).first()
+                if conflict is not None and conflict.id != student_id:
+                    lookup_key = f"{lookup_key}-{student_id[:8]}"
+                record = session.get(StudentProgressRecord, student_id)
+                if record is None:
+                    record = StudentProgressRecord(
+                        id=student_id,
+                        display_name=normalized_name,
+                        normalized_name=lookup_key,
+                    )
+                    session.add(record)
+                    session.commit()
+                    session.refresh(record)
+                    return self._dashboard_payload(record)
+
+                updated = False
+                if record.display_name != normalized_name:
+                    record.display_name = normalized_name
+                    updated = True
+                if not record.normalized_name:
+                    record.normalized_name = lookup_key
+                    updated = True
+                if updated:
+                    record.updated_at = datetime.now(timezone.utc)
+                    session.add(record)
+                    session.commit()
+                    session.refresh(record)
+                return self._dashboard_payload(record)
+
     def close(self) -> None:
         self._database.close()
 
