@@ -11,10 +11,15 @@ class CodeSubmission(BaseModel):
     exploration_rate: float | None = Field(default=None, ge=0, le=1)
     episode_count: int | None = Field(default=None, ge=1, le=500)
     student_id: str | None = None
+    session_id: str | None = None
+    owner_user_id: str | None = None
+    owner_role: str | None = None
 
 
 class WorkspaceSessionCreateRequest(BaseModel):
     lesson_id: str
+    owner_user_id: str
+    owner_role: str
 
 
 class WorkspaceFileUpdateRequest(BaseModel):

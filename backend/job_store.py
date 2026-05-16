@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from threading import Lock
 from typing import Any, Optional
 from uuid import uuid4
@@ -8,6 +9,9 @@ from uuid import uuid4
 class ExecutionJob:
     task_id: str
     status: str
+    owner_user_id: str
+    owner_role: str
+    created_at_utc: str
     result: Optional[dict[str, Any]] = None
     error: Any = None
 
@@ -19,9 +23,20 @@ class ExecutionJobStore:
         self._jobs: dict[str, ExecutionJob] = {}
         self._lock = Lock()
 
-    def create(self) -> ExecutionJob:
+    def create(
+        self,
+        *,
+        owner_user_id: str,
+        owner_role: str,
+    ) -> ExecutionJob:
         with self._lock:
-            job = ExecutionJob(task_id=uuid4().hex, status="queued")
+            job = ExecutionJob(
+                task_id=uuid4().hex,
+                status="queued",
+                owner_user_id=owner_user_id,
+                owner_role=owner_role,
+                created_at_utc=datetime.now(timezone.utc).isoformat(),
+            )
             self._jobs[job.task_id] = job
             return job
 
@@ -46,6 +61,9 @@ class ExecutionJobStore:
         payload: dict[str, Any] = {
             "task_id": job.task_id,
             "status": job.status,
+            "owner_user_id": job.owner_user_id,
+            "owner_role": job.owner_role,
+            "created_at_utc": job.created_at_utc,
         }
         if job.result is not None:
             payload["result"] = job.result

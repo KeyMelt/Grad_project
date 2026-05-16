@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/backend_api.dart';
 import '../../core/constants.dart';
 import '../../core/theme.dart';
 import '../../core/workbench_state.dart';
@@ -7,12 +8,20 @@ import '../../core/workbench_state.dart';
 class AdminConsole extends StatefulWidget {
   final List<LessonSection> sections;
   final String? selectedLessonId;
+  final LearnerDashboard? progressDashboard;
+  final List<StaffStudentSummary> students;
+  final String? selectedStudentId;
   final String message;
   final bool isExportingMetrics;
+  final bool isProgressLoading;
+  final bool isAdmin;
   final ValueChanged<String> onSelectLesson;
+  final ValueChanged<String> onSelectStudent;
+  final VoidCallback onRefreshProgressDirectory;
   final VoidCallback onCreateDraftLesson;
   final ValueChanged<String> onDeleteLesson;
   final VoidCallback onExportNGainMetrics;
+  final VoidCallback onExportLearningAnalytics;
   final void Function({
     required String lessonId,
     required String title,
@@ -35,12 +44,20 @@ class AdminConsole extends StatefulWidget {
     super.key,
     required this.sections,
     required this.selectedLessonId,
+    required this.progressDashboard,
+    required this.students,
+    required this.selectedStudentId,
     required this.message,
     required this.isExportingMetrics,
+    required this.isProgressLoading,
+    required this.isAdmin,
     required this.onSelectLesson,
+    required this.onSelectStudent,
+    required this.onRefreshProgressDirectory,
     required this.onCreateDraftLesson,
     required this.onDeleteLesson,
     required this.onExportNGainMetrics,
+    required this.onExportLearningAnalytics,
     required this.onSaveLesson,
   });
 
@@ -48,7 +65,7 @@ class AdminConsole extends StatefulWidget {
   State<AdminConsole> createState() => _AdminConsoleState();
 }
 
-enum _AdminSection { lessonStudio, evaluation }
+enum _AdminSection { lessonStudio, progressTracking }
 
 class _AdminConsoleState extends State<AdminConsole> {
   late final TextEditingController _titleController;
@@ -121,6 +138,7 @@ class _AdminConsoleState extends State<AdminConsole> {
 
   @override
   Widget build(BuildContext context) {
+    final activeSection = _activeSection;
     final lessons = widget.sections
         .expand((section) => section.lessons)
         .toList(growable: false);
@@ -134,9 +152,9 @@ class _AdminConsoleState extends State<AdminConsole> {
           _buildSectionSwitcher(context),
           const SizedBox(height: AppConstants.defaultPadding),
           Expanded(
-            child: _activeSection == _AdminSection.lessonStudio
+            child: activeSection == _AdminSection.lessonStudio
                 ? _buildLessonStudioLayout(context, lessons, selectedLesson)
-                : _buildEvaluationSection(context),
+                : _buildProgressTrackingSection(context),
           ),
         ],
       ),
@@ -166,11 +184,11 @@ class _AdminConsoleState extends State<AdminConsole> {
           const SizedBox(width: 8),
           Expanded(
             child: _SectionButton(
-              label: 'Evaluation',
-              selected: _activeSection == _AdminSection.evaluation,
-              icon: Icons.analytics_outlined,
+              label: 'Progress',
+              selected: _activeSection == _AdminSection.progressTracking,
+              icon: Icons.insights_outlined,
               onTap: () {
-                setState(() => _activeSection = _AdminSection.evaluation);
+                setState(() => _activeSection = _AdminSection.progressTracking);
               },
             ),
           ),
@@ -222,7 +240,11 @@ class _AdminConsoleState extends State<AdminConsole> {
     );
   }
 
-  Widget _buildEvaluationSection(BuildContext context) {
+  Widget _buildProgressTrackingSection(BuildContext context) {
+    final dashboard = widget.progressDashboard;
+    final progress = dashboard?.progress ?? const LearnerProgress.empty();
+    final stats = _buildProgressStats(progress);
+
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.surfaceWhite,
@@ -230,63 +252,243 @@ class _AdminConsoleState extends State<AdminConsole> {
         border: Border.all(color: AppTheme.borderLight),
       ),
       padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Evaluation',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Export N-gain metrics.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppTheme.textPrimary,
-                  height: 1.45,
-                ),
-          ),
-          const SizedBox(height: 18),
-          SizedBox(
-            width: 240,
-            child: FilledButton.icon(
-              onPressed: widget.isExportingMetrics
-                  ? null
-                  : widget.onExportNGainMetrics,
-              icon: widget.isExportingMetrics
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final columns = (constraints.maxWidth / 280).floor().clamp(1, 4);
+          return SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Progress Tracking',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Review student quiz and coding progress from a privileged console instead of the learner home screen.',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: AppTheme.textPrimary,
+                                  height: 1.45,
+                                ),
+                          ),
+                        ],
                       ),
-                    )
-                  : const Icon(Icons.table_view_outlined),
-              label: Text(
-                widget.isExportingMetrics ? 'Exporting...' : 'Export N-gain',
-              ),
-            ),
-          ),
-          const SizedBox(height: 18),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppTheme.borderLight),
-            ),
-            child: Text(
-              widget.message,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppTheme.textPrimary,
-                    height: 1.45,
+                    ),
+                    const SizedBox(width: 16),
+                    OutlinedButton.icon(
+                      onPressed: widget.onRefreshProgressDirectory,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('Refresh'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                DropdownButtonFormField<String>(
+                  initialValue: widget.students.any(
+                    (student) => student.id == widget.selectedStudentId,
+                  )
+                      ? widget.selectedStudentId
+                      : null,
+                  decoration: const InputDecoration(
+                    labelText: 'Learner',
+                    border: OutlineInputBorder(),
                   ),
+                  items: widget.students
+                      .map(
+                        (student) => DropdownMenuItem<String>(
+                          value: student.id,
+                          child: Text(student.displayName),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: widget.isProgressLoading
+                      ? null
+                      : (value) {
+                          if (value != null) {
+                            widget.onSelectStudent(value);
+                          }
+                        },
+                ),
+                const SizedBox(height: 16),
+                if (widget.isProgressLoading) const LinearProgressIndicator(),
+                if (dashboard != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    dashboard.student.displayName,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  const SizedBox(height: 12),
+                  GridView.builder(
+                    itemCount: stats.length,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: columns,
+                      mainAxisSpacing: AppConstants.defaultPadding,
+                      crossAxisSpacing: AppConstants.defaultPadding,
+                      mainAxisExtent: 180,
+                    ),
+                    itemBuilder: (context, index) {
+                      return _ProgressStatCard(stat: stats[index]);
+                    },
+                  ),
+                ] else if (!widget.isProgressLoading) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Select a learner to view progress.',
+                    style: TextStyle(color: AppTheme.textSecondary),
+                  ),
+                ],
+                const SizedBox(height: 24),
+                Text(
+                  'Exports',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    SizedBox(
+                      width: 220,
+                      child: FilledButton.icon(
+                        onPressed: widget.isAdmin && !widget.isExportingMetrics
+                            ? widget.onExportNGainMetrics
+                            : null,
+                        icon: widget.isExportingMetrics
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.table_view_outlined),
+                        label: Text(
+                          widget.isExportingMetrics
+                              ? 'Exporting...'
+                              : 'Export N-gain',
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 260,
+                      child: OutlinedButton.icon(
+                        onPressed: widget.isAdmin && !widget.isExportingMetrics
+                            ? widget.onExportLearningAnalytics
+                            : null,
+                        icon: const Icon(Icons.psychology_alt_outlined),
+                        label: const Text('Export Learning Analytics'),
+                      ),
+                    ),
+                  ],
+                ),
+                if (!widget.isAdmin) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Analytics exports are admin-only.',
+                    style: TextStyle(color: AppTheme.textSecondary),
+                  ),
+                ],
+                const SizedBox(height: 18),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppTheme.borderLight),
+                  ),
+                  child: Text(
+                    widget.message,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppTheme.textPrimary,
+                          height: 1.45,
+                        ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
+  }
+
+  List<_ProgressStat> _buildProgressStats(LearnerProgress progress) {
+    return [
+      _ProgressStat(
+        label: 'Lessons completed',
+        value: '${progress.lessonsCompleted}',
+        caption: 'Completed lesson runs',
+      ),
+      _ProgressStat(
+        label: 'Successful runs',
+        value: '${progress.successfulRuns}',
+        caption: 'Runs completed',
+      ),
+      _ProgressStat(
+        label: 'Pre-test',
+        value: progress.pretestScore == null
+            ? 'Pending'
+            : '${progress.pretestScore!.toStringAsFixed(1)}%',
+        caption: 'Baseline score',
+      ),
+      _ProgressStat(
+        label: 'Post-test',
+        value: progress.posttestScore == null
+            ? 'Pending'
+            : '${progress.posttestScore!.toStringAsFixed(1)}%',
+        caption: 'After-practice score',
+      ),
+      _ProgressStat(
+        label: 'N-gain',
+        value: progress.nGain == null
+            ? 'Pending'
+            : progress.nGain!.toStringAsFixed(3),
+        caption: 'Learning gain score',
+      ),
+      _ProgressStat(
+        label: 'Submission attempts',
+        value: '${progress.totalSubmissionAttempts}',
+        caption: 'All code submissions',
+      ),
+      _ProgressStat(
+        label: 'Passed checks',
+        value: '${progress.passedSubmissionAttempts}',
+        caption: 'Submissions that passed lesson checks',
+      ),
+      _ProgressStat(
+        label: 'Validation issues',
+        value: '${progress.validationFailures}',
+        caption: 'Interface or syntax failures',
+      ),
+      _ProgressStat(
+        label: 'Test failures',
+        value: '${progress.testFailures}',
+        caption: 'Code ran but lesson checks failed',
+      ),
+      _ProgressStat(
+        label: 'Runtime failures',
+        value: '${progress.runtimeFailures}',
+        caption: 'Execution-time breakdowns',
+      ),
+    ];
   }
 
   Widget _buildLessonList(
@@ -663,6 +865,70 @@ class _AdminConsoleState extends State<AdminConsole> {
     if (shouldDelete == true) {
       widget.onDeleteLesson(lesson.id);
     }
+  }
+}
+
+class _ProgressStat {
+  final String label;
+  final String value;
+  final String caption;
+
+  const _ProgressStat({
+    required this.label,
+    required this.value,
+    required this.caption,
+  });
+}
+
+class _ProgressStatCard extends StatelessWidget {
+  final _ProgressStat stat;
+
+  const _ProgressStatCard({
+    required this.stat,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppConstants.cardRadius),
+        side: const BorderSide(color: AppTheme.borderLight),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              stat.label,
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              stat.value,
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              stat.caption,
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                height: 1.45,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

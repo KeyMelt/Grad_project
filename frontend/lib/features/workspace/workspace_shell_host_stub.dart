@@ -4,19 +4,21 @@ Widget buildWorkspaceShellHost({
   required BuildContext context,
   required String? url,
   required bool workspaceReady,
-  required String fallbackMessage,
+  required bool isLoading,
+  required String placeholderMessage,
 }) {
-  final message = workspaceReady && url != null
-      ? 'Workspace host is not available on this platform.'
-      : fallbackMessage;
-
-  return _WorkspaceShellPlaceholder(message: message);
+  return _WorkspaceShellPlaceholder(
+    isLoading: isLoading,
+    message: placeholderMessage,
+  );
 }
 
 class _WorkspaceShellPlaceholder extends StatelessWidget {
+  final bool isLoading;
   final String message;
 
   const _WorkspaceShellPlaceholder({
+    required this.isLoading,
     required this.message,
   });
 
@@ -30,163 +32,105 @@ class _WorkspaceShellPlaceholder extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFF1F2937)),
       ),
-      child: Column(
+      child: Stack(
         children: [
-          Container(
-            height: 44,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: const BoxDecoration(
-              color: Color(0xFF0F172A),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-              border: Border(
-                bottom: BorderSide(color: Color(0xFF1F2937)),
+          Positioned.fill(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF111827),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF1F2937)),
+                ),
+                child: const _PlaceholderLines(
+                  padding: EdgeInsets.fromLTRB(20, 22, 20, 120),
+                  lineCount: 14,
+                  lineWidthScale: <double>[
+                    0.90,
+                    0.74,
+                    0.66,
+                    0.82,
+                    0.58,
+                    0.86,
+                    0.64,
+                    0.78,
+                    0.48,
+                    0.88,
+                    0.70,
+                    0.62,
+                    0.80,
+                    0.54,
+                  ],
+                ),
               ),
             ),
-            child: Row(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF172554),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    'script.py',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFFDBEAFE),
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                const _PlaceholderChip(label: 'Editor'),
-                const SizedBox(width: 8),
-                const _PlaceholderChip(label: 'Console'),
-              ],
-            ),
           ),
-          Expanded(
-            child: Column(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF111827),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF1F2937)),
-                      ),
-                      child: const _PlaceholderLines(
-                        padding: EdgeInsets.all(16),
-                        lineCount: 9,
-                        lineWidthScale: <double>[
-                          0.88,
-                          0.72,
-                          0.66,
-                          0.79,
-                          0.54,
-                          0.83,
-                          0.58,
-                          0.76,
-                          0.49,
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0F172A),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF1F2937)),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            return SingleChildScrollView(
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  minHeight: constraints.maxHeight,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Interactive Python console',
-                                      style: textTheme.bodyMedium?.copyWith(
-                                        color: const Color(0xFFE5E7EB),
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      message,
-                                      style: textTheme.bodySmall?.copyWith(
-                                        color: const Color(0xFF94A3B8),
-                                        height: 1.45,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      '>>> ',
-                                      style: textTheme.bodyMedium?.copyWith(
-                                        color: const Color(0xFF86EFAC),
-                                        fontFamily: 'Menlo',
-                                        fontFamilyFallback: const [
-                                          'Monaco',
-                                          'Consolas'
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xCC0B1220),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 340),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (isLoading)
+                        const SizedBox(
+                          width: 30,
+                          height: 30,
+                          child: CircularProgressIndicator(strokeWidth: 2.4),
+                        )
+                      else
+                        const Icon(
+                          Icons.sync_problem_rounded,
+                          size: 34,
+                          color: Color(0xFFFCA5A5),
+                        ),
+                      const SizedBox(height: 14),
+                      Text(
+                        message,
+                        textAlign: TextAlign.center,
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: const Color(0xFFE2E8F0),
+                          fontWeight: FontWeight.w700,
+                          height: 1.45,
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 10),
+                      Text(
+                        isLoading
+                            ? 'The workspace shell is still starting.'
+                            : 'The embedded workspace shell could not be loaded.',
+                        textAlign: TextAlign.center,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: const Color(0xFF94A3B8),
+                          height: 1.45,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
+            ),
+          ),
+          Positioned(
+            left: 24,
+            right: 24,
+            bottom: 20,
+            child: Text(
+              '>>>',
+              style: textTheme.bodyMedium?.copyWith(
+                color: const Color(0xFF86EFAC),
+                fontFamily: 'Menlo',
+                fontFamilyFallback: const ['Monaco', 'Consolas'],
+              ),
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _PlaceholderChip extends StatelessWidget {
-  final String label;
-
-  const _PlaceholderChip({
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFF172033),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFF334155)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: const Color(0xFFCBD5E1),
-              fontWeight: FontWeight.w600,
-            ),
       ),
     );
   }

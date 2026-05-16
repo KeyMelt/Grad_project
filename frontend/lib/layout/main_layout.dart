@@ -11,6 +11,7 @@ import '../features/home/home_dashboard.dart';
 import '../features/lessons/lesson_browser.dart';
 import '../features/onboarding/onboarding_tutorial.dart';
 import '../features/quiz/quiz_section.dart';
+import '../features/study_buddy/study_buddy_panel.dart';
 import '../features/workspace/workspace_tabs.dart';
 
 class MainLayout extends StatefulWidget {
@@ -71,24 +72,34 @@ class _MainLayoutState extends State<MainLayout> {
         return HomeDashboard(
           learner: state.learner,
           progress: state.progress,
+          studyBuddySummary: state.studyBuddySummary,
+          isStudyBuddySummaryLoading: state.studyBuddySummaryLoading,
           sections: state.sections,
           isSigningIn: state.isSigningIn,
+          canAccessAuthoring: state.canAccessAuthoring,
           message: state.homeMessage,
           onSignIn: _cubit.signIn,
+          onSignUp: _cubit.signUp,
+          onSignInWithGoogle: _cubit.signInWithGoogle,
           onOpenLesson: _cubit.openLesson,
           onOpenQuiz: () => _cubit.navigateTo(AppSection.quiz),
           onOpenFlashcards: () => _cubit.navigateTo(AppSection.flashcards),
+          onOpenAuthoring: () => _cubit.navigateTo(AppSection.admin),
           onSignOut: _cubit.signOut,
         );
       case AppSection.workspace:
         return LayoutBuilder(
           builder: (context, constraints) {
-            final lessonBrowser = LessonBrowser(
-              sections: state.sections,
-              selectedLesson: state.selectedLesson,
-              onLessonSelected: _cubit.selectLesson,
-              onToggleVisibility: _cubit.toggleSidebar,
+            final orderedLessons = state.sections
+                .expand((section) => section.lessons)
+                .toList(growable: false);
+            final currentLessonIndex = orderedLessons.indexWhere(
+              (lesson) => lesson.id == state.selectedLesson.id,
             );
+            final canGoPrevious = currentLessonIndex > 0;
+            final canGoNext = currentLessonIndex >= 0 &&
+                currentLessonIndex < orderedLessons.length - 1;
+
             final workspace = WorkspaceTabs(
               lesson: state.selectedLesson,
               code: state.code,
@@ -96,10 +107,7 @@ class _MainLayoutState extends State<MainLayout> {
               workspaceReady: state.workspaceReady,
               editorConnectionStatus: state.editorConnectionStatus,
               consoleConnectionStatus: state.consoleConnectionStatus,
-              editorShellUrl: state.workspaceSessionId == null
-                  ? null
-                  : (_cubit.api)
-                      .workspaceEditorShellUrl(state.workspaceSessionId!),
+              editorShellUrl: state.editorShellUrl,
               scriptVersion: state.scriptVersion,
               onSubmit: () => _cubit.submit(),
               onStop: _cubit.stop,
@@ -117,34 +125,75 @@ class _MainLayoutState extends State<MainLayout> {
               videoPath: state.videoPath,
               testResults: state.testResults,
               stepTrace: state.stepTrace,
+              onConceptVideoSession: _cubit.recordConceptVideoSession,
+              onWorkspaceFocusSession: _cubit.recordWorkspaceFocusSession,
+            );
+            final studyBuddyPanel = StudyBuddyPanel(
+              lesson: state.selectedLesson,
+              intervention: state.studyBuddyIntervention,
+              isLoading: state.studyBuddyLoading,
+              isDismissed: state.studyBuddyPanelDismissed,
+              chatMessages: state.studyBuddyChatMessages,
+              isChatLoading: state.studyBuddyChatLoading,
+              chatError: state.studyBuddyChatError,
+              onDismiss: () => _cubit.dismissStudyBuddy(),
+              onComplete: () => _cubit.completeStudyBuddy(),
+              onReopen: _cubit.reopenStudyBuddy,
+              onRefresh: () => _cubit.refreshStudyBuddy(),
+              onSendChatMessage: _cubit.sendStudyBuddyChat,
             );
 
-            if (constraints.maxWidth < 1100) {
-              return Column(
-                children: [
-                  if (state.sidebarVisible)
-                    SizedBox(
-                      height: 320,
-                      child: lessonBrowser,
-                    ),
-                  Expanded(child: workspace),
-                ],
-              );
-            }
+            final content = constraints.maxWidth >= 980
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        width: _studyBuddyRailWidth(constraints.maxWidth),
+                        child: studyBuddyPanel,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(child: workspace),
+                    ],
+                  )
+                : Column(
+                    children: [
+                      SizedBox(
+                        height:
+                            (constraints.maxHeight * 0.30).clamp(240.0, 340.0),
+                        child: studyBuddyPanel,
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(child: workspace),
+                    ],
+                  );
 
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (state.sidebarVisible) ...[
-                  SizedBox(
-                    width: AppConstants.leftPanelWidth,
-                    child: lessonBrowser,
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+              child: Column(
+                children: [
+                  Center(
+                    child: CourseOutlineLauncher(
+                      selectedLesson: state.selectedLesson,
+                      canGoPrevious: canGoPrevious,
+                      canGoNext: canGoNext,
+                      onPrevious: () => _cubit.selectLesson(
+                        orderedLessons[currentLessonIndex - 1],
+                      ),
+                      onNext: () => _cubit.selectLesson(
+                        orderedLessons[currentLessonIndex + 1],
+                      ),
+                      onOpenOutline: () => showCourseOutlineDialog(
+                        context: context,
+                        sections: state.sections,
+                        selectedLesson: state.selectedLesson,
+                        onLessonSelected: _cubit.selectLesson,
+                      ),
+                    ),
                   ),
-                  const VerticalDivider(),
-                ] else
-                  _CollapsedOutlineRail(onTap: _cubit.toggleSidebar),
-                Expanded(child: workspace),
-              ],
+                  const SizedBox(height: 12),
+                  Expanded(child: content),
+                ],
+              ),
             );
           },
         );
@@ -167,15 +216,46 @@ class _MainLayoutState extends State<MainLayout> {
           onSubmitQuiz: _cubit.submitQuiz,
         );
       case AppSection.admin:
+        if (!state.canAccessAuthoring) {
+          return HomeDashboard(
+            learner: state.learner,
+            progress: state.progress,
+            studyBuddySummary: state.studyBuddySummary,
+            isStudyBuddySummaryLoading: state.studyBuddySummaryLoading,
+            sections: state.sections,
+            isSigningIn: state.isSigningIn,
+            canAccessAuthoring: state.canAccessAuthoring,
+            message:
+                'Authoring is available to instructor and admin roles only.',
+            onSignIn: _cubit.signIn,
+            onSignUp: _cubit.signUp,
+            onSignInWithGoogle: _cubit.signInWithGoogle,
+            onOpenLesson: _cubit.openLesson,
+            onOpenQuiz: () => _cubit.navigateTo(AppSection.quiz),
+            onOpenFlashcards: () => _cubit.navigateTo(AppSection.flashcards),
+            onOpenAuthoring: () => _cubit.navigateTo(AppSection.admin),
+            onSignOut: _cubit.signOut,
+          );
+        }
         return AdminConsole(
           sections: state.sections,
           selectedLessonId: state.adminSelectedLessonId,
+          progressDashboard: state.selectedProgressDashboard,
+          students: state.staffStudents,
+          selectedStudentId: state.selectedProgressStudentId,
           message: state.adminMessage,
           isExportingMetrics: state.isAdminExporting,
+          isProgressLoading: state.isProgressDashboardLoading,
+          isAdmin: state.isAdmin,
           onSelectLesson: _cubit.selectAdminLesson,
+          onSelectStudent: (studentId) =>
+              _cubit.selectProgressStudent(studentId),
+          onRefreshProgressDirectory: () =>
+              _cubit.loadStaffProgressDirectory(quiet: false),
           onCreateDraftLesson: _cubit.createDraftLesson,
           onDeleteLesson: _cubit.deleteAdminLesson,
           onExportNGainMetrics: _cubit.exportAdminNGainMetrics,
+          onExportLearningAnalytics: _cubit.exportAdminLearningAnalytics,
           onSaveLesson: _cubit.saveAdminLesson,
         );
     }
@@ -190,6 +270,7 @@ class _MainLayoutState extends State<MainLayout> {
     await showOnboardingTutorial(
       context,
       onNavigate: _cubit.navigateTo,
+      role: _cubit.state.currentRole,
     );
 
     if (markSeen) {
@@ -241,11 +322,12 @@ class _MainLayoutState extends State<MainLayout> {
                         onTap: () => _cubit.navigateTo(AppSection.quiz),
                       ),
                       const SizedBox(width: 8),
-                      _NavChip(
-                        label: 'Admin',
-                        selected: state.currentSection == AppSection.admin,
-                        onTap: () => _cubit.navigateTo(AppSection.admin),
-                      ),
+                      if (state.canAccessAuthoring)
+                        _NavChip(
+                          label: 'Authoring',
+                          selected: state.currentSection == AppSection.admin,
+                          onTap: () => _cubit.navigateTo(AppSection.admin),
+                        ),
                     ],
                   ),
                 ),
@@ -289,64 +371,8 @@ class _MainLayoutState extends State<MainLayout> {
           onPressed: () => _openOnboarding(markSeen: false),
           icon: const Icon(Icons.lightbulb_outline_rounded),
         ),
-        if (state.currentSection == AppSection.workspace)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                 return OutlinedButton.icon(
-                  onPressed: _cubit.toggleSidebar,
-                  icon: Icon(
-                    state.sidebarVisible
-                        ? Icons.menu_open_rounded
-                        : Icons.menu_rounded,
-                  ),
-                  label: const Text('Sidebar'),
-                );
-              }
-            ),
-          ),
         const SizedBox(width: 10),
       ],
-    );
-  }
-}
-
-class _CollapsedOutlineRail extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _CollapsedOutlineRail({
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 56,
-      decoration: const BoxDecoration(
-        color: AppTheme.surfaceWhite,
-        border: Border(
-          right: BorderSide(color: AppTheme.borderLight),
-        ),
-      ),
-      child: Column(
-        children: [
-          const SizedBox(height: 20),
-          IconButton(
-            tooltip: 'Show lesson sidebar',
-            onPressed: onTap,
-            icon: const Icon(Icons.menu_open_rounded),
-          ),
-          const SizedBox(height: 8),
-          RotatedBox(
-            quarterTurns: 3,
-            child: Text(
-              'Course Outline',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -383,4 +409,8 @@ class _NavChip extends StatelessWidget {
       ),
     );
   }
+}
+
+double _studyBuddyRailWidth(double maxWidth) {
+  return (maxWidth * 0.26).clamp(300.0, AppConstants.rightPanelWidth);
 }

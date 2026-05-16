@@ -4,13 +4,13 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.services.firebase_progress_service import FirebaseProgressService
 from backend.services.quiz_service import QuizService
 from backend.services.user_evaluation_service import UserEvaluationService
-from backend.settings import UserEvaluationSettings
+from backend.settings import UserEvaluationSettings, require_configured_secret
 
 
 @dataclass(frozen=True)
@@ -62,6 +62,10 @@ def _build_services() -> ServiceContainer:
 
 
 def create_app(services: ServiceContainer | None = None) -> FastAPI:
+    required_token = require_configured_secret(
+        "RL_IDE_INTERNAL_TOKEN",
+        "user evaluation internal API authentication",
+    )
     svc = services or _build_services()
 
     @asynccontextmanager
@@ -76,12 +80,20 @@ def create_app(services: ServiceContainer | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
+    def _assert_internal_access(x_internal_token: str | None) -> None:
+        if x_internal_token != required_token:
+            raise HTTPException(status_code=401, detail="Unauthorized internal call.")
+
     @app.get("/")
     def read_root():
         return {"status": "User evaluation service is running"}
 
     @app.post("/internal/auth/sign-in")
-    def sign_in(request: StudentSignInRequest):
+    def sign_in(
+        request: StudentSignInRequest,
+        x_internal_token: str | None = Header(default=None),
+    ):
+        _assert_internal_access(x_internal_token)
         try:
             return svc.user_evaluation.sign_in(
                 request.display_name,
@@ -94,7 +106,11 @@ def create_app(services: ServiceContainer | None = None) -> FastAPI:
             raise HTTPException(status_code=500, detail=str(error)) from error
 
     @app.get("/internal/students/{student_id}/dashboard")
-    def get_student_dashboard(student_id: str):
+    def get_student_dashboard(
+        student_id: str,
+        x_internal_token: str | None = Header(default=None),
+    ):
+        _assert_internal_access(x_internal_token)
         dashboard = svc.user_evaluation.get_dashboard(student_id)
         if dashboard is None:
             raise HTTPException(
@@ -104,7 +120,11 @@ def create_app(services: ServiceContainer | None = None) -> FastAPI:
         return dashboard
 
     @app.post("/internal/quiz/start")
-    def start_quiz(request: QuizStartRequest):
+    def start_quiz(
+        request: QuizStartRequest,
+        x_internal_token: str | None = Header(default=None),
+    ):
+        _assert_internal_access(x_internal_token)
         try:
             return svc.user_evaluation.start_quiz(
                 student_id=request.student_id,
@@ -114,7 +134,11 @@ def create_app(services: ServiceContainer | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(error)) from error
 
     @app.post("/internal/quiz/submit")
-    def submit_quiz(request: QuizSubmissionRequest):
+    def submit_quiz(
+        request: QuizSubmissionRequest,
+        x_internal_token: str | None = Header(default=None),
+    ):
+        _assert_internal_access(x_internal_token)
         try:
             return svc.user_evaluation.submit_quiz(
                 student_id=request.student_id,
@@ -125,7 +149,8 @@ def create_app(services: ServiceContainer | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(error)) from error
 
     @app.get("/internal/metrics/n-gain")
-    def list_n_gain_metrics():
+    def list_n_gain_metrics(x_internal_token: str | None = Header(default=None)):
+        _assert_internal_access(x_internal_token)
         return {"rows": svc.user_evaluation.list_n_gain_metrics()}
 
     return app

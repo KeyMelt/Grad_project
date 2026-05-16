@@ -7,13 +7,15 @@ import 'workspace_shell_host_stub.dart'
 class WorkspaceShellHost extends StatelessWidget {
   final String? url;
   final bool workspaceReady;
-  final String fallbackMessage;
+  final bool isLoading;
+  final String placeholderMessage;
 
   const WorkspaceShellHost({
     super.key,
     required this.url,
     required this.workspaceReady,
-    required this.fallbackMessage,
+    required this.isLoading,
+    required this.placeholderMessage,
   });
 
   @override
@@ -22,7 +24,8 @@ class WorkspaceShellHost extends StatelessWidget {
       context: context,
       url: url,
       workspaceReady: workspaceReady,
-      fallbackMessage: fallbackMessage,
+      isLoading: isLoading,
+      placeholderMessage: placeholderMessage,
     );
   }
 }

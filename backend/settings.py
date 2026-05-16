@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 import os
+import secrets
 from dataclasses import dataclass
 from pathlib import Path
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
 FALSE_VALUES = {"0", "false", "no", "off"}
+PLACEHOLDER_SECRET_VALUES = {
+    "change-me",
+    "change-this-local-dev-auth-secret",
+    "change-this-local-dev-shell-secret",
+    "change-this-local-dev-token",
+    "dev-auth-secret",
+    "dev-shell-secret",
+}
+_RUNTIME_SECRET_CACHE: dict[str, str] = {}
 
 
 def env_bool(name: str, default: bool = False) -> bool:
@@ -43,6 +53,43 @@ def env_path(name: str, default: str) -> Path:
     return Path(env_str(name, default)).expanduser()
 
 
+def env_csv(name: str, default: str = "") -> list[str]:
+    raw = env_str(name, default)
+    if not raw:
+        return []
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def is_placeholder_secret(value: str | None) -> bool:
+    normalized = (value or "").strip().lower()
+    return bool(normalized) and normalized in PLACEHOLDER_SECRET_VALUES
+
+
+def runtime_secret(name: str) -> str:
+    configured = env_str(name)
+    if configured:
+        if is_placeholder_secret(configured):
+            raise ValueError(
+                f"{name} must be set to a non-placeholder value or left unset for an ephemeral secret."
+            )
+        return configured
+
+    cached = _RUNTIME_SECRET_CACHE.get(name)
+    if cached is None:
+        cached = secrets.token_urlsafe(48)
+        _RUNTIME_SECRET_CACHE[name] = cached
+    return cached
+
+
+def require_configured_secret(name: str, purpose: str) -> str:
+    configured = env_str(name)
+    if not configured:
+        raise ValueError(f"{name} must be configured for {purpose}.")
+    if is_placeholder_secret(configured):
+        raise ValueError(f"{name} must not use a placeholder value for {purpose}.")
+    return configured
+
+
 @dataclass(frozen=True)
 class GatewaySettings:
     user_service_mode: str
@@ -56,11 +103,23 @@ class GatewaySettings:
     internal_token: str | None
     visualization_output_dir: Path
     concept_video_dir: Path
+    cors_allowed_origins: list[str]
+    auth_token_secret: str
+    auth_token_ttl_seconds: int
+    shell_token_secret: str
+    open_provisioning: bool
+    allow_legacy_password_sign_in: bool
+    bootstrap_admin_firebase_uid: str | None
+    bootstrap_admin_display_name: str
 
     @classmethod
     def from_env(cls) -> GatewaySettings:
         internal_token = env_str("RL_IDE_INTERNAL_TOKEN") or None
         firebase_credentials = env_str("RL_IDE_FIREBASE_CREDENTIALS_PATH") or None
+        bootstrap_uid = env_str("RL_IDE_BOOTSTRAP_ADMIN_FIREBASE_UID") or None
+        cors_origins = env_csv("RL_IDE_ALLOWED_ORIGINS")
+        if not cors_origins:
+            cors_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
         return cls(
             user_service_mode=env_str("RL_IDE_USER_SERVICE_MODE", "local").lower(),
             user_service_url=env_str(
@@ -87,6 +146,20 @@ class GatewaySettings:
             concept_video_dir=env_path(
                 "RL_IDE_CONCEPT_VIDEO_DIR",
                 "backend/media/concept_videos",
+            ),
+            cors_allowed_origins=cors_origins,
+            auth_token_secret=runtime_secret("RL_IDE_AUTH_TOKEN_SECRET"),
+            auth_token_ttl_seconds=env_int("RL_IDE_AUTH_TOKEN_TTL_SECONDS", 43_200),
+            shell_token_secret=runtime_secret("RL_IDE_SHELL_TOKEN_SECRET"),
+            open_provisioning=env_bool("RL_IDE_OPEN_PROVISIONING", True),
+            allow_legacy_password_sign_in=env_bool(
+                "RL_IDE_ALLOW_LEGACY_PASSWORD_SIGN_IN",
+                True,
+            ),
+            bootstrap_admin_firebase_uid=bootstrap_uid,
+            bootstrap_admin_display_name=env_str(
+                "RL_IDE_BOOTSTRAP_ADMIN_DISPLAY_NAME",
+                "Platform Admin",
             ),
         )
 

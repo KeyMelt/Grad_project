@@ -25,24 +25,44 @@ class SqliteExecutionJobStore:
         self._database_path = str(db_path)
         self._init_schema()
 
-    def create(self) -> ExecutionJob:
+    def create(
+        self,
+        *,
+        owner_user_id: str,
+        owner_role: str,
+    ) -> ExecutionJob:
         with self._lock, self._connection() as conn:
             task_id = uuid4().hex
+            created_at_utc = _utc_now()
             conn.execute(
                 """
-                INSERT INTO execution_jobs (task_id, status, result_json, error_json)
-                VALUES (?, ?, NULL, NULL)
+                INSERT INTO execution_jobs (
+                    task_id,
+                    status,
+                    owner_user_id,
+                    owner_role,
+                    created_at_utc,
+                    result_json,
+                    error_json
+                )
+                VALUES (?, ?, ?, ?, ?, NULL, NULL)
                 """,
-                (task_id, "queued"),
+                (task_id, "queued", owner_user_id, owner_role, created_at_utc),
             )
             conn.commit()
-        return ExecutionJob(task_id=task_id, status="queued")
+        return ExecutionJob(
+            task_id=task_id,
+            status="queued",
+            owner_user_id=owner_user_id,
+            owner_role=owner_role,
+            created_at_utc=created_at_utc,
+        )
 
     def get(self, task_id: str) -> Optional[ExecutionJob]:
         with self._lock, self._connection() as conn:
             row = conn.execute(
                 """
-                SELECT task_id, status, result_json, error_json
+                SELECT task_id, status, owner_user_id, owner_role, created_at_utc, result_json, error_json
                 FROM execution_jobs
                 WHERE task_id = ?
                 """,
@@ -53,8 +73,11 @@ class SqliteExecutionJobStore:
         return ExecutionJob(
             task_id=row[0],
             status=row[1],
-            result=json.loads(row[2]) if row[2] else None,
-            error=json.loads(row[3]) if row[3] else None,
+            owner_user_id=row[2],
+            owner_role=row[3],
+            created_at_utc=row[4],
+            result=json.loads(row[5]) if row[5] else None,
+            error=json.loads(row[6]) if row[6] else None,
         )
 
     def mark_running(self, task_id: str) -> None:
@@ -70,7 +93,13 @@ class SqliteExecutionJobStore:
         job = self.get(task_id)
         if job is None:
             return None
-        payload: dict[str, Any] = {"task_id": job.task_id, "status": job.status}
+        payload: dict[str, Any] = {
+            "task_id": job.task_id,
+            "status": job.status,
+            "owner_user_id": job.owner_user_id,
+            "owner_role": job.owner_role,
+            "created_at_utc": job.created_at_utc,
+        }
         if job.result is not None:
             payload["result"] = job.result
         if job.error is not None:
@@ -109,11 +138,27 @@ class SqliteExecutionJobStore:
                 CREATE TABLE IF NOT EXISTS execution_jobs (
                     task_id TEXT PRIMARY KEY,
                     status TEXT NOT NULL,
+                    owner_user_id TEXT NOT NULL DEFAULT '',
+                    owner_role TEXT NOT NULL DEFAULT 'student',
+                    created_at_utc TEXT NOT NULL DEFAULT (datetime('now')),
                     result_json TEXT NULL,
-                    error_json TEXT NULL,
-                    created_at_utc TEXT NOT NULL DEFAULT (datetime('now'))
+                    error_json TEXT NULL
                 )
                 """)
+            column_rows = conn.execute("PRAGMA table_info(execution_jobs)").fetchall()
+            existing_columns = {row[1] for row in column_rows}
+            if "owner_user_id" not in existing_columns:
+                conn.execute(
+                    "ALTER TABLE execution_jobs ADD COLUMN owner_user_id TEXT NOT NULL DEFAULT ''"
+                )
+            if "owner_role" not in existing_columns:
+                conn.execute(
+                    "ALTER TABLE execution_jobs ADD COLUMN owner_role TEXT NOT NULL DEFAULT 'student'"
+                )
+            if "created_at_utc" not in existing_columns:
+                conn.execute(
+                    "ALTER TABLE execution_jobs ADD COLUMN created_at_utc TEXT NOT NULL DEFAULT (datetime('now'))"
+                )
             conn.commit()
 
     @contextmanager
@@ -124,3 +169,9 @@ class SqliteExecutionJobStore:
             yield connection
         finally:
             connection.close()
+
+
+def _utc_now() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).isoformat()

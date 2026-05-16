@@ -22,7 +22,11 @@ async def test_workspace_session_creates_visible_and_hidden_files(tmp_path):
     service = WorkspaceSessionService(base_dir=str(tmp_path), use_docker=False)
 
     try:
-        session = await service.create_session("dp_policy_eval")
+        session = await service.create_session(
+            "dp_policy_eval",
+            owner_user_id="student-1",
+            owner_role="student",
+        )
         assert session["lesson_id"] == "dp_policy_eval"
         assert session["visible_files"] == ["script.py"]
         assert session["runtime_mode"] == "local"
@@ -50,7 +54,11 @@ async def test_workspace_service_requires_docker_when_enabled(
     service = WorkspaceSessionService(base_dir=str(tmp_path), use_docker=True)
 
     with pytest.raises(WorkspaceRuntimeError) as error:
-        await service.create_session("dp_policy_eval")
+        await service.create_session(
+            "dp_policy_eval",
+            owner_user_id="student-1",
+            owner_role="student",
+        )
 
     assert "Docker is required for the workspace runtime." in str(error.value)
 
@@ -64,7 +72,11 @@ async def test_workspace_run_executes_script_and_tracks_completion(tmp_path):
     )
 
     try:
-        session = await service.create_session("dp_policy_eval")
+        session = await service.create_session(
+            "dp_policy_eval",
+            owner_user_id="student-1",
+            owner_role="student",
+        )
         await service.write_file(
             session["session_id"],
             "script.py",
@@ -101,7 +113,11 @@ async def test_workspace_store_records_artifact_references(tmp_path):
     )
 
     try:
-        session = await service.create_session("dp_policy_eval")
+        session = await service.create_session(
+            "dp_policy_eval",
+            owner_user_id="student-1",
+            owner_role="student",
+        )
         service.record_artifact_reference(
             owner_kind="session",
             owner_id=session["session_id"],

@@ -147,6 +147,21 @@ ensure_compose() {
   docker compose version >/dev/null 2>&1 || fail "Docker Compose is not available."
 }
 
+ensure_internal_token() {
+  case "${RL_IDE_INTERNAL_TOKEN:-}" in
+    ""|change-me|change-this-local-dev-token|local-dev-internal-token)
+      RL_IDE_INTERNAL_TOKEN="$("${PYTHON_BIN}" - <<'PY'
+import secrets
+
+print(secrets.token_urlsafe(48))
+PY
+)"
+      export RL_IDE_INTERNAL_TOKEN
+      info "Generated a local RL_IDE_INTERNAL_TOKEN for this session."
+      ;;
+  esac
+}
+
 show_backend_status() {
   info "Docker Compose service status:"
   compose ps "${BACKEND_SERVICES[@]}" || true
@@ -232,8 +247,26 @@ start_backend_stack() {
 }
 
 verify_workspace_health() {
+  local response_code
   local payload
-  payload="$(curl -fsS "http://127.0.0.1:${GATEWAY_PORT}/workspace/health")" || fail "Could not fetch workspace health."
+  payload="$(curl -sS -o /tmp/rl_workspace_health.$$ -w "%{http_code}" "http://127.0.0.1:${GATEWAY_PORT}/workspace/health" || true)"
+  response_code="${payload}"
+  if [[ -f /tmp/rl_workspace_health.$$ ]]; then
+    payload="$(cat /tmp/rl_workspace_health.$$)"
+    rm -f /tmp/rl_workspace_health.$$
+  else
+    payload=""
+  fi
+
+  if [[ "${response_code}" == "401" || "${response_code}" == "403" ]]; then
+    info "Workspace health endpoint now requires authentication; skipping anonymous workspace probe."
+    return 0
+  fi
+
+  if [[ "${response_code}" != "200" ]]; then
+    fail "Could not fetch workspace health."
+  fi
+
   if ! printf '%s' "${payload}" | grep -q '"ready":true'; then
     show_backend_status
     show_backend_logs
@@ -257,6 +290,7 @@ main() {
   ensure_docker_cli
   ensure_compose
   wait_for_docker
+  ensure_internal_token
   start_backend_stack
   verify_workspace_health
   info "Backend logs: COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME} PROJECT_ROOT=${ROOT_DIR} docker compose logs -f ${BACKEND_SERVICES[*]}"

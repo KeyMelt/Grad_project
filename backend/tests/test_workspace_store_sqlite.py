@@ -9,6 +9,8 @@ def test_session_metadata_persists_and_reloads(tmp_path):
     store.upsert_session(
         session_id="session-1",
         lesson_id="dp_policy_eval",
+        owner_user_id="student-1",
+        owner_role="student",
         workspace_dir="/tmp/workspace-1",
         visible_files=["script.py"],
         file_versions={"script.py": 2},
@@ -20,6 +22,7 @@ def test_session_metadata_persists_and_reloads(tmp_path):
 
     assert snapshot is not None
     assert snapshot["lesson_id"] == "dp_policy_eval"
+    assert snapshot["owner_user_id"] == "student-1"
     assert snapshot["file_versions"]["script.py"] == 2
 
 

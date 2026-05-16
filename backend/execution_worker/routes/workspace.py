@@ -25,7 +25,11 @@ def build_workspace_router(
     ):
         assert_internal_access(x_internal_token)
         try:
-            return await services.workspace.create_session(request.lesson_id)
+            return await services.workspace.create_session(
+                request.lesson_id,
+                owner_user_id=request.owner_user_id,
+                owner_role=request.owner_role,
+            )
         except WorkspaceRuntimeError as error:
             raise HTTPException(status_code=error.status_code, detail=error.detail) from error
 

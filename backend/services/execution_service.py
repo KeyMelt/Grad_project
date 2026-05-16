@@ -1,10 +1,14 @@
+from datetime import datetime, timezone
 import threading
 from typing import Any
+from uuid import uuid4
 
+from backend.config.trigger_config import TELEMETRY_SOURCE_VERSION
 from backend.execution_runtime import ExecutionPipelineError, run_submission_with_timeout
 from backend.job_store import ExecutionJobStore
 from backend.artifact_store_sqlite import SqliteArtifactStore
 from backend.services.firebase_progress_service import FirebaseProgressService
+from backend.services.telemetry_service import TelemetryService
 
 
 class ExecutionService:
@@ -15,13 +19,20 @@ class ExecutionService:
         job_store: ExecutionJobStore | None = None,
         artifact_store: SqliteArtifactStore | None = None,
         progress_service: FirebaseProgressService | None = None,
+        telemetry_service: TelemetryService | None = None,
     ):
         self.job_store = job_store or ExecutionJobStore()
         self.artifact_store = artifact_store
         self.progress_service = progress_service
+        self.telemetry_service = telemetry_service
 
     def submit(self, submission_payload: dict[str, Any]) -> dict[str, str]:
-        job = self.job_store.create()
+        owner_user_id = str(submission_payload.get("owner_user_id") or "anonymous")
+        owner_role = str(submission_payload.get("owner_role") or "student")
+        job = self.job_store.create(
+            owner_user_id=owner_user_id,
+            owner_role=owner_role,
+        )
         thread = threading.Thread(
             target=self._execute_async_job,
             args=(job.task_id, submission_payload),
@@ -44,16 +55,23 @@ class ExecutionService:
         try:
             result = run_submission_with_timeout(submission_payload)
         except ExecutionPipelineError as error:
+            failure_kind = (
+                error.detail.get("failure_kind") if isinstance(error.detail, dict) else None
+            )
             self._record_submission_outcome(
                 submission_payload,
                 passed=False,
-                failure_kind=(
-                    error.detail.get("failure_kind") if isinstance(error.detail, dict) else None
-                ),
+                failure_kind=failure_kind,
+            )
+            self._record_submission_telemetry(
+                submission_payload,
+                passed=False,
+                failure_kind=failure_kind,
             )
             raise
 
         self._record_submission_outcome(submission_payload, passed=True)
+        self._record_submission_telemetry(submission_payload, passed=True)
         self._record_success(submission_payload)
         return result
 
@@ -122,6 +140,45 @@ class ExecutionService:
                 passed=passed,
                 failure_kind=failure_kind,
             )
+
+    def _record_submission_telemetry(
+        self,
+        submission_payload: dict[str, Any],
+        *,
+        passed: bool,
+        failure_kind: str | None = None,
+    ) -> None:
+        if self.telemetry_service is None:
+            return
+
+        student_id = submission_payload.get("student_id")
+        lesson_id = submission_payload.get("lesson_id")
+        if not student_id or not lesson_id:
+            return
+
+        session_id = (
+            submission_payload.get("session_id")
+            or submission_payload.get("workspace_session_id")
+            or f"submission-{uuid4().hex}"
+        )
+        self.telemetry_service.record_events(
+            [
+                {
+                    "student_id": student_id,
+                    "lesson_id": lesson_id,
+                    "concept_id": submission_payload.get("concept_id") or lesson_id,
+                    "session_id": session_id,
+                    "event_type": "submission_result",
+                    "occurred_at_utc": datetime.now(timezone.utc),
+                    "payload_json": {
+                        "passed": passed,
+                        "failure_kind": failure_kind,
+                        "origin": "backend_execution_service",
+                    },
+                    "source_version": TELEMETRY_SOURCE_VERSION,
+                }
+            ]
+        )
 
     def close(self) -> None:
         if self.progress_service is None:

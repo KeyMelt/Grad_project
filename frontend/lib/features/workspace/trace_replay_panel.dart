@@ -84,7 +84,10 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
 
     final uri = _replayVideoUri(widget.videoPath);
     try {
-      final controller = VideoPlayerController.networkUrl(uri);
+      final controller = VideoPlayerController.networkUrl(
+        uri,
+        httpHeaders: _authHeaders(),
+      );
       await controller.initialize().timeout(const Duration(seconds: 45));
       await controller.setLooping(false);
       controller.addListener(_onReplayControllerChanged);
@@ -108,11 +111,19 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
   }
 
   Uri _replayVideoUri(String path) {
-    final base = Uri.parse(defaultBackendBaseUrl);
+    final base = Uri.parse(BackendConnectionManager().baseUrl);
     return base.replace(
       path: '/visualization/video',
       queryParameters: {'path': path},
     );
+  }
+
+  Map<String, String> _authHeaders() {
+    final token = AuthSessionStore.accessToken;
+    if (token == null || token.isEmpty) {
+      return const <String, String>{};
+    }
+    return {'Authorization': 'Bearer $token'};
   }
 
   void _onReplayControllerChanged() {
@@ -627,6 +638,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       ).replace(queryParameters: {'path': framePath});
       return Image.network(
         frameUri.toString(),
+        headers: _authHeaders(),
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) =>
             _buildMissingFramePlaceholder(framePath),

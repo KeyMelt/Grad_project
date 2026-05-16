@@ -10,6 +10,15 @@ class FakeBackendApi extends BackendApi {
   LearnerProgress _progress = const LearnerProgress.empty();
   QuizPhase? _latestPhase;
   String _workspaceContent = 'print("workspace")\n';
+  String? _token;
+
+  @override
+  String? get accessToken => _token;
+
+  @override
+  void clearAuthToken() {
+    _token = null;
+  }
 
   @override
   Future<List<LessonSection>> fetchLessonSections() async => const [];
@@ -24,14 +33,14 @@ class FakeBackendApi extends BackendApi {
     _student = LearnerProfile(
       id: 'student-123',
       displayName: displayName,
+      platformRole: 'student',
     );
+    _token = 'fake-token';
     return LearnerDashboard(student: _student!, progress: _progress);
   }
 
   @override
-  Future<LearnerDashboard> getDashboard({
-    required String studentId,
-  }) async {
+  Future<LearnerDashboard> getDashboard() async {
     return LearnerDashboard(
       student: _student!,
       progress: _progress,
@@ -39,8 +48,31 @@ class FakeBackendApi extends BackendApi {
   }
 
   @override
+  Future<List<StaffStudentSummary>> fetchStaffStudents() async {
+    return const [
+      StaffStudentSummary(
+        id: 'student-123',
+        displayName: 'student-123',
+        role: 'student',
+        status: 'active',
+      ),
+    ];
+  }
+
+  @override
+  Future<LearnerDashboard> fetchStaffStudentDashboard(String studentId) async {
+    return LearnerDashboard(
+      student: LearnerProfile(
+        id: studentId,
+        displayName: 'student-123',
+        platformRole: 'student',
+      ),
+      progress: _progress,
+    );
+  }
+
+  @override
   Future<QuizSessionData> startQuiz({
-    required String studentId,
     required QuizPhase phase,
   }) async {
     _latestPhase = phase;
@@ -77,7 +109,6 @@ class FakeBackendApi extends BackendApi {
 
   @override
   Future<QuizAttemptSummary> submitQuiz({
-    required String studentId,
     required String sessionId,
     required Map<String, int> answers,
   }) async {
@@ -131,7 +162,9 @@ class FakeBackendApi extends BackendApi {
     required String lessonId,
     required String code,
     String? studentId,
+    String? sessionId,
   }) async {
+    if (sessionId != null) {}
     return const SubmittedExecutionTask(
       taskId: 'task-123',
       status: ExecutionTaskStatus.queued,
@@ -304,13 +337,13 @@ class FakeBackendApi extends BackendApi {
   }
 
   @override
-  String workspaceEditorShellUrl(String sessionId) {
+  Future<String> workspaceEditorShellUrl(String sessionId) async {
     return 'http://127.0.0.1:8000/workspace/editor-shell?session_id=$sessionId';
   }
 }
 
 void main() {
-  testWidgets('Home dashboard signs in a learner and shows progress cards', (
+  testWidgets('Home dashboard signs in a learner through the auth dialog', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 1800);
@@ -327,21 +360,23 @@ void main() {
     );
 
     expect(find.text('RL Learning Platform'), findsNothing);
-    expect(find.text('Student Sign In'), findsOneWidget);
+    expect(find.text('Authentication'), findsOneWidget);
 
-    await tester.enterText(find.byType(TextField).at(0), 'Maya Hassan');
+    await tester.tap(find.text('Open Sign In / Sign Up'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(0), 'maya@example.com');
     await tester.enterText(find.byType(TextField).at(1), 'Password123!');
-    await tester.ensureVisible(find.text('Sign In'));
-    await tester.tap(find.text('Sign In'));
+    await tester.tap(find.text('Sign In').last);
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Welcome back, Maya Hassan'), findsOneWidget);
-    expect(find.text('Lessons completed'), findsOneWidget);
+    expect(
+        find.textContaining('Welcome back, maya@example.com'), findsOneWidget);
+    expect(find.text('Progress Overview'), findsNothing);
     expect(find.text('Study Flashcards'), findsOneWidget);
 
     await tester.tap(find.text('Sign Out'));
     await tester.pumpAndSettle();
-    expect(find.text('Student Sign In'), findsOneWidget);
+    expect(find.text('Authentication'), findsOneWidget);
     expect(find.textContaining('Signed out.'), findsOneWidget);
 
     await cubit.close();
@@ -363,10 +398,11 @@ void main() {
       ),
     );
 
-    await tester.enterText(find.byType(TextField).at(0), 'Maya Hassan');
+    await tester.tap(find.text('Open Sign In / Sign Up'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(0), 'maya@example.com');
     await tester.enterText(find.byType(TextField).at(1), 'Password123!');
-    await tester.ensureVisible(find.text('Sign In'));
-    await tester.tap(find.text('Sign In'));
+    await tester.tap(find.text('Sign In').last);
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Workspace'));

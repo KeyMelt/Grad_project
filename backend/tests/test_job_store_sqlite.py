@@ -7,7 +7,7 @@ from backend.job_store_sqlite import SqliteExecutionJobStore
 
 def test_sqlite_job_store_round_trip(tmp_path: Path):
     store = SqliteExecutionJobStore(str(tmp_path / "jobs.db"))
-    job = store.create()
+    job = store.create(owner_user_id="student-1", owner_role="student")
     assert job.status == "queued"
 
     store.mark_running(job.task_id)
@@ -21,7 +21,7 @@ def test_sqlite_job_store_round_trip(tmp_path: Path):
 
 def test_sqlite_job_store_failure_path(tmp_path: Path):
     store = SqliteExecutionJobStore(str(tmp_path / "jobs.db"))
-    job = store.create()
+    job = store.create(owner_user_id="student-1", owner_role="student")
     store.mark_failed(job.task_id, {"message": "execution failed"})
 
     snapshot = store.snapshot(job.task_id)
