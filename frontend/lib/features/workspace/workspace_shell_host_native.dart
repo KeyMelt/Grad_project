@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -8,7 +10,8 @@ Widget buildWorkspaceShellHost({
   required BuildContext context,
   required String? url,
   required bool workspaceReady,
-  required String fallbackMessage,
+  required bool isLoading,
+  required String placeholderMessage,
 }) {
   if (kIsWeb ||
       (defaultTargetPlatform != TargetPlatform.macOS &&
@@ -18,23 +21,24 @@ Widget buildWorkspaceShellHost({
       context: context,
       url: url,
       workspaceReady: workspaceReady,
-      fallbackMessage: fallbackMessage,
+      isLoading: isLoading,
+      placeholderMessage: placeholderMessage,
     );
   }
 
   return _MacWorkspaceShellHost(
     url: url,
-    fallbackMessage: fallbackMessage,
+    placeholderMessage: placeholderMessage,
   );
 }
 
 class _MacWorkspaceShellHost extends StatefulWidget {
   final String url;
-  final String fallbackMessage;
+  final String placeholderMessage;
 
   const _MacWorkspaceShellHost({
     required this.url,
-    required this.fallbackMessage,
+    required this.placeholderMessage,
   });
 
   @override
@@ -43,6 +47,7 @@ class _MacWorkspaceShellHost extends StatefulWidget {
 
 class _MacWorkspaceShellHostState extends State<_MacWorkspaceShellHost> {
   late final WebViewController _controller;
+  Timer? _loadTimeout;
   bool _loadFailed = false;
   bool _pageLoaded = false;
 
@@ -54,13 +59,16 @@ class _MacWorkspaceShellHostState extends State<_MacWorkspaceShellHost> {
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageFinished: (_) {
+            _loadTimeout?.cancel();
             if (mounted) {
               setState(() {
                 _pageLoaded = true;
+                _loadFailed = false;
               });
             }
           },
           onWebResourceError: (_) {
+            _loadTimeout?.cancel();
             if (mounted) {
               setState(() {
                 _loadFailed = true;
@@ -68,18 +76,36 @@ class _MacWorkspaceShellHostState extends State<_MacWorkspaceShellHost> {
             }
           },
         ),
-      )
-      ..loadRequest(Uri.parse(widget.url));
+      );
+    _loadUrl(widget.url);
   }
 
   @override
   void didUpdateWidget(covariant _MacWorkspaceShellHost oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url) {
-      _loadFailed = false;
-      _pageLoaded = false;
-      _controller.loadRequest(Uri.parse(widget.url));
+      _loadUrl(widget.url);
     }
+  }
+
+  void _loadUrl(String url) {
+    _loadTimeout?.cancel();
+    _loadFailed = false;
+    _pageLoaded = false;
+    _loadTimeout = Timer(const Duration(seconds: 10), () {
+      if (mounted && !_pageLoaded) {
+        setState(() {
+          _loadFailed = true;
+        });
+      }
+    });
+    _controller.loadRequest(Uri.parse(url));
+  }
+
+  @override
+  void dispose() {
+    _loadTimeout?.cancel();
+    super.dispose();
   }
 
   @override
@@ -89,7 +115,8 @@ class _MacWorkspaceShellHostState extends State<_MacWorkspaceShellHost> {
         context: context,
         url: null,
         workspaceReady: false,
-        fallbackMessage: widget.fallbackMessage,
+        isLoading: false,
+        placeholderMessage: 'Connection failed, Try again.',
       );
     }
     return Stack(
@@ -104,7 +131,8 @@ class _MacWorkspaceShellHostState extends State<_MacWorkspaceShellHost> {
               context: context,
               url: null,
               workspaceReady: false,
-              fallbackMessage: widget.fallbackMessage,
+              isLoading: true,
+              placeholderMessage: widget.placeholderMessage,
             ),
           ),
       ],
