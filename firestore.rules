@@ -1,0 +1,14 @@
+rules_version='2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // MVP security posture:
+    // The app uses backend APIs with Firebase Admin SDK for all persistence.
+    // Deny direct client reads/writes to Firestore from web/mobile SDKs.
+    // If direct client Firestore access is introduced later, replace with
+    // least-privilege role/user-scoped rules.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
