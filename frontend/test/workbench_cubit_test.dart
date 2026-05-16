@@ -15,6 +15,16 @@ class _FakeBackendApi extends BackendApi {
   final List<LessonSection> lessonSections;
   int _pollCount = 0;
   int _workspacePollCount = 0;
+  String? _token;
+  Map<String, dynamic>? latestChatRequest;
+
+  @override
+  String? get accessToken => _token;
+
+  @override
+  void clearAuthToken() {
+    _token = null;
+  }
 
   @override
   Future<List<LessonSection>> fetchLessonSections() async {
@@ -34,26 +44,57 @@ class _FakeBackendApi extends BackendApi {
     if (password == 'wrong') {
       throw const BackendApiException('Invalid display name or password.');
     }
+    _token = 'fake-token';
 
     return LearnerDashboard(
-      student: LearnerProfile(id: 'student-1', displayName: displayName),
+      student: LearnerProfile(
+        id: 'student-1',
+        displayName: displayName,
+        platformRole: 'student',
+      ),
       progress: const LearnerProgress.empty(),
     );
   }
 
   @override
-  Future<LearnerDashboard> getDashboard({
-    required String studentId,
-  }) async {
+  Future<LearnerDashboard> getDashboard() async {
+    const studentId = 'student-1';
+    return const LearnerDashboard(
+      student: LearnerProfile(
+        id: studentId,
+        displayName: 'Maya',
+        platformRole: 'student',
+      ),
+      progress: LearnerProgress.empty(),
+    );
+  }
+
+  @override
+  Future<List<StaffStudentSummary>> fetchStaffStudents() async {
+    return const [
+      StaffStudentSummary(
+        id: 'student-1',
+        displayName: 'Maya',
+        role: 'student',
+        status: 'active',
+      ),
+    ];
+  }
+
+  @override
+  Future<LearnerDashboard> fetchStaffStudentDashboard(String studentId) async {
     return LearnerDashboard(
-      student: LearnerProfile(id: studentId, displayName: 'Maya'),
+      student: LearnerProfile(
+        id: studentId,
+        displayName: 'Maya',
+        platformRole: 'student',
+      ),
       progress: const LearnerProgress.empty(),
     );
   }
 
   @override
   Future<QuizSessionData> startQuiz({
-    required String studentId,
     required QuizPhase phase,
   }) async {
     throw UnimplementedError();
@@ -61,7 +102,6 @@ class _FakeBackendApi extends BackendApi {
 
   @override
   Future<QuizAttemptSummary> submitQuiz({
-    required String studentId,
     required String sessionId,
     required Map<String, int> answers,
   }) async {
@@ -73,7 +113,9 @@ class _FakeBackendApi extends BackendApi {
     required String lessonId,
     required String code,
     String? studentId,
+    String? sessionId,
   }) async {
+    if (sessionId != null) {}
     return const SubmittedExecutionTask(
       taskId: 'task-1',
       status: ExecutionTaskStatus.queued,
@@ -224,8 +266,42 @@ class _FakeBackendApi extends BackendApi {
   }
 
   @override
-  String workspaceEditorShellUrl(String sessionId) {
+  Future<String> workspaceEditorShellUrl(String sessionId) async {
     return 'http://127.0.0.1:8000/workspace/editor-shell?session_id=$sessionId';
+  }
+
+  @override
+  Future<StudyBuddyChatResponse> sendStudyBuddyChat({
+    required String lessonId,
+    required String sessionId,
+    required String message,
+    required List<StudyBuddyChatMessage> history,
+    String? currentCode,
+    List<String> unresolvedBlanks = const [],
+    String? failureKind,
+    Map<String, dynamic> latestFeedback = const {},
+  }) async {
+    latestChatRequest = {
+      'lesson_id': lessonId,
+      'session_id': sessionId,
+      'message': message,
+      'history_count': history.length,
+      'current_code': currentCode,
+      'unresolved_blanks': unresolvedBlanks,
+      'failure_kind': failureKind,
+      'latest_feedback': latestFeedback,
+    };
+    return const StudyBuddyChatResponse(
+      message: StudyBuddyChatMessage(
+        role: 'assistant',
+        content: 'Start by checking the Bellman update target.',
+      ),
+      usedFallback: false,
+      suggestedNextStep: 'Run one small check.',
+      conceptIds: ['dp_policy_eval'],
+      solutionLeakageRisk: 'low',
+      observability: {'prompt_version': 'test_chat_prompt_v1'},
+    );
   }
 }
 
@@ -288,6 +364,7 @@ void main() {
   test('cubit workspace run lifecycle reaches terminal status', () async {
     final cubit = RLWorkbenchCubit(api: _FakeBackendApi());
 
+    await cubit.signIn('Maya', 'Password123!');
     cubit.openLesson(cubit.state.selectedLesson);
     await Future<void>.delayed(const Duration(milliseconds: 20));
     await cubit.run();
@@ -302,6 +379,7 @@ void main() {
   test('cubit submit lifecycle handles failure state', () async {
     final cubit = RLWorkbenchCubit(api: _FakeBackendApi(shouldFailRun: true));
 
+    await cubit.signIn('Maya', 'Password123!');
     await cubit.submit();
 
     expect(cubit.state.runStatus, RunStatus.failed);
@@ -312,6 +390,27 @@ void main() {
       cubit.state.studentFeedback?.summary,
       'The submission still contains guided blanks.',
     );
+
+    await cubit.close();
+  });
+
+  test('cubit sends Study Buddy chat with lesson context', () async {
+    final api = _FakeBackendApi();
+    final cubit = RLWorkbenchCubit(api: api);
+
+    await cubit.signIn('Maya', 'Password123!');
+    await cubit.sendStudyBuddyChat('What should I inspect next?');
+
+    expect(cubit.state.studyBuddyChatLoading, isFalse);
+    expect(cubit.state.studyBuddyChatError, isNull);
+    expect(cubit.state.studyBuddyChatMessages, hasLength(2));
+    expect(cubit.state.studyBuddyChatMessages.first.role, 'user');
+    expect(cubit.state.studyBuddyChatMessages.last.content,
+        contains('Bellman update target'));
+    expect(api.latestChatRequest?['lesson_id'], cubit.state.selectedLesson.id);
+    expect(api.latestChatRequest?['message'], 'What should I inspect next?');
+    expect(
+        api.latestChatRequest?['current_code'], contains('policy_evaluation'));
 
     await cubit.close();
   });

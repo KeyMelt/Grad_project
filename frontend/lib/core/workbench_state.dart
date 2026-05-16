@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -24,6 +25,8 @@ class RLWorkbenchState {
   final List<StudyFlashcard> flashcards;
   final AppSection currentSection;
   final LearnerProfile? learner;
+  final String currentRole;
+  final bool isAuthenticated;
   final LearnerProgress progress;
   final bool isSigningIn;
   final bool isQuizLoading;
@@ -33,8 +36,10 @@ class RLWorkbenchState {
   final Map<String, int> quizAnswers;
   final QuizAttemptSummary? lastQuizSummary;
   final LessonDefinition selectedLesson;
+  final String studySessionId;
   final String code;
   final String? workspaceSessionId;
+  final String? editorShellUrl;
   final bool workspaceReady;
   final WorkspaceConnectionStatus editorConnectionStatus;
   final WorkspaceConnectionStatus consoleConnectionStatus;
@@ -58,12 +63,26 @@ class RLWorkbenchState {
   final String? adminSelectedLessonId;
   final String adminMessage;
   final bool isAdminExporting;
+  final List<StaffStudentSummary> staffStudents;
+  final String? selectedProgressStudentId;
+  final LearnerDashboard? selectedProgressDashboard;
+  final bool isProgressDashboardLoading;
+  final StudyBuddyIntervention? studyBuddyIntervention;
+  final bool studyBuddyLoading;
+  final bool studyBuddyPanelDismissed;
+  final StudyBuddySummary studyBuddySummary;
+  final bool studyBuddySummaryLoading;
+  final List<StudyBuddyChatMessage> studyBuddyChatMessages;
+  final bool studyBuddyChatLoading;
+  final String? studyBuddyChatError;
 
   const RLWorkbenchState({
     required this.sections,
     required this.flashcards,
     required this.currentSection,
     required this.learner,
+    required this.currentRole,
+    required this.isAuthenticated,
     required this.progress,
     required this.isSigningIn,
     required this.isQuizLoading,
@@ -73,8 +92,10 @@ class RLWorkbenchState {
     required this.quizAnswers,
     required this.lastQuizSummary,
     required this.selectedLesson,
+    required this.studySessionId,
     required this.code,
     required this.workspaceSessionId,
+    required this.editorShellUrl,
     required this.workspaceReady,
     required this.editorConnectionStatus,
     required this.consoleConnectionStatus,
@@ -98,6 +119,18 @@ class RLWorkbenchState {
     required this.adminSelectedLessonId,
     required this.adminMessage,
     required this.isAdminExporting,
+    required this.staffStudents,
+    required this.selectedProgressStudentId,
+    required this.selectedProgressDashboard,
+    required this.isProgressDashboardLoading,
+    required this.studyBuddyIntervention,
+    required this.studyBuddyLoading,
+    required this.studyBuddyPanelDismissed,
+    required this.studyBuddySummary,
+    required this.studyBuddySummaryLoading,
+    required this.studyBuddyChatMessages,
+    required this.studyBuddyChatLoading,
+    required this.studyBuddyChatError,
   });
 
   factory RLWorkbenchState.initial() {
@@ -107,6 +140,8 @@ class RLWorkbenchState {
       flashcards: studyFlashcards,
       currentSection: AppSection.home,
       learner: null,
+      currentRole: 'guest',
+      isAuthenticated: false,
       progress: const LearnerProgress.empty(),
       isSigningIn: false,
       isQuizLoading: false,
@@ -117,8 +152,10 @@ class RLWorkbenchState {
       quizAnswers: const {},
       lastQuizSummary: null,
       selectedLesson: selectedLesson,
+      studySessionId: _newStudySessionId(),
       code: selectedLesson.starterCode,
       workspaceSessionId: null,
+      editorShellUrl: null,
       workspaceReady: false,
       editorConnectionStatus: WorkspaceConnectionStatus.disconnected,
       consoleConnectionStatus: WorkspaceConnectionStatus.disconnected,
@@ -142,6 +179,18 @@ class RLWorkbenchState {
       adminSelectedLessonId: selectedLesson.id,
       adminMessage: 'Edit lessons in this session.',
       isAdminExporting: false,
+      staffStudents: const [],
+      selectedProgressStudentId: null,
+      selectedProgressDashboard: null,
+      isProgressDashboardLoading: false,
+      studyBuddyIntervention: null,
+      studyBuddyLoading: false,
+      studyBuddyPanelDismissed: false,
+      studyBuddySummary: const StudyBuddySummary.empty(),
+      studyBuddySummaryLoading: false,
+      studyBuddyChatMessages: const [],
+      studyBuddyChatLoading: false,
+      studyBuddyChatError: null,
     );
   }
 
@@ -165,6 +214,8 @@ class RLWorkbenchState {
     List<StudyFlashcard>? flashcards,
     AppSection? currentSection,
     Object? learner = _sentinel,
+    String? currentRole,
+    bool? isAuthenticated,
     LearnerProgress? progress,
     bool? isSigningIn,
     bool? isQuizLoading,
@@ -174,8 +225,10 @@ class RLWorkbenchState {
     Map<String, int>? quizAnswers,
     Object? lastQuizSummary = _sentinel,
     LessonDefinition? selectedLesson,
+    String? studySessionId,
     String? code,
     Object? workspaceSessionId = _sentinel,
+    Object? editorShellUrl = _sentinel,
     bool? workspaceReady,
     WorkspaceConnectionStatus? editorConnectionStatus,
     WorkspaceConnectionStatus? consoleConnectionStatus,
@@ -199,6 +252,18 @@ class RLWorkbenchState {
     Object? adminSelectedLessonId = _sentinel,
     String? adminMessage,
     bool? isAdminExporting,
+    List<StaffStudentSummary>? staffStudents,
+    Object? selectedProgressStudentId = _sentinel,
+    Object? selectedProgressDashboard = _sentinel,
+    bool? isProgressDashboardLoading,
+    Object? studyBuddyIntervention = _sentinel,
+    bool? studyBuddyLoading,
+    bool? studyBuddyPanelDismissed,
+    StudyBuddySummary? studyBuddySummary,
+    bool? studyBuddySummaryLoading,
+    List<StudyBuddyChatMessage>? studyBuddyChatMessages,
+    bool? studyBuddyChatLoading,
+    Object? studyBuddyChatError = _sentinel,
   }) {
     return RLWorkbenchState(
       sections: sections ?? this.sections,
@@ -207,6 +272,8 @@ class RLWorkbenchState {
       learner: identical(learner, _sentinel)
           ? this.learner
           : learner as LearnerProfile?,
+      currentRole: currentRole ?? this.currentRole,
+      isAuthenticated: isAuthenticated ?? this.isAuthenticated,
       progress: progress ?? this.progress,
       isSigningIn: isSigningIn ?? this.isSigningIn,
       isQuizLoading: isQuizLoading ?? this.isQuizLoading,
@@ -220,10 +287,14 @@ class RLWorkbenchState {
           ? this.lastQuizSummary
           : lastQuizSummary as QuizAttemptSummary?,
       selectedLesson: selectedLesson ?? this.selectedLesson,
+      studySessionId: studySessionId ?? this.studySessionId,
       code: code ?? this.code,
       workspaceSessionId: identical(workspaceSessionId, _sentinel)
           ? this.workspaceSessionId
           : workspaceSessionId as String?,
+      editorShellUrl: identical(editorShellUrl, _sentinel)
+          ? this.editorShellUrl
+          : editorShellUrl as String?,
       workspaceReady: workspaceReady ?? this.workspaceReady,
       editorConnectionStatus:
           editorConnectionStatus ?? this.editorConnectionStatus,
@@ -257,8 +328,41 @@ class RLWorkbenchState {
           : adminSelectedLessonId as String?,
       adminMessage: adminMessage ?? this.adminMessage,
       isAdminExporting: isAdminExporting ?? this.isAdminExporting,
+      staffStudents: staffStudents ?? this.staffStudents,
+      selectedProgressStudentId: identical(selectedProgressStudentId, _sentinel)
+          ? this.selectedProgressStudentId
+          : selectedProgressStudentId as String?,
+      selectedProgressDashboard: identical(selectedProgressDashboard, _sentinel)
+          ? this.selectedProgressDashboard
+          : selectedProgressDashboard as LearnerDashboard?,
+      isProgressDashboardLoading:
+          isProgressDashboardLoading ?? this.isProgressDashboardLoading,
+      studyBuddyIntervention: identical(studyBuddyIntervention, _sentinel)
+          ? this.studyBuddyIntervention
+          : studyBuddyIntervention as StudyBuddyIntervention?,
+      studyBuddyLoading: studyBuddyLoading ?? this.studyBuddyLoading,
+      studyBuddyPanelDismissed:
+          studyBuddyPanelDismissed ?? this.studyBuddyPanelDismissed,
+      studyBuddySummary: studyBuddySummary ?? this.studyBuddySummary,
+      studyBuddySummaryLoading:
+          studyBuddySummaryLoading ?? this.studyBuddySummaryLoading,
+      studyBuddyChatMessages:
+          studyBuddyChatMessages ?? this.studyBuddyChatMessages,
+      studyBuddyChatLoading:
+          studyBuddyChatLoading ?? this.studyBuddyChatLoading,
+      studyBuddyChatError: identical(studyBuddyChatError, _sentinel)
+          ? this.studyBuddyChatError
+          : studyBuddyChatError as String?,
     );
   }
+
+  bool get canAccessAuthoring =>
+      isAuthenticated &&
+      (currentRole == 'instructor' || currentRole == 'admin');
+
+  bool get isAdmin => isAuthenticated && currentRole == 'admin';
+
+  bool get isPrivileged => canAccessAuthoring;
 }
 
 /// Coordinates learner actions across auth, lesson selection, execution,
@@ -266,18 +370,22 @@ class RLWorkbenchState {
 class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   RLWorkbenchCubit({
     BackendApi? api,
+    bool autoStartTelemetry = true,
   })  : _api = api ?? HttpBackendApi(),
         super(RLWorkbenchState.initial()) {
+    _telemetry = LearningTelemetryClient(
+      api: _api,
+      autoStart: autoStartTelemetry,
+    );
     unawaited(loadBackendLessonCatalog());
-    if (state.selectedLesson.backendEnabled) {
-      unawaited(
-          _attachWorkspaceSession(state.selectedLesson, announceStatus: false));
-    }
   }
 
   final BackendApi _api;
+  late final LearningTelemetryClient _telemetry;
   String? _activeTaskId;
   String? _activeWorkspaceRunId;
+  Timer? _studyBuddyPollTimer;
+  int _studyBuddyPollAttempts = 0;
 
   BackendApi get api => _api;
 
@@ -355,7 +463,20 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   }
 
   void navigateTo(AppSection section) {
+    if (section == AppSection.admin && !state.canAccessAuthoring) {
+      emit(
+        state.copyWith(
+          currentSection: AppSection.home,
+          homeMessage:
+              'Authoring is available to instructor and admin roles only.',
+        ),
+      );
+      return;
+    }
     emit(state.copyWith(currentSection: section));
+    if (section == AppSection.admin && state.canAccessAuthoring) {
+      unawaited(loadStaffProgressDirectory());
+    }
   }
 
   void toggleSidebar() {
@@ -363,9 +484,13 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   }
 
   Future<void> signIn(String displayName, String password) async {
-    final normalizedName = displayName.trim();
-    if (normalizedName.isEmpty) {
-      emit(state.copyWith(homeMessage: 'Enter a student name to continue.'));
+    final normalizedEmail = displayName.trim();
+    if (normalizedEmail.isEmpty) {
+      emit(
+        state.copyWith(
+          homeMessage: 'Enter your email address to continue.',
+        ),
+      );
       return;
     }
     if (password.trim().isEmpty) {
@@ -375,29 +500,41 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
 
     emit(state.copyWith(
       isSigningIn: true,
-      homeMessage: 'Signing in $normalizedName...',
+      homeMessage: 'Signing in $normalizedEmail...',
     ));
 
     try {
+      String? firebaseIdToken;
+      if (kIsWeb) {
+        final credential =
+            await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: normalizedEmail,
+          password: password,
+        );
+        firebaseIdToken = await credential.user?.getIdToken(true);
+      }
+
       final dashboard = await _api.signIn(
-        displayName: normalizedName,
+        displayName: normalizedEmail,
         password: password,
+        firebaseIdToken: firebaseIdToken,
       );
-      emit(
-        state.copyWith(
-          learner: dashboard.student,
-          progress: dashboard.progress,
-          isSigningIn: false,
-          homeMessage: 'Signed in as ${dashboard.student.displayName}.',
-          quizStatusMessage: _quizPromptForProgress(dashboard.progress),
-          currentSection: AppSection.home,
-        ),
+      _applyAuthenticatedSession(
+        dashboard,
+        successMessage: 'Signed in as ${dashboard.student.displayName}.',
       );
     } on BackendApiException catch (error) {
       emit(state.copyWith(
         isSigningIn: false,
         homeMessage: error.message,
       ));
+    } on FirebaseAuthException catch (error) {
+      emit(
+        state.copyWith(
+          isSigningIn: false,
+          homeMessage: _firebaseAuthMessage(error),
+        ),
+      );
     } catch (_) {
       emit(state.copyWith(
         isSigningIn: false,
@@ -406,12 +543,132 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     }
   }
 
+  Future<void> signUp(String email, String password) async {
+    final normalizedEmail = email.trim();
+    if (normalizedEmail.isEmpty) {
+      emit(
+        state.copyWith(
+          homeMessage: 'Enter your email address to create an account.',
+        ),
+      );
+      return;
+    }
+    if (password.trim().length < 8) {
+      emit(
+        state.copyWith(
+          homeMessage: 'Use a password with at least 8 characters.',
+        ),
+      );
+      return;
+    }
+
+    emit(state.copyWith(
+      isSigningIn: true,
+      homeMessage: 'Creating account for $normalizedEmail...',
+    ));
+
+    try {
+      String? firebaseIdToken;
+      if (kIsWeb) {
+        final credential =
+            await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: normalizedEmail,
+          password: password,
+        );
+        firebaseIdToken = await credential.user?.getIdToken(true);
+      }
+
+      final dashboard = await _api.signIn(
+        displayName: normalizedEmail,
+        password: password,
+        firebaseIdToken: firebaseIdToken,
+      );
+      _applyAuthenticatedSession(
+        dashboard,
+        successMessage: 'Account ready for ${dashboard.student.displayName}.',
+      );
+    } on BackendApiException catch (error) {
+      emit(state.copyWith(
+        isSigningIn: false,
+        homeMessage: error.message,
+      ));
+    } on FirebaseAuthException catch (error) {
+      emit(
+        state.copyWith(
+          isSigningIn: false,
+          homeMessage: _firebaseAuthMessage(error),
+        ),
+      );
+    } catch (_) {
+      emit(state.copyWith(
+        isSigningIn: false,
+        homeMessage: 'Backend unavailable. Start FastAPI and try again.',
+      ));
+    }
+  }
+
+  Future<void> signInWithGoogle() async {
+    emit(state.copyWith(
+      isSigningIn: true,
+      homeMessage: 'Opening Google sign-in...',
+    ));
+
+    try {
+      String? firebaseIdToken;
+      var displayName = 'Google User';
+      if (kIsWeb) {
+        final provider = GoogleAuthProvider()
+          ..setCustomParameters({'prompt': 'select_account'});
+        final credential =
+            await FirebaseAuth.instance.signInWithPopup(provider);
+        firebaseIdToken = await credential.user?.getIdToken(true);
+        displayName = credential.user?.displayName ??
+            credential.user?.email ??
+            displayName;
+      }
+
+      final dashboard = await _api.signIn(
+        displayName: displayName,
+        password: '__firebase_google__',
+        firebaseIdToken: firebaseIdToken,
+      );
+      _applyAuthenticatedSession(
+        dashboard,
+        successMessage: 'Signed in as ${dashboard.student.displayName}.',
+      );
+    } on BackendApiException catch (error) {
+      emit(state.copyWith(
+        isSigningIn: false,
+        homeMessage: error.message,
+      ));
+    } on FirebaseAuthException catch (error) {
+      emit(
+        state.copyWith(
+          isSigningIn: false,
+          homeMessage: _firebaseAuthMessage(error),
+        ),
+      );
+    } catch (_) {
+      emit(state.copyWith(
+        isSigningIn: false,
+        homeMessage: 'Google sign-in failed. Try again.',
+      ));
+    }
+  }
+
   void signOut() {
+    if (kIsWeb) {
+      unawaited(FirebaseAuth.instance.signOut());
+    }
+    unawaited(_api.signOut());
+    _api.clearAuthToken();
     _activeTaskId = null;
     _activeWorkspaceRunId = null;
     emit(
       state.copyWith(
         learner: null,
+        currentRole: 'guest',
+        isAuthenticated: false,
         progress: const LearnerProgress.empty(),
         activeQuiz: null,
         quizAnswers: const {},
@@ -423,14 +680,51 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         quizStatusMessage:
             'Take a randomized pre-test before you begin the lessons.',
         workspaceSessionId: null,
+        editorShellUrl: null,
         workspaceReady: false,
         editorConnectionStatus: WorkspaceConnectionStatus.disconnected,
         consoleConnectionStatus: WorkspaceConnectionStatus.disconnected,
         activeRunId: null,
         runOutputBuffer: '',
         scriptVersion: 1,
+        studySessionId: _newStudySessionId(),
+        staffStudents: const [],
+        selectedProgressStudentId: null,
+        selectedProgressDashboard: null,
+        isProgressDashboardLoading: false,
+        studyBuddyIntervention: null,
+        studyBuddyLoading: false,
+        studyBuddyPanelDismissed: false,
+        studyBuddySummary: const StudyBuddySummary.empty(),
+        studyBuddySummaryLoading: false,
+        studyBuddyChatMessages: const [],
+        studyBuddyChatLoading: false,
+        studyBuddyChatError: null,
       ),
     );
+  }
+
+  String _firebaseAuthMessage(FirebaseAuthException error) {
+    switch (error.code) {
+      case 'invalid-email':
+        return 'Enter a valid email address.';
+      case 'email-already-in-use':
+        return 'An account already exists for that email.';
+      case 'user-disabled':
+        return 'This account has been disabled.';
+      case 'user-not-found':
+      case 'wrong-password':
+      case 'invalid-credential':
+        return 'Invalid email or password.';
+      case 'weak-password':
+        return 'Use a stronger password.';
+      case 'popup-closed-by-user':
+        return 'Google sign-in was cancelled.';
+      case 'too-many-requests':
+        return 'Too many attempts. Try again later.';
+      default:
+        return 'Sign-in failed. Check your credentials and try again.';
+    }
   }
 
   Future<void> refreshDashboard({bool quiet = false}) async {
@@ -440,24 +734,138 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     }
 
     try {
-      final dashboard = await _api.getDashboard(studentId: learner.id);
+      final dashboard = await _api.getDashboard();
       final nextState = quiet
           ? state.copyWith(
               learner: dashboard.student,
+              currentRole: dashboard.student.platformRole,
               progress: dashboard.progress,
               quizStatusMessage: _quizPromptForProgress(dashboard.progress),
             )
           : state.copyWith(
               learner: dashboard.student,
+              currentRole: dashboard.student.platformRole,
               progress: dashboard.progress,
               homeMessage: 'Progress updated.',
               quizStatusMessage: _quizPromptForProgress(dashboard.progress),
             );
       emit(nextState);
+      unawaited(refreshStudyBuddySummary(quiet: true));
     } on BackendApiException catch (error) {
       if (!quiet) {
         emit(state.copyWith(homeMessage: error.message));
       }
+    }
+  }
+
+  Future<void> loadStaffProgressDirectory({bool quiet = true}) async {
+    if (!state.canAccessAuthoring) {
+      return;
+    }
+    if (!quiet) {
+      emit(
+        state.copyWith(
+          isProgressDashboardLoading: true,
+          adminMessage: 'Loading learner progress directory...',
+        ),
+      );
+    }
+
+    try {
+      final students = await _api.fetchStaffStudents();
+      final selectedStudentId = _resolveSelectedStaffStudentId(students);
+      emit(
+        state.copyWith(
+          staffStudents: students,
+          selectedProgressStudentId: selectedStudentId,
+        ),
+      );
+
+      if (selectedStudentId == null) {
+        emit(
+          state.copyWith(
+            selectedProgressDashboard: null,
+            isProgressDashboardLoading: false,
+            adminMessage: 'No student progress records are available yet.',
+          ),
+        );
+        return;
+      }
+
+      await selectProgressStudent(selectedStudentId, quiet: quiet);
+    } on BackendApiException catch (error) {
+      emit(
+        state.copyWith(
+          isProgressDashboardLoading: false,
+          adminMessage: error.message,
+        ),
+      );
+    }
+  }
+
+  Future<void> selectProgressStudent(
+    String studentId, {
+    bool quiet = false,
+  }) async {
+    if (!state.canAccessAuthoring || studentId.isEmpty) {
+      return;
+    }
+
+    emit(
+      state.copyWith(
+        selectedProgressStudentId: studentId,
+        isProgressDashboardLoading: true,
+        adminMessage:
+            quiet ? state.adminMessage : 'Loading learner progress...',
+      ),
+    );
+
+    try {
+      final dashboard = await _api.fetchStaffStudentDashboard(studentId);
+      emit(
+        state.copyWith(
+          selectedProgressDashboard: dashboard,
+          isProgressDashboardLoading: false,
+          adminMessage: quiet
+              ? state.adminMessage
+              : 'Loaded progress for ${dashboard.student.displayName}.',
+        ),
+      );
+    } on BackendApiException catch (error) {
+      emit(
+        state.copyWith(
+          selectedProgressDashboard: null,
+          isProgressDashboardLoading: false,
+          adminMessage: error.message,
+        ),
+      );
+    }
+  }
+
+  Future<void> refreshStudyBuddySummary({bool quiet = false}) async {
+    final learner = state.learner;
+    if (learner == null) {
+      return;
+    }
+
+    if (!quiet) {
+      emit(state.copyWith(studyBuddySummaryLoading: true));
+    }
+
+    try {
+      final summary = await _api.fetchStudyBuddySummary();
+      if (summary == null) {
+        emit(state.copyWith(studyBuddySummaryLoading: false));
+        return;
+      }
+      emit(
+        state.copyWith(
+          studyBuddySummary: summary,
+          studyBuddySummaryLoading: false,
+        ),
+      );
+    } catch (_) {
+      emit(state.copyWith(studyBuddySummaryLoading: false));
     }
   }
 
@@ -469,18 +877,21 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     emit(
       state.copyWith(
         selectedLesson: lesson,
+        studySessionId:
+            preserveWorkspace ? state.studySessionId : _newStudySessionId(),
         code: preserveWorkspace ? state.code : lesson.starterCode,
         currentSection: AppSection.workspace,
         workspaceSessionId: preserveWorkspace ? state.workspaceSessionId : null,
+        editorShellUrl: preserveWorkspace ? state.editorShellUrl : null,
         workspaceReady: preserveWorkspace ? state.workspaceReady : false,
         editorConnectionStatus: preserveWorkspace
             ? state.editorConnectionStatus
-            : lesson.backendEnabled
+            : state.isAuthenticated && lesson.backendEnabled
                 ? WorkspaceConnectionStatus.connecting
                 : WorkspaceConnectionStatus.disconnected,
         consoleConnectionStatus: preserveWorkspace
             ? state.consoleConnectionStatus
-            : lesson.backendEnabled
+            : state.isAuthenticated && lesson.backendEnabled
                 ? WorkspaceConnectionStatus.connecting
                 : WorkspaceConnectionStatus.disconnected,
         activeRunId: null,
@@ -498,14 +909,22 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         failureKind: null,
         unresolvedBlanks: const [],
         studentFeedback: null,
+        studyBuddyIntervention: null,
+        studyBuddyLoading: false,
+        studyBuddyPanelDismissed: false,
+        studyBuddyChatMessages: const [],
+        studyBuddyChatLoading: false,
+        studyBuddyChatError: null,
         statusMessage: preserveWorkspace
             ? state.statusMessage
-            : lesson.backendEnabled
-                ? 'Ready to run ${lesson.title}.'
-                : '${lesson.title} is draft-only.',
+            : !state.isAuthenticated
+                ? 'Sign in to open the live workspace for ${lesson.title}.'
+                : lesson.backendEnabled
+                    ? 'Ready to run ${lesson.title}.'
+                    : '${lesson.title} is draft-only.',
       ),
     );
-    if (lesson.backendEnabled && !preserveWorkspace) {
+    if (lesson.backendEnabled && state.isAuthenticated && !preserveWorkspace) {
       unawaited(_attachWorkspaceSession(lesson));
     }
   }
@@ -563,7 +982,6 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
 
     try {
       final session = await _api.startQuiz(
-        studentId: learner.id,
         phase: phase,
       );
       emit(
@@ -623,7 +1041,6 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
 
     try {
       final summary = await _api.submitQuiz(
-        studentId: learner.id,
         sessionId: activeQuiz.sessionId,
         answers: state.quizAnswers,
       );
@@ -659,12 +1076,175 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     await runWorkspace();
   }
 
+  void recordConceptVideoSession(Map<String, dynamic> payload) {
+    _recordTelemetry('concept_video_session', payload, flushAfter: true);
+  }
+
+  void recordWorkspaceFocusSession(String viewId, Duration duration) {
+    if (duration.inMilliseconds <= 0) {
+      return;
+    }
+    _recordTelemetry(
+      'workspace_focus_session',
+      {
+        'view_id': viewId,
+        'duration_seconds': duration.inMilliseconds / 1000,
+      },
+      flushAfter: true,
+    );
+  }
+
+  Future<void> refreshStudyBuddy() async {
+    await _pollStudyBuddyPending();
+  }
+
+  Future<void> sendStudyBuddyChat(String message) async {
+    final trimmed = message.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    if (state.learner == null) {
+      emit(
+        state.copyWith(
+          studyBuddyChatError: 'Sign in to ask Study Buddy.',
+        ),
+      );
+      return;
+    }
+    if (state.studyBuddyChatLoading) {
+      return;
+    }
+
+    final history = state.studyBuddyChatMessages;
+    final userMessage = StudyBuddyChatMessage(
+      role: 'user',
+      content: trimmed,
+    );
+    emit(
+      state.copyWith(
+        studyBuddyChatMessages: [...history, userMessage],
+        studyBuddyChatLoading: true,
+        studyBuddyChatError: null,
+        studyBuddyPanelDismissed: false,
+      ),
+    );
+
+    try {
+      final currentCode = await _latestSubmissionCode();
+      final response = await _api.sendStudyBuddyChat(
+        lessonId: state.selectedLesson.id,
+        sessionId: state.studySessionId,
+        message: trimmed,
+        history: history.length <= 12
+            ? history
+            : history.sublist(history.length - 12),
+        currentCode: currentCode,
+        unresolvedBlanks: state.unresolvedBlanks,
+        failureKind: state.failureKind,
+        latestFeedback: _feedbackPayload(state.studentFeedback),
+      );
+      if (isClosed) {
+        return;
+      }
+      emit(
+        state.copyWith(
+          studyBuddyChatMessages: [
+            ...state.studyBuddyChatMessages,
+            response.message,
+          ],
+          studyBuddyChatLoading: false,
+          studyBuddyChatError: null,
+        ),
+      );
+    } on BackendApiException catch (error) {
+      emit(
+        state.copyWith(
+          studyBuddyChatLoading: false,
+          studyBuddyChatError: error.message,
+        ),
+      );
+    } catch (_) {
+      emit(
+        state.copyWith(
+          studyBuddyChatLoading: false,
+          studyBuddyChatError: 'Study Buddy could not reply. Try again.',
+        ),
+      );
+    }
+  }
+
+  Future<void> dismissStudyBuddy() async {
+    final intervention = state.studyBuddyIntervention;
+    emit(
+      state.copyWith(
+        studyBuddyPanelDismissed: true,
+        studyBuddyLoading: false,
+      ),
+    );
+    if (intervention != null) {
+      _recordTelemetry(
+        'study_buddy_intervention_response',
+        {
+          'intervention_id': intervention.id,
+          'response': 'dismissed',
+          'trigger_type': intervention.triggerType,
+          'intervention_type': intervention.interventionType,
+        },
+        flushAfter: true,
+      );
+      try {
+        await _api.respondToStudyBuddyIntervention(
+          interventionId: intervention.id,
+          response: 'dismissed',
+        );
+      } catch (_) {}
+      unawaited(refreshStudyBuddySummary(quiet: true));
+    }
+  }
+
+  Future<void> completeStudyBuddy() async {
+    final intervention = state.studyBuddyIntervention;
+    if (intervention == null) {
+      return;
+    }
+    try {
+      _recordTelemetry(
+        'study_buddy_intervention_response',
+        {
+          'intervention_id': intervention.id,
+          'response': 'completed',
+          'trigger_type': intervention.triggerType,
+          'intervention_type': intervention.interventionType,
+        },
+        flushAfter: true,
+      );
+      await _api.respondToStudyBuddyIntervention(
+        interventionId: intervention.id,
+        response: 'completed',
+      );
+    } catch (_) {}
+    emit(
+      state.copyWith(
+        studyBuddyIntervention: null,
+        studyBuddyLoading: false,
+        studyBuddyPanelDismissed: false,
+      ),
+    );
+    unawaited(refreshStudyBuddySummary(quiet: true));
+  }
+
+  void reopenStudyBuddy() {
+    emit(state.copyWith(studyBuddyPanelDismissed: false));
+  }
+
   Future<void> runWorkspace() async {
     final sessionId = await _ensureWorkspaceSession();
     if (sessionId == null) {
       emit(
         state.copyWith(
-          statusMessage: 'Workspace runtime is not ready for this lesson.',
+          statusMessage: state.isAuthenticated
+              ? 'Workspace runtime is not ready for this lesson.'
+              : 'Sign in to open the live workspace for this lesson.',
           editorConnectionStatus: WorkspaceConnectionStatus.failed,
           consoleConnectionStatus: WorkspaceConnectionStatus.failed,
         ),
@@ -693,6 +1273,15 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       await _pollWorkspaceRun(sessionId, run.runId);
     } on BackendApiException catch (error) {
       _activeWorkspaceRunId = null;
+      _recordTelemetry(
+        'code_run_result',
+        {
+          'passed': false,
+          'failure_kind': 'workspace_start_failed',
+          'message': error.message,
+        },
+        flushAfter: true,
+      );
       emit(
         state.copyWith(
           activeRunId: null,
@@ -703,6 +1292,14 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       );
     } catch (_) {
       _activeWorkspaceRunId = null;
+      _recordTelemetry(
+        'code_run_result',
+        {
+          'passed': false,
+          'failure_kind': 'workspace_unavailable',
+        },
+        flushAfter: true,
+      );
       emit(
         state.copyWith(
           activeRunId: null,
@@ -721,6 +1318,20 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         state.copyWith(
           runStatus: RunStatus.failed,
           statusMessage: 'This lesson is draft-only.',
+        ),
+      );
+      return;
+    }
+
+    if (!state.isAuthenticated) {
+      emit(
+        state.copyWith(
+          currentSection: AppSection.home,
+          runStatus: RunStatus.failed,
+          statusMessage:
+              'Sign in before using the live workspace or submitting code.',
+          homeMessage:
+              'Sign in before using the live workspace or submitting code.',
         ),
       );
       return;
@@ -760,7 +1371,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       final task = await _api.submitCode(
         lessonId: state.selectedLesson.id,
         code: submissionCode,
-        studentId: state.learner?.id,
+        sessionId: state.studySessionId,
       );
       _activeTaskId = task.taskId;
       emit(
@@ -772,6 +1383,16 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       await _pollUntilComplete(task.taskId);
     } on BackendApiException catch (error) {
       _activeTaskId = null;
+      _recordTelemetry(
+        'submission_result',
+        {
+          'passed': false,
+          'failure_kind': error.failureKind ?? 'submission_request_failed',
+          'message': error.message,
+          'origin': 'frontend_submit',
+        },
+        flushAfter: true,
+      );
       emit(
         state.copyWith(
           runStatus: RunStatus.failed,
@@ -791,6 +1412,15 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       );
     } catch (_) {
       _activeTaskId = null;
+      _recordTelemetry(
+        'submission_result',
+        {
+          'passed': false,
+          'failure_kind': 'backend_unavailable',
+          'origin': 'frontend_submit',
+        },
+        flushAfter: true,
+      );
       emit(
         state.copyWith(
           runStatus: RunStatus.failed,
@@ -862,6 +1492,9 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   }
 
   void selectAdminLesson(String lessonId) {
+    if (!state.canAccessAuthoring) {
+      return;
+    }
     emit(
       state.copyWith(
         currentSection: AppSection.admin,
@@ -871,6 +1504,11 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   }
 
   void createDraftLesson() {
+    if (!state.canAccessAuthoring) {
+      emit(state.copyWith(
+          adminMessage: 'Authoring requires instructor or admin access.'));
+      return;
+    }
     final draftId = 'draft_${DateTime.now().millisecondsSinceEpoch}';
     final draftLesson = LessonDefinition(
       id: draftId,
@@ -938,6 +1576,11 @@ def lesson_function(*args, **kwargs):
     required String starterCode,
     required bool backendEnabled,
   }) {
+    if (!state.canAccessAuthoring) {
+      emit(state.copyWith(
+          adminMessage: 'Authoring requires instructor or admin access.'));
+      return;
+    }
     final existingLesson = _findLessonById(state.sections, lessonId);
     if (existingLesson == null) {
       emit(state.copyWith(
@@ -1009,6 +1652,11 @@ def lesson_function(*args, **kwargs):
   }
 
   void deleteAdminLesson(String lessonId) {
+    if (!state.canAccessAuthoring) {
+      emit(state.copyWith(
+          adminMessage: 'Authoring requires instructor or admin access.'));
+      return;
+    }
     if (_isCoreLessonId(lessonId)) {
       emit(
         state.copyWith(
@@ -1066,6 +1714,11 @@ def lesson_function(*args, **kwargs):
   }
 
   Future<void> exportAdminNGainMetrics() async {
+    if (!state.isAdmin) {
+      emit(state.copyWith(
+          adminMessage: 'Only admin users can export evaluation data.'));
+      return;
+    }
     emit(
       state.copyWith(
         isAdminExporting: true,
@@ -1105,7 +1758,56 @@ def lesson_function(*args, **kwargs):
     }
   }
 
+  Future<void> exportAdminLearningAnalytics() async {
+    if (!state.isAdmin) {
+      emit(state.copyWith(
+          adminMessage: 'Only admin users can export learning analytics.'));
+      return;
+    }
+    emit(
+      state.copyWith(
+        isAdminExporting: true,
+        adminMessage: 'Exporting Study Buddy learning analytics...',
+      ),
+    );
+
+    try {
+      final export = await _api.exportLearningAnalytics();
+      final saveResult = await saveExportFile(
+        fileName: export.fileName,
+        bytes: export.bytes,
+      );
+
+      emit(
+        state.copyWith(
+          isAdminExporting: false,
+          adminMessage: saveResult.success
+              ? '${saveResult.message} ${saveResult.savedPath ?? ''}'.trim()
+              : saveResult.message,
+        ),
+      );
+    } on BackendApiException catch (error) {
+      emit(
+        state.copyWith(
+          isAdminExporting: false,
+          adminMessage: error.message,
+        ),
+      );
+    } catch (_) {
+      emit(
+        state.copyWith(
+          isAdminExporting: false,
+          adminMessage: 'Could not export learning analytics. Check backend.',
+        ),
+      );
+    }
+  }
+
   Future<String?> _ensureWorkspaceSession() async {
+    if (!state.isAuthenticated) {
+      return null;
+    }
+
     final existingSessionId = state.workspaceSessionId;
     if (existingSessionId != null && state.workspaceReady) {
       return existingSessionId;
@@ -1123,11 +1825,27 @@ def lesson_function(*args, **kwargs):
     LessonDefinition lesson, {
     bool announceStatus = true,
   }) async {
+    if (!state.isAuthenticated) {
+      emit(
+        state.copyWith(
+          workspaceSessionId: null,
+          editorShellUrl: null,
+          workspaceReady: false,
+          editorConnectionStatus: WorkspaceConnectionStatus.disconnected,
+          consoleConnectionStatus: WorkspaceConnectionStatus.disconnected,
+          statusMessage:
+              'Sign in to open the live workspace for ${lesson.title}.',
+        ),
+      );
+      return;
+    }
+
     final requestedLessonId = lesson.id;
     final showProgress =
         announceStatus || state.currentSection == AppSection.workspace;
     emit(
       state.copyWith(
+        editorShellUrl: null,
         workspaceReady: false,
         editorConnectionStatus: WorkspaceConnectionStatus.connecting,
         consoleConnectionStatus: WorkspaceConnectionStatus.connecting,
@@ -1141,6 +1859,13 @@ def lesson_function(*args, **kwargs):
       final session =
           await _api.createWorkspaceSession(lessonId: requestedLessonId);
       final file = await _api.getWorkspaceFile(sessionId: session.sessionId);
+      String? editorShellUrl;
+      var editorConnectionStatus = WorkspaceConnectionStatus.ready;
+      try {
+        editorShellUrl = await _api.workspaceEditorShellUrl(session.sessionId);
+      } on BackendApiException {
+        editorConnectionStatus = WorkspaceConnectionStatus.failed;
+      }
       if (isClosed || state.selectedLesson.id != requestedLessonId) {
         return;
       }
@@ -1149,14 +1874,17 @@ def lesson_function(*args, **kwargs):
         state.copyWith(
           code: file.content,
           workspaceSessionId: session.sessionId,
+          editorShellUrl: editorShellUrl,
           workspaceReady: true,
-          editorConnectionStatus: WorkspaceConnectionStatus.ready,
+          editorConnectionStatus: editorConnectionStatus,
           consoleConnectionStatus: session.consoleReady
               ? WorkspaceConnectionStatus.ready
               : WorkspaceConnectionStatus.connecting,
           scriptVersion: file.version,
           statusMessage: showProgress
-              ? 'Workspace ready for ${lesson.title}.'
+              ? editorConnectionStatus == WorkspaceConnectionStatus.ready
+                  ? 'Workspace ready for ${lesson.title}.'
+                  : 'Workspace session ready, but the embedded editor could not be loaded.'
               : state.statusMessage,
         ),
       );
@@ -1167,6 +1895,7 @@ def lesson_function(*args, **kwargs):
       emit(
         state.copyWith(
           workspaceSessionId: null,
+          editorShellUrl: null,
           workspaceReady: false,
           editorConnectionStatus: WorkspaceConnectionStatus.failed,
           consoleConnectionStatus: WorkspaceConnectionStatus.failed,
@@ -1180,6 +1909,7 @@ def lesson_function(*args, **kwargs):
       emit(
         state.copyWith(
           workspaceSessionId: null,
+          editorShellUrl: null,
           workspaceReady: false,
           editorConnectionStatus: WorkspaceConnectionStatus.failed,
           consoleConnectionStatus: WorkspaceConnectionStatus.failed,
@@ -1236,6 +1966,49 @@ def lesson_function(*args, **kwargs):
     } on BackendApiException {
       return state.code;
     }
+  }
+
+  void _applyAuthenticatedSession(
+    LearnerDashboard dashboard, {
+    required String successMessage,
+  }) {
+    final shouldAnnounceWorkspace =
+        state.currentSection == AppSection.workspace;
+    emit(
+      state.copyWith(
+        learner: dashboard.student,
+        currentRole: dashboard.student.platformRole,
+        isAuthenticated: true,
+        progress: dashboard.progress,
+        isSigningIn: false,
+        homeMessage: successMessage,
+        quizStatusMessage: _quizPromptForProgress(dashboard.progress),
+        currentSection: AppSection.home,
+      ),
+    );
+    if (state.selectedLesson.backendEnabled) {
+      unawaited(
+        _attachWorkspaceSession(
+          state.selectedLesson,
+          announceStatus: shouldAnnounceWorkspace,
+        ),
+      );
+    }
+    if (state.canAccessAuthoring) {
+      unawaited(loadStaffProgressDirectory());
+    }
+    unawaited(refreshStudyBuddySummary(quiet: true));
+  }
+
+  String? _resolveSelectedStaffStudentId(List<StaffStudentSummary> students) {
+    if (students.isEmpty) {
+      return null;
+    }
+    final current = state.selectedProgressStudentId;
+    if (current != null && students.any((student) => student.id == current)) {
+      return current;
+    }
+    return students.first.id;
   }
 
   RLWorkbenchState _resetProgressState(String message) {
@@ -1307,6 +2080,16 @@ def lesson_function(*args, **kwargs):
                   : '${result.message} No replay video generated.',
             ),
           );
+          _recordTelemetry(
+            'submission_result',
+            {
+              'passed': true,
+              'task_id': taskId,
+              'test_count': result.testResults.length,
+              'origin': 'frontend_submit',
+            },
+            flushAfter: true,
+          );
           await refreshDashboard(quiet: true);
           return;
         case ExecutionTaskStatus.failed:
@@ -1328,6 +2111,16 @@ def lesson_function(*args, **kwargs):
               statusMessage: snapshot.errorMessage ?? 'Execution task failed.',
             ),
           );
+          _recordTelemetry(
+            'submission_result',
+            {
+              'passed': false,
+              'task_id': taskId,
+              'failure_kind': snapshot.failureKind,
+              'origin': 'frontend_submit',
+            },
+            flushAfter: true,
+          );
           return;
       }
 
@@ -1347,6 +2140,15 @@ def lesson_function(*args, **kwargs):
 
       if (snapshot.isTerminal) {
         _activeWorkspaceRunId = null;
+        _recordTelemetry(
+          'code_run_result',
+          {
+            'passed': snapshot.exitCode == 0,
+            'run_id': runId,
+            'exit_code': snapshot.exitCode,
+          },
+          flushAfter: true,
+        );
         emit(
           state.copyWith(
             activeRunId: null,
@@ -1434,4 +2236,109 @@ def lesson_function(*args, **kwargs):
         )
         .toList(growable: false);
   }
+
+  void _recordTelemetry(
+    String eventType,
+    Map<String, dynamic> payload, {
+    bool flushAfter = false,
+  }) {
+    final learner = state.learner;
+    if (learner == null) {
+      return;
+    }
+
+    _telemetry.record(
+      LearningTelemetryEvent(
+        lessonId: state.selectedLesson.id,
+        conceptId: state.selectedLesson.id,
+        sessionId: state.studySessionId,
+        eventType: eventType,
+        occurredAtUtc: DateTime.now().toUtc(),
+        payloadJson: payload,
+      ),
+    );
+    if (flushAfter) {
+      unawaited(_telemetry.flush());
+      _scheduleStudyBuddyPolling();
+    }
+  }
+
+  void _scheduleStudyBuddyPolling() {
+    if (state.studyBuddyIntervention != null) {
+      return;
+    }
+    _studyBuddyPollTimer?.cancel();
+    _studyBuddyPollAttempts = 0;
+    emit(
+      state.copyWith(
+        studyBuddyLoading: true,
+        studyBuddyPanelDismissed: false,
+      ),
+    );
+    _studyBuddyPollTimer = Timer.periodic(
+      const Duration(seconds: 3),
+      (timer) {
+        _studyBuddyPollAttempts += 1;
+        unawaited(_pollStudyBuddyPending());
+        if (_studyBuddyPollAttempts >= 4) {
+          timer.cancel();
+          if (state.studyBuddyIntervention == null) {
+            emit(state.copyWith(studyBuddyLoading: false));
+          }
+        }
+      },
+    );
+    unawaited(_pollStudyBuddyPending());
+  }
+
+  Future<void> _pollStudyBuddyPending() async {
+    if (state.learner == null) {
+      return;
+    }
+    try {
+      final intervention = await _api.fetchPendingStudyBuddyIntervention(
+        sessionId: state.studySessionId,
+      );
+      if (intervention == null) {
+        return;
+      }
+      _studyBuddyPollTimer?.cancel();
+      emit(
+        state.copyWith(
+          studyBuddyIntervention: intervention,
+          studyBuddyLoading: false,
+          studyBuddyPanelDismissed: false,
+        ),
+      );
+    } catch (_) {
+      if (_studyBuddyPollAttempts >= 4) {
+        emit(state.copyWith(studyBuddyLoading: false));
+      }
+    }
+  }
+
+  @override
+  Future<void> close() async {
+    _studyBuddyPollTimer?.cancel();
+    await _telemetry.dispose();
+    return super.close();
+  }
+}
+
+String _newStudySessionId() {
+  return 'study-${DateTime.now().microsecondsSinceEpoch}';
+}
+
+Map<String, dynamic> _feedbackPayload(ExecutionStudentFeedback? feedback) {
+  if (feedback == null) {
+    return const {};
+  }
+  return {
+    'status': feedback.status,
+    'summary': feedback.summary,
+    'likely_issue': feedback.likelyIssue,
+    'affected_blank_ids': feedback.affectedBlankIds,
+    'next_steps': feedback.nextSteps,
+    'hint_level': feedback.hintLevel,
+  };
 }
