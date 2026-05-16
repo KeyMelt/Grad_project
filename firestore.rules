@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // The backend uses the Admin SDK (bypasses rules). Clients never write
+    // directly — they go through the FastAPI gateway. Block all client access.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

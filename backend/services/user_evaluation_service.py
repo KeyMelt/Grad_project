@@ -4,7 +4,6 @@ from typing import Any
 
 from backend.services.firebase_progress_service import FirebaseProgressService
 from backend.services.quiz_service import QuizService
-from backend.services.student_progress_service import StudentProgressService
 
 
 class UserEvaluationService:
@@ -13,7 +12,7 @@ class UserEvaluationService:
     def __init__(
         self,
         *,
-        progress_service: StudentProgressService | FirebaseProgressService | Any,
+        progress_service: FirebaseProgressService,
         quiz_service: QuizService | None = None,
     ) -> None:
         self._progress_service = progress_service
@@ -49,13 +48,8 @@ class UserEvaluationService:
         return self._progress_service.list_n_gain_metrics()
 
     def close(self) -> None:
-        close_quiz = getattr(self._quiz_service, "close", None)
-        if callable(close_quiz):
-            close_quiz()
-        close_progress = getattr(self._progress_service, "close", None)
-        if callable(close_progress):
-            close_progress()
+        self._progress_service.close()
 
     @property
-    def progress_service(self) -> Any:
+    def progress_service(self) -> FirebaseProgressService:
         return self._progress_service

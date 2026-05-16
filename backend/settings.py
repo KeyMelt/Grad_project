@@ -48,7 +48,6 @@ class GatewaySettings:
     user_service_mode: str
     user_service_url: str
     user_service_timeout_seconds: float
-    progress_backend: str
     firebase_credentials_path: str | None
     firebase_app_name: str
     execution_mode: str
@@ -72,7 +71,6 @@ class GatewaySettings:
                 "RL_IDE_USER_SERVICE_TIMEOUT_SECONDS",
                 10.0,
             ),
-            progress_backend=env_str("RL_IDE_PROGRESS_BACKEND", "sql").lower(),
             firebase_credentials_path=firebase_credentials,
             firebase_app_name=env_str("RL_IDE_FIREBASE_APP_NAME", "rl-ide-backend"),
             execution_mode=env_str("RL_IDE_EXECUTION_MODE", "local").lower(),
@@ -212,7 +210,6 @@ class DatabaseSettings:
 
 @dataclass(frozen=True)
 class UserEvaluationSettings:
-    progress_backend: str
     firebase_credentials_path: str | None
     firebase_app_name: str
 
@@ -220,7 +217,6 @@ class UserEvaluationSettings:
     def from_env(cls) -> UserEvaluationSettings:
         credentials_path = env_str("RL_IDE_FIREBASE_CREDENTIALS_PATH") or None
         return cls(
-            progress_backend=env_str("RL_IDE_PROGRESS_BACKEND", "firebase").lower(),
             firebase_credentials_path=credentials_path,
             firebase_app_name=env_str("RL_IDE_FIREBASE_APP_NAME", "rl-ide-backend"),
         )

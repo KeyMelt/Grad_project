@@ -1,11 +1,10 @@
 import threading
-from typing import Optional
 from typing import Any
 
 from backend.execution_runtime import ExecutionPipelineError, run_submission_with_timeout
 from backend.job_store import ExecutionJobStore
 from backend.artifact_store_sqlite import SqliteArtifactStore
-from backend.services.student_progress_service import StudentProgressService
+from backend.services.firebase_progress_service import FirebaseProgressService
 
 
 class ExecutionService:
@@ -13,9 +12,9 @@ class ExecutionService:
 
     def __init__(
         self,
-        job_store: Optional[ExecutionJobStore] = None,
-        artifact_store: Optional[SqliteArtifactStore] = None,
-        progress_service: Optional[StudentProgressService] = None,
+        job_store: ExecutionJobStore | None = None,
+        artifact_store: SqliteArtifactStore | None = None,
+        progress_service: FirebaseProgressService | None = None,
     ):
         self.job_store = job_store or ExecutionJobStore()
         self.artifact_store = artifact_store

@@ -9,7 +9,6 @@ from pydantic import BaseModel, Field
 
 from backend.services.firebase_progress_service import FirebaseProgressService
 from backend.services.quiz_service import QuizService
-from backend.services.student_progress_service import StudentProgressService
 from backend.services.user_evaluation_service import UserEvaluationService
 from backend.settings import UserEvaluationSettings
 
@@ -49,17 +48,10 @@ def _close_if_present(service: Any) -> None:
 
 def _build_services() -> ServiceContainer:
     settings = UserEvaluationSettings.from_env()
-    progress: Any
-    if settings.progress_backend == "firebase":
-        try:
-            progress = FirebaseProgressService(
-                credentials_path=settings.firebase_credentials_path,
-                app_name=settings.firebase_app_name,
-            )
-        except RuntimeError:
-            progress = StudentProgressService()
-    else:
-        progress = StudentProgressService()
+    progress = FirebaseProgressService(
+        credentials_path=settings.firebase_credentials_path,
+        app_name=settings.firebase_app_name,
+    )
 
     return ServiceContainer(
         user_evaluation=UserEvaluationService(

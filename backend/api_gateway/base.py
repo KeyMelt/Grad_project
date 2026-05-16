@@ -29,7 +29,6 @@ from backend.services.quiz_service import QuizService
 from backend.services.remote_execution_service import RemoteExecutionService
 from backend.services.remote_user_evaluation_service import RemoteUserEvaluationService
 from backend.services.remote_workspace_service import RemoteWorkspaceService
-from backend.services.student_progress_service import StudentProgressService
 from backend.services.user_evaluation_service import UserEvaluationService
 from backend.settings import GatewaySettings
 
@@ -37,7 +36,7 @@ from backend.settings import GatewaySettings
 @dataclass(frozen=True)
 class ServiceContainer:
     lesson_catalog: LessonCatalogService
-    user_evaluation: Any
+    user_evaluation: UserEvaluationService | RemoteUserEvaluationService
     execution: LocalExecutionService | RemoteExecutionService
     workspace: RemoteWorkspaceService | None
     metrics_export: MetricsExportService
@@ -57,7 +56,9 @@ def _build_services() -> ServiceContainer:
     )
 
 
-def _build_user_evaluation(settings: GatewaySettings) -> tuple[Any, Any | None]:
+def _build_user_evaluation(
+    settings: GatewaySettings,
+) -> tuple[UserEvaluationService | RemoteUserEvaluationService, FirebaseProgressService | None]:
     if settings.user_service_mode == "remote":
         return (
             RemoteUserEvaluationService(
@@ -68,17 +69,10 @@ def _build_user_evaluation(settings: GatewaySettings) -> tuple[Any, Any | None]:
             None,
         )
 
-    progress: Any
-    if settings.progress_backend == "firebase":
-        try:
-            progress = FirebaseProgressService(
-                credentials_path=settings.firebase_credentials_path,
-                app_name=settings.firebase_app_name,
-            )
-        except RuntimeError:
-            progress = StudentProgressService()
-    else:
-        progress = StudentProgressService()
+    progress = FirebaseProgressService(
+        credentials_path=settings.firebase_credentials_path,
+        app_name=settings.firebase_app_name,
+    )
 
     return (
         UserEvaluationService(
@@ -91,7 +85,7 @@ def _build_user_evaluation(settings: GatewaySettings) -> tuple[Any, Any | None]:
 
 def _build_execution_services(
     settings: GatewaySettings,
-    local_progress_service: Any | None,
+    local_progress_service: FirebaseProgressService | None,
 ) -> tuple[LocalExecutionService | RemoteExecutionService, RemoteWorkspaceService | None]:
     if settings.execution_mode == "remote":
         execution = RemoteExecutionService(
@@ -106,8 +100,7 @@ def _build_execution_services(
         )
         return execution, workspace
 
-    execution_progress_service = local_progress_service or StudentProgressService()
-    return LocalExecutionService(progress_service=execution_progress_service), None
+    return LocalExecutionService(progress_service=local_progress_service), None
 
 
 def _close_if_present(service: Any) -> None:

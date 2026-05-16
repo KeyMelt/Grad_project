@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -378,10 +379,29 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       homeMessage: 'Signing in $normalizedName...',
     ));
 
+    final firebaseResult = await _firebaseSignIn(normalizedName, password);
+    if (firebaseResult is _FirebaseAuthError) {
+      emit(state.copyWith(
+        isSigningIn: false,
+        homeMessage: firebaseResult.message,
+      ));
+      return;
+    }
+    final firebaseIdToken = firebaseResult as String?;
+    if (firebaseIdToken == null) {
+      emit(state.copyWith(
+        isSigningIn: false,
+        homeMessage:
+            'Could not reach Firebase. Check your network and try again.',
+      ));
+      return;
+    }
+
     try {
       final dashboard = await _api.signIn(
         displayName: normalizedName,
         password: password,
+        firebaseIdToken: firebaseIdToken,
       );
       emit(
         state.copyWith(
@@ -406,9 +426,58 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     }
   }
 
+  /// Returns the Firebase ID token string on success, or a [_FirebaseAuthError]
+  /// when the user provides wrong credentials. Returns null only if Firebase
+  /// auth is unavailable (network, misconfiguration).
+  Future<Object?> _firebaseSignIn(String name, String password) async {
+    final email = _emailFromName(name);
+    try {
+      UserCredential cred;
+      try {
+        cred = await FirebaseAuth.instance
+            .signInWithEmailAndPassword(email: email, password: password);
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
+          cred = await FirebaseAuth.instance
+              .createUserWithEmailAndPassword(email: email, password: password);
+          await cred.user?.updateDisplayName(name);
+        } else {
+          return _FirebaseAuthError(_friendlyFirebaseMessage(e));
+        }
+      }
+      return await cred.user?.getIdToken();
+    } on FirebaseAuthException catch (e) {
+      return _FirebaseAuthError(_friendlyFirebaseMessage(e));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String _emailFromName(String name) {
+    final slug = name
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '.')
+        .replaceAll(RegExp(r'^\.+|\.+$'), '');
+    return '$slug@rl-platform.students';
+  }
+
+  static String _friendlyFirebaseMessage(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'wrong-password':
+        return 'Incorrect password. Try again.';
+      case 'too-many-requests':
+        return 'Too many sign-in attempts. Wait a moment and try again.';
+      case 'user-disabled':
+        return 'This account has been disabled. Contact your instructor.';
+      default:
+        return e.message ?? 'Firebase authentication failed.';
+    }
+  }
+
   void signOut() {
     _activeTaskId = null;
     _activeWorkspaceRunId = null;
+    FirebaseAuth.instance.signOut().ignore();
     emit(
       state.copyWith(
         learner: null,
@@ -1434,4 +1503,9 @@ def lesson_function(*args, **kwargs):
         )
         .toList(growable: false);
   }
+}
+
+class _FirebaseAuthError {
+  const _FirebaseAuthError(this.message);
+  final String message;
 }

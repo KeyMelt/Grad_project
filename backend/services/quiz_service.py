@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from random import SystemRandom
 from uuid import uuid4
 
-from backend.services.student_progress_service import StudentProgressService
+from backend.services.firebase_progress_service import FirebaseProgressService
 
 
 @dataclass(frozen=True)
@@ -201,7 +201,7 @@ class QuizService:
 
     quiz_length = 6
 
-    def __init__(self, progress_service: StudentProgressService) -> None:
+    def __init__(self, progress_service: FirebaseProgressService) -> None:
         self._progress_service = progress_service
         self._rng = SystemRandom()
         self._sessions: dict[str, QuizSession] = {}

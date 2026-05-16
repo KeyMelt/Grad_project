@@ -14,9 +14,8 @@ from backend.execution_worker.routes import (
 )
 from backend.job_store_sqlite import SqliteExecutionJobStore
 from backend.services.execution_service import ExecutionService
-from backend.services.student_progress_service import StudentProgressService
 from backend.services.workspace_service import WorkspaceSessionService
-from backend.settings import WorkerSettings, env_bool
+from backend.settings import WorkerSettings
 from backend.workspace_store_sqlite import SqliteWorkspaceStore
 
 
@@ -28,15 +27,11 @@ class WorkerServiceContainer:
 
 def _build_services() -> WorkerServiceContainer:
     settings = WorkerSettings.from_env()
-    progress_service: StudentProgressService | None = None
-    if env_bool("RL_IDE_WORKER_RECORD_PROGRESS"):
-        progress_service = StudentProgressService()
 
     return WorkerServiceContainer(
         execution=ExecutionService(
             job_store=SqliteExecutionJobStore(str(settings.job_store_path)),
             artifact_store=SqliteArtifactStore(str(settings.artifact_store_path)),
-            progress_service=progress_service,
         ),
         workspace=WorkspaceSessionService(
             base_dir=settings.workspace_base_dir,
