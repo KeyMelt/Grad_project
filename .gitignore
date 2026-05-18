@@ -68,6 +68,11 @@ output/
 # Local-only research and scratch directories
 .codex-skills/
 .codex_artifacts/
+
+# Claude Code / AI tooling system files
+.agents/
+.playwright-cli/
+skills-lock.json
 RL_manim/
 _tmp_grad1/
 /media/

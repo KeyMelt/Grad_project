@@ -31,6 +31,7 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   late final RLWorkbenchCubit _cubit;
   bool _onboardingShown = false;
+  bool _studyBuddyDrawerOpen = false;
 
   @override
   void initState() {
@@ -58,15 +59,15 @@ class _MainLayoutState extends State<MainLayout> {
       child: BlocBuilder<RLWorkbenchCubit, RLWorkbenchState>(
         builder: (context, state) {
           return Scaffold(
-            appBar: _buildAppBar(state),
-            body: _buildCurrentSection(state),
+            appBar: _buildAppBar(context, state),
+            body: _buildCurrentSection(context, state),
           );
         },
       ),
     );
   }
 
-  Widget _buildCurrentSection(RLWorkbenchState state) {
+  Widget _buildCurrentSection(BuildContext context, RLWorkbenchState state) {
     switch (state.currentSection) {
       case AppSection.home:
         return HomeDashboard(
@@ -90,16 +91,6 @@ class _MainLayoutState extends State<MainLayout> {
       case AppSection.workspace:
         return LayoutBuilder(
           builder: (context, constraints) {
-            final orderedLessons = state.sections
-                .expand((section) => section.lessons)
-                .toList(growable: false);
-            final currentLessonIndex = orderedLessons.indexWhere(
-              (lesson) => lesson.id == state.selectedLesson.id,
-            );
-            final canGoPrevious = currentLessonIndex > 0;
-            final canGoNext = currentLessonIndex >= 0 &&
-                currentLessonIndex < orderedLessons.length - 1;
-
             final workspace = WorkspaceTabs(
               lesson: state.selectedLesson,
               code: state.code,
@@ -112,6 +103,8 @@ class _MainLayoutState extends State<MainLayout> {
               onSubmit: () => _cubit.submit(),
               onStop: _cubit.stop,
               onReset: _cubit.reset,
+              onRun: _cubit.run,
+              onReconnectWorkspace: _cubit.refreshWorkspaceConnection,
               statusMessage: state.statusMessage,
               runStatusLabel: state.runStatusLabel,
               failureKind: state.failureKind,
@@ -128,6 +121,7 @@ class _MainLayoutState extends State<MainLayout> {
               onConceptVideoSession: _cubit.recordConceptVideoSession,
               onWorkspaceFocusSession: _cubit.recordWorkspaceFocusSession,
             );
+
             final studyBuddyPanel = StudyBuddyPanel(
               lesson: state.selectedLesson,
               intervention: state.studyBuddyIntervention,
@@ -143,55 +137,49 @@ class _MainLayoutState extends State<MainLayout> {
               onSendChatMessage: _cubit.sendStudyBuddyChat,
             );
 
-            final content = constraints.maxWidth >= 980
+            // Wide layout: 50/50 exercise brief + workspace, Study Buddy drawer overlay.
+            // Narrow: workspace fills full width (exercise brief lives inside code pane).
+            final isWide = constraints.maxWidth >= 980;
+            final mainContent = isWide
                 ? Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      SizedBox(
-                        width: _studyBuddyRailWidth(constraints.maxWidth),
-                        child: studyBuddyPanel,
+                      // FORTH (GREEN): exercise brief, full height, 50% width.
+                      Expanded(
+                        child: StudyBuddyExerciseBrief(
+                          lesson: state.selectedLesson,
+                        ),
                       ),
                       const SizedBox(width: 12),
+                      // SIXTH (PINK): code editor, 50% width.
                       Expanded(child: workspace),
                     ],
                   )
-                : Column(
-                    children: [
-                      SizedBox(
-                        height:
-                            (constraints.maxHeight * 0.30).clamp(240.0, 340.0),
-                        child: studyBuddyPanel,
-                      ),
-                      const SizedBox(height: 12),
-                      Expanded(child: workspace),
-                    ],
-                  );
+                : workspace;
 
             return Padding(
               padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-              child: Column(
+              child: Stack(
+                clipBehavior: Clip.none,
                 children: [
-                  Center(
-                    child: CourseOutlineLauncher(
-                      selectedLesson: state.selectedLesson,
-                      canGoPrevious: canGoPrevious,
-                      canGoNext: canGoNext,
-                      onPrevious: () => _cubit.selectLesson(
-                        orderedLessons[currentLessonIndex - 1],
-                      ),
-                      onNext: () => _cubit.selectLesson(
-                        orderedLessons[currentLessonIndex + 1],
-                      ),
-                      onOpenOutline: () => showCourseOutlineDialog(
-                        context: context,
-                        sections: state.sections,
-                        selectedLesson: state.selectedLesson,
-                        onLessonSelected: _cubit.selectLesson,
-                      ),
+                  Positioned.fill(child: mainContent),
+                  // FIFTH (PURPLE): Study Buddy sliding drawer from the right.
+                  Positioned(
+                    top: 0,
+                    bottom: 0,
+                    right: 0,
+                    child: _StudyBuddyDrawer(
+                      isOpen: _studyBuddyDrawerOpen,
+                      drawerWidth:
+                          _studyBuddyRailWidth(constraints.maxWidth),
+                      hasIntervention:
+                          state.studyBuddyIntervention != null,
+                      onToggle: () => setState(() {
+                        _studyBuddyDrawerOpen = !_studyBuddyDrawerOpen;
+                      }),
+                      panel: studyBuddyPanel,
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Expanded(child: content),
                 ],
               ),
             );
@@ -281,57 +269,125 @@ class _MainLayoutState extends State<MainLayout> {
     }
   }
 
-  PreferredSizeWidget _buildAppBar(RLWorkbenchState state) {
+  PreferredSizeWidget _buildAppBar(
+      BuildContext context, RLWorkbenchState state) {
+    final isWorkspace = state.currentSection == AppSection.workspace;
+
+    // Build course outline launcher bottom bar for workspace mode.
+    PreferredSizeWidget? bottomBar;
+    if (isWorkspace) {
+      final orderedLessons = state.sections
+          .expand((section) => section.lessons)
+          .toList(growable: false);
+      final currentLessonIndex = orderedLessons.indexWhere(
+        (lesson) => lesson.id == state.selectedLesson.id,
+      );
+      final canGoPrevious = currentLessonIndex > 0;
+      final canGoNext = currentLessonIndex >= 0 &&
+          currentLessonIndex < orderedLessons.length - 1;
+
+      bottomBar = PreferredSize(
+        preferredSize: const Size.fromHeight(52),
+        child: Container(
+          decoration: const BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: Color(0xFFE5E7EB)),
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+          child: Center(
+            child: CourseOutlineLauncher(
+              selectedLesson: state.selectedLesson,
+              canGoPrevious: canGoPrevious,
+              canGoNext: canGoNext,
+              onPrevious: canGoPrevious
+                  ? () => _cubit
+                      .selectLesson(orderedLessons[currentLessonIndex - 1])
+                  : () {},
+              onNext: canGoNext
+                  ? () => _cubit
+                      .selectLesson(orderedLessons[currentLessonIndex + 1])
+                  : () {},
+              onOpenOutline: () => showCourseOutlineDialog(
+                context: context,
+                sections: state.sections,
+                selectedLesson: state.selectedLesson,
+                onLessonSelected: _cubit.selectLesson,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return AppBar(
       backgroundColor: AppTheme.surfaceWhite,
       elevation: 0,
       toolbarHeight: 58,
+      bottom: bottomBar,
       title: LayoutBuilder(
         builder: (context, constraints) {
           final showLogo = constraints.maxWidth > 300;
           return Row(
             children: [
               if (showLogo) ...[
-                Image.asset(
-                  'assets/branding/rl_logo_trimmed.png',
-                  height: 38,
-                  fit: BoxFit.contain,
+                // FIRST (RED): logo acts as home button in workspace mode.
+                InkWell(
+                  onTap: isWorkspace
+                      ? () => _cubit.navigateTo(AppSection.home)
+                      : null,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.asset(
+                    'assets/branding/rl_logo_trimmed.png',
+                    height: 38,
+                    fit: BoxFit.contain,
+                  ),
                 ),
                 const SizedBox(width: 18),
               ],
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _NavChip(
-                        label: 'Home',
-                        selected: state.currentSection == AppSection.home,
-                        onTap: () => _cubit.navigateTo(AppSection.home),
-                      ),
-                      const SizedBox(width: 8),
-                      _NavChip(
-                        label: 'Workspace',
-                        selected: state.currentSection == AppSection.workspace,
-                        onTap: () => _cubit.navigateTo(AppSection.workspace),
-                      ),
-                      const SizedBox(width: 8),
-                      _NavChip(
-                        label: 'Quiz',
-                        selected: state.currentSection == AppSection.quiz,
-                        onTap: () => _cubit.navigateTo(AppSection.quiz),
-                      ),
-                      const SizedBox(width: 8),
-                      if (state.canAccessAuthoring)
+              // FIRST (RED): hide nav chips when inside workspace.
+              if (!isWorkspace)
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
                         _NavChip(
-                          label: 'Authoring',
-                          selected: state.currentSection == AppSection.admin,
-                          onTap: () => _cubit.navigateTo(AppSection.admin),
+                          label: 'Home',
+                          selected:
+                              state.currentSection == AppSection.home,
+                          onTap: () => _cubit.navigateTo(AppSection.home),
                         ),
-                    ],
+                        const SizedBox(width: 8),
+                        _NavChip(
+                          label: 'Workspace',
+                          selected: state.currentSection ==
+                              AppSection.workspace,
+                          onTap: () =>
+                              _cubit.navigateTo(AppSection.workspace),
+                        ),
+                        const SizedBox(width: 8),
+                        _NavChip(
+                          label: 'Quiz',
+                          selected:
+                              state.currentSection == AppSection.quiz,
+                          onTap: () => _cubit.navigateTo(AppSection.quiz),
+                        ),
+                        const SizedBox(width: 8),
+                        if (state.canAccessAuthoring)
+                          _NavChip(
+                            label: 'Authoring',
+                            selected:
+                                state.currentSection == AppSection.admin,
+                            onTap: () =>
+                                _cubit.navigateTo(AppSection.admin),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-              ),
+                )
+              else
+                const Spacer(),
             ],
           );
         },
@@ -376,6 +432,139 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 }
+
+// ── Study Buddy drawer ────────────────────────────────────────────────────────
+
+class _StudyBuddyDrawer extends StatefulWidget {
+  final bool isOpen;
+  final double drawerWidth;
+  final bool hasIntervention;
+  final VoidCallback onToggle;
+  final Widget panel;
+
+  const _StudyBuddyDrawer({
+    required this.isOpen,
+    required this.drawerWidth,
+    required this.hasIntervention,
+    required this.onToggle,
+    required this.panel,
+  });
+
+  @override
+  State<_StudyBuddyDrawer> createState() => _StudyBuddyDrawerState();
+}
+
+class _StudyBuddyDrawerState extends State<_StudyBuddyDrawer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Handle tab — clickable vertical strip on left edge of drawer.
+        GestureDetector(
+          onTap: widget.onToggle,
+          child: Container(
+            width: 22,
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceWhite,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(12),
+                bottomLeft: Radius.circular(12),
+              ),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x12000000),
+                  blurRadius: 6,
+                  offset: Offset(-2, 0),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  widget.isOpen
+                      ? Icons.chevron_right_rounded
+                      : Icons.chevron_left_rounded,
+                  size: 16,
+                  color: const Color(0xFF6B7280),
+                ),
+                // Pulsing intervention dot — visible only when closed and an
+                // intervention is available, so users know there's a cue.
+                if (widget.hasIntervention && !widget.isOpen) ...[
+                  const SizedBox(height: 10),
+                  AnimatedBuilder(
+                    animation: _pulseController,
+                    builder: (context, _) {
+                      final t = _pulseController.value;
+                      return Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color.lerp(
+                            AppTheme.primaryBlue,
+                            const Color(0xFF93C5FD),
+                            t,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.primaryBlue
+                                  .withValues(alpha: 0.35 + 0.35 * t),
+                              blurRadius: 4 + 5 * t,
+                              spreadRadius: 1 + 2 * t,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        // Animated drawer panel — expands/collapses horizontally.
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeInOut,
+          width: widget.isOpen ? widget.drawerWidth : 0,
+          child: OverflowBox(
+            maxWidth: widget.drawerWidth,
+            minWidth: 0,
+            alignment: Alignment.centerLeft,
+            child: SizedBox(
+              width: widget.drawerWidth,
+              child: widget.panel,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Nav chip ──────────────────────────────────────────────────────────────────
 
 class _NavChip extends StatelessWidget {
   final String label;

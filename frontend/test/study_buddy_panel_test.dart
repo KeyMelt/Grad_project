@@ -34,9 +34,7 @@ void main() {
 
     expect(find.text('Check the failing pattern'), findsOneWidget);
     expect(find.text('What feels unclear?'), findsOneWidget);
-    expect(find.text('Current Exercise'), findsOneWidget);
-    expect(find.text('Implement iterative policy evaluation'), findsOneWidget);
-    expect(find.text('What to do'), findsOneWidget);
+    expect(find.text('Current Exercise'), findsNothing);
 
     await tester.ensureVisible(find.text('Done'));
     await tester.pumpAndSettle();
@@ -81,6 +79,8 @@ void main() {
   testWidgets('idle study buddy panel stays visible without intervention', (
     tester,
   ) async {
+    String? sentMessage;
+
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -93,26 +93,45 @@ void main() {
             onComplete: _noop,
             onReopen: _noop,
             onRefresh: _noop,
-            onSendChatMessage: (_) {},
+            onSendChatMessage: (message) => sentMessage = message,
           ),
         ),
       ),
     );
 
     expect(find.text('Study Buddy'), findsOneWidget);
-    expect(find.text('Current Exercise'), findsOneWidget);
-    expect(find.text('Implement iterative policy evaluation'), findsOneWidget);
-    expect(
-      find.text(
-        'Complete the Bellman expectation update so each state value is replaced by the expected return under the supplied policy. The lesson video gives the conceptual walkthrough; this exercise asks you to express that reasoning in code.',
-      ),
-      findsOneWidget,
-    );
     expect(find.text('AI Coach'), findsOneWidget);
     expect(find.text('Ask Study Buddy about the current exercise.'),
         findsOneWidget);
     expect(
         find.byKey(const ValueKey('study-buddy-chat-input')), findsOneWidget);
+
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.widgetWithText(ActionChip, 'Quick recap'));
+    await tester.tap(find.widgetWithText(ActionChip, 'Quick recap'));
+    await tester.pump();
+    expect(sentMessage, contains('quick recap'));
+
+    await tester.ensureVisible(find.widgetWithText(ActionChip, 'Find blocker'));
+    await tester.tap(find.widgetWithText(ActionChip, 'Find blocker'));
+    await tester.pump();
+    expect(sentMessage, contains('most likely blocker'));
+  });
+
+  testWidgets('current exercise brief renders as standalone widget', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StudyBuddyExerciseBrief(lesson: _lesson()),
+        ),
+      ),
+    );
+
+    expect(find.text('Current Exercise'), findsOneWidget);
+    expect(find.text('Implement iterative policy evaluation'), findsOneWidget);
+    expect(find.text('What to do'), findsOneWidget);
   });
 
   testWidgets('study buddy chat input sends learner message', (

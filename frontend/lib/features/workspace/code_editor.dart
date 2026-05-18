@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../core/backend_api.dart';
-import '../../core/theme.dart';
 import '../../core/workbench_state.dart';
 import 'workspace_shell_host.dart';
 
@@ -23,6 +22,8 @@ class CodeEditorTab extends StatelessWidget {
   final VoidCallback onSubmit;
   final VoidCallback onStop;
   final VoidCallback onReset;
+  final VoidCallback onReconnect;
+  final VoidCallback? onRun;
 
   const CodeEditorTab({
     super.key,
@@ -43,14 +44,12 @@ class CodeEditorTab extends StatelessWidget {
     required this.onSubmit,
     required this.onStop,
     required this.onReset,
+    required this.onReconnect,
+    this.onRun,
   });
 
   @override
   Widget build(BuildContext context) {
-    final connectionStatus = _workspaceConnectionSummary(
-      editorConnectionStatus,
-      consoleConnectionStatus,
-    );
     final hasLocalDraft = code.trim().isNotEmpty;
     final shellLoading =
         editorConnectionStatus == WorkspaceConnectionStatus.connecting ||
@@ -68,15 +67,6 @@ class CodeEditorTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
-            child: Row(
-              children: [
-                const Spacer(),
-                _ConnectionField(status: connectionStatus),
-              ],
-            ),
-          ),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
@@ -127,77 +117,30 @@ class CodeEditorTab extends StatelessWidget {
                       ),
                     Expanded(
                       child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            return Stack(
-                              children: [
-                                Positioned.fill(
-                                  child: WorkspaceShellHost(
-                                    url: editorShellUrl,
-                                    workspaceReady: workspaceReady,
-                                    isLoading: shellLoading,
-                                    placeholderMessage: shellMessage,
-                                  ),
-                                ),
-                                Positioned(
-                                  left: 16,
-                                  bottom: 16,
-                                  child: ConstrainedBox(
-                                    constraints: BoxConstraints(
-                                      maxWidth: constraints.maxWidth * 0.48,
-                                    ),
-                                    child: _RunStatusFooter(
-                                      runStatusLabel: runStatusLabel,
-                                      statusMessage: statusMessage,
-                                      scriptVersion: scriptVersion,
-                                      hasLocalDraft: hasLocalDraft,
-                                    ),
-                                  ),
-                                ),
-                                Positioned(
-                                  right: 16,
-                                  bottom: 16,
-                                  child: ConstrainedBox(
-                                    constraints: BoxConstraints(
-                                      maxWidth: constraints.maxWidth * 0.52,
-                                    ),
-                                    child: Wrap(
-                                      alignment: WrapAlignment.end,
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children: [
-                                        _EditorActionButton(
-                                          onPressed: lesson.backendEnabled &&
-                                                  workspaceSessionId != null
-                                              ? onSubmit
-                                              : null,
-                                          icon: Icons.task_alt_rounded,
-                                          label: 'Submit',
-                                          variant: _EditorActionVariant.primary,
-                                        ),
-                                        _EditorActionButton(
-                                          onPressed: workspaceSessionId != null
-                                              ? onStop
-                                              : null,
-                                          icon: Icons.stop_rounded,
-                                          label: 'Stop',
-                                        ),
-                                        _EditorActionButton(
-                                          onPressed: workspaceSessionId != null
-                                              ? onReset
-                                              : null,
-                                          icon: Icons.refresh_rounded,
-                                          label: 'Reset',
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                        child: WorkspaceShellHost(
+                          url: editorShellUrl,
+                          workspaceReady: workspaceReady,
+                          isLoading: shellLoading,
+                          placeholderMessage: shellMessage,
                         ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                      child: _EditorFooterBar(
+                        runStatusLabel: runStatusLabel,
+                        statusMessage: statusMessage,
+                        scriptVersion: scriptVersion,
+                        hasLocalDraft: hasLocalDraft,
+                        canUseWorkspace: workspaceSessionId != null,
+                        canSubmit:
+                            lesson.backendEnabled && workspaceSessionId != null,
+                        onSubmit: onSubmit,
+                        onStop: onStop,
+                        onReset: onReset,
+                        onReconnect: onReconnect,
+                        onRun: onRun,
                       ),
                     ),
                   ],
@@ -210,68 +153,6 @@ class CodeEditorTab extends StatelessWidget {
     );
   }
 
-  _WorkspaceVisual _workspaceConnectionSummary(
-    WorkspaceConnectionStatus editorStatus,
-    WorkspaceConnectionStatus consoleStatus,
-  ) {
-    if (editorStatus == WorkspaceConnectionStatus.ready &&
-        consoleStatus == WorkspaceConnectionStatus.ready) {
-      return const _WorkspaceVisual('Connected', Color(0xFF16A34A));
-    }
-    if (editorStatus == WorkspaceConnectionStatus.connecting ||
-        consoleStatus == WorkspaceConnectionStatus.connecting) {
-      return const _WorkspaceVisual('Connecting', Color(0xFFF59E0B));
-    }
-    return const _WorkspaceVisual('No connection', Color(0xFFDC2626));
-  }
-}
-
-class _WorkspaceVisual {
-  final String label;
-  final Color color;
-
-  const _WorkspaceVisual(this.label, this.color);
-}
-
-class _ConnectionField extends StatelessWidget {
-  final _WorkspaceVisual status;
-
-  const _ConnectionField({
-    required this.status,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              color: status.color,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            status.label,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppTheme.textPrimary,
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _RunStatusFooter extends StatelessWidget {
@@ -326,6 +207,102 @@ class _RunStatusFooter extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _EditorFooterBar extends StatelessWidget {
+  final String runStatusLabel;
+  final String statusMessage;
+  final int scriptVersion;
+  final bool hasLocalDraft;
+  final bool canUseWorkspace;
+  final bool canSubmit;
+  final VoidCallback onSubmit;
+  final VoidCallback onStop;
+  final VoidCallback onReset;
+  final VoidCallback onReconnect;
+  final VoidCallback? onRun;
+
+  const _EditorFooterBar({
+    required this.runStatusLabel,
+    required this.statusMessage,
+    required this.scriptVersion,
+    required this.hasLocalDraft,
+    required this.canUseWorkspace,
+    required this.canSubmit,
+    required this.onSubmit,
+    required this.onStop,
+    required this.onReset,
+    required this.onReconnect,
+    this.onRun,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 720;
+        final status = _RunStatusFooter(
+          runStatusLabel: runStatusLabel,
+          statusMessage: statusMessage,
+          scriptVersion: scriptVersion,
+          hasLocalDraft: hasLocalDraft,
+        );
+        final actions = Wrap(
+          alignment: WrapAlignment.end,
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _EditorActionButton(
+              onPressed: onReconnect,
+              icon: Icons.sync_rounded,
+              label: 'Reconnect',
+            ),
+            _EditorActionButton(
+              onPressed: canUseWorkspace ? onRun : null,
+              icon: Icons.play_arrow_rounded,
+              label: 'Run',
+            ),
+            _EditorActionButton(
+              onPressed: canSubmit ? onSubmit : null,
+              icon: Icons.task_alt_rounded,
+              label: 'Submit',
+              variant: _EditorActionVariant.primary,
+            ),
+            _EditorActionButton(
+              onPressed: canUseWorkspace ? onStop : null,
+              icon: Icons.stop_rounded,
+              label: 'Stop',
+            ),
+            _EditorActionButton(
+              onPressed: canUseWorkspace ? onReset : null,
+              icon: Icons.refresh_rounded,
+              label: 'Reset',
+            ),
+          ],
+        );
+
+        if (isNarrow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              status,
+              const SizedBox(height: 10),
+              Align(alignment: Alignment.centerRight, child: actions),
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(child: status),
+            const SizedBox(width: 12),
+            Flexible(child: actions),
+          ],
+        );
+      },
     );
   }
 }

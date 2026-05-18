@@ -71,6 +71,7 @@ void main() {
             onSubmit: () {},
             onStop: () {},
             onReset: () {},
+            onReconnect: () {},
           ),
         ),
       ),

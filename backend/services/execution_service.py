@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 import threading
-from typing import Any
+from typing import Any, Optional
 from uuid import uuid4
 
 from backend.config.trigger_config import TELEMETRY_SOURCE_VERSION

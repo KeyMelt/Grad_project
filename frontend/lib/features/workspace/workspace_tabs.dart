@@ -19,6 +19,7 @@ class WorkspaceTabs extends StatefulWidget {
   final VoidCallback onSubmit;
   final VoidCallback onStop;
   final VoidCallback onReset;
+  final VoidCallback onReconnectWorkspace;
   final String statusMessage;
   final String runStatusLabel;
   final String? failureKind;
@@ -35,6 +36,7 @@ class WorkspaceTabs extends StatefulWidget {
   final ValueChanged<Map<String, dynamic>>? onConceptVideoSession;
   final void Function(String viewId, Duration duration)?
       onWorkspaceFocusSession;
+  final VoidCallback? onRun;
 
   const WorkspaceTabs({
     super.key,
@@ -49,6 +51,7 @@ class WorkspaceTabs extends StatefulWidget {
     required this.onSubmit,
     required this.onStop,
     required this.onReset,
+    required this.onReconnectWorkspace,
     required this.statusMessage,
     required this.runStatusLabel,
     required this.failureKind,
@@ -64,6 +67,7 @@ class WorkspaceTabs extends StatefulWidget {
     required this.stepTrace,
     this.onConceptVideoSession,
     this.onWorkspaceFocusSession,
+    this.onRun,
   });
 
   @override
@@ -182,6 +186,8 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
                   onSubmit: widget.onSubmit,
                   onStop: widget.onStop,
                   onReset: widget.onReset,
+                  onReconnectWorkspace: widget.onReconnectWorkspace,
+                  onRun: widget.onRun,
                 ),
                 TraceReplayPanel(
                   runStatusLabel: runStatusLabel,
@@ -243,6 +249,8 @@ class _CodeExercisePane extends StatelessWidget {
   final VoidCallback onSubmit;
   final VoidCallback onStop;
   final VoidCallback onReset;
+  final VoidCallback onReconnectWorkspace;
+  final VoidCallback? onRun;
 
   const _CodeExercisePane({
     required this.lesson,
@@ -262,13 +270,15 @@ class _CodeExercisePane extends StatelessWidget {
     required this.onSubmit,
     required this.onStop,
     required this.onReset,
+    required this.onReconnectWorkspace,
+    this.onRun,
   });
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 1100) {
+        if (constraints.maxWidth < 760) {
           final briefHeight =
               (constraints.maxHeight * 0.34).clamp(240.0, 360.0);
           return Column(
@@ -297,6 +307,8 @@ class _CodeExercisePane extends StatelessWidget {
                   onSubmit: onSubmit,
                   onStop: onStop,
                   onReset: onReset,
+                  onReconnect: onReconnectWorkspace,
+                  onRun: onRun,
                 ),
               ),
             ],
@@ -321,6 +333,8 @@ class _CodeExercisePane extends StatelessWidget {
           onSubmit: onSubmit,
           onStop: onStop,
           onReset: onReset,
+          onReconnect: onReconnectWorkspace,
+          onRun: onRun,
         );
       },
     );

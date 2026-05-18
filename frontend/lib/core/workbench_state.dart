@@ -1310,6 +1310,81 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     }
   }
 
+  Future<void> refreshWorkspaceConnection() async {
+    if (!state.isAuthenticated) {
+      emit(
+        state.copyWith(
+          workspaceSessionId: null,
+          editorShellUrl: null,
+          workspaceReady: false,
+          editorConnectionStatus: WorkspaceConnectionStatus.disconnected,
+          consoleConnectionStatus: WorkspaceConnectionStatus.disconnected,
+          statusMessage: 'Sign in to refresh the live workspace connection.',
+        ),
+      );
+      return;
+    }
+
+    if (!state.selectedLesson.backendEnabled) {
+      emit(
+        state.copyWith(
+          statusMessage:
+              '${state.selectedLesson.title} does not use a live workspace.',
+        ),
+      );
+      return;
+    }
+
+    final sessionId = state.workspaceSessionId;
+    emit(
+      state.copyWith(
+        editorConnectionStatus: WorkspaceConnectionStatus.connecting,
+        consoleConnectionStatus: WorkspaceConnectionStatus.connecting,
+        statusMessage: 'Refreshing workspace connection...',
+      ),
+    );
+
+    if (sessionId == null) {
+      await _attachWorkspaceSession(state.selectedLesson);
+      return;
+    }
+
+    try {
+      final file = await _api.getWorkspaceFile(sessionId: sessionId);
+      final editorShellUrl = await _api.workspaceEditorShellUrl(sessionId);
+      if (isClosed || state.workspaceSessionId != sessionId) {
+        return;
+      }
+      emit(
+        state.copyWith(
+          code: file.content,
+          editorShellUrl: editorShellUrl,
+          workspaceReady: true,
+          editorConnectionStatus: WorkspaceConnectionStatus.ready,
+          consoleConnectionStatus: WorkspaceConnectionStatus.ready,
+          scriptVersion: file.version,
+          statusMessage: 'Workspace connection refreshed.',
+        ),
+      );
+    } on BackendApiException {
+      await _attachWorkspaceSession(state.selectedLesson);
+    } catch (_) {
+      if (isClosed || state.workspaceSessionId != sessionId) {
+        return;
+      }
+      emit(
+        state.copyWith(
+          editorShellUrl: null,
+          workspaceReady: false,
+          editorConnectionStatus: WorkspaceConnectionStatus.failed,
+          consoleConnectionStatus: WorkspaceConnectionStatus.failed,
+          statusMessage:
+              'Workspace connection could not be refreshed. Check the backend services.',
+        ),
+      );
+    }
+  }
+
   Future<void> submit() async {
     if (!state.selectedLesson.backendEnabled) {
       emit(
@@ -2340,4 +2415,3 @@ Map<String, dynamic> _feedbackPayload(ExecutionStudentFeedback? feedback) {
     'hint_level': feedback.hintLevel,
   };
 }
-

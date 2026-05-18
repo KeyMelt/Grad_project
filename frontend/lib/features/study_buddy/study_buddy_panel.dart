@@ -46,36 +46,24 @@ class StudyBuddyPanel extends StatelessWidget {
           border: Border.all(color: AppTheme.borderLight),
         ),
         padding: const EdgeInsets.all(18),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final pinnedBriefHeight =
-                (constraints.maxHeight * 0.26).clamp(120.0, 188.0);
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _StudyBuddyHeader(
-                  lessonTitle: lesson.title,
-                  isDismissed: isDismissed,
-                  onDismiss: onDismiss,
-                  onReopen: onReopen,
-                  onRefresh: onRefresh,
-                ),
-                const SizedBox(height: 14),
-                ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: pinnedBriefHeight),
-                  child: _PinnedExerciseBrief(lesson: lesson),
-                ),
-                const SizedBox(height: 14),
-                Expanded(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
-                    child: _buildBody(),
-                  ),
-                ),
-              ],
-            );
-          },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _StudyBuddyHeader(
+              lessonTitle: lesson.title,
+              isDismissed: isDismissed,
+              onDismiss: onDismiss,
+              onReopen: onReopen,
+              onRefresh: onRefresh,
+            ),
+            const SizedBox(height: 14),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: _buildBody(),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -103,7 +91,12 @@ class StudyBuddyPanel extends StatelessWidget {
     } else {
       coachContent = _IdleContent(
         key: const ValueKey('study-buddy-idle'),
-        onRefresh: onRefresh,
+        onQuickRecap: () => onSendChatMessage(
+          'Give me a quick recap of the current exercise and what I should focus on next.',
+        ),
+        onFindBlocker: () => onSendChatMessage(
+          'Help me identify the most likely blocker in this exercise and ask me one diagnostic question.',
+        ),
       );
     }
 
@@ -117,10 +110,11 @@ class StudyBuddyPanel extends StatelessWidget {
   }
 }
 
-class _PinnedExerciseBrief extends StatelessWidget {
+class StudyBuddyExerciseBrief extends StatelessWidget {
   final LessonDefinition lesson;
 
-  const _PinnedExerciseBrief({
+  const StudyBuddyExerciseBrief({
+    super.key,
     required this.lesson,
   });
 
@@ -425,11 +419,13 @@ class _DismissedContent extends StatelessWidget {
 }
 
 class _IdleContent extends StatelessWidget {
-  final VoidCallback onRefresh;
+  final VoidCallback onQuickRecap;
+  final VoidCallback onFindBlocker;
 
   const _IdleContent({
     super.key,
-    required this.onRefresh,
+    required this.onQuickRecap,
+    required this.onFindBlocker,
   });
 
   @override
@@ -441,41 +437,48 @@ class _IdleContent extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppTheme.borderLight),
       ),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'AI Coach',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Study Buddy is pinned here and will surface prompts when your lesson activity suggests you may be stuck.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppTheme.textPrimary,
-                    height: 1.45,
-                  ),
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxHeight < 150;
+          return SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ActionChip(
-                  label: const Text('Quick recap'),
-                  onPressed: onRefresh,
+                Text(
+                  'AI Coach',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
                 ),
-                ActionChip(
-                  label: const Text('Find blocker'),
-                  onPressed: onRefresh,
+                if (!compact) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Study Buddy can recap the current exercise or help isolate a blocker.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppTheme.textPrimary,
+                          height: 1.35,
+                        ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ActionChip(
+                      label: const Text('Quick recap'),
+                      onPressed: onQuickRecap,
+                    ),
+                    ActionChip(
+                      label: const Text('Find blocker'),
+                      onPressed: onFindBlocker,
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -500,12 +503,12 @@ class _ActiveStudyBuddyContent extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final showCoach = constraints.maxHeight >= 300;
+        final showCoach = constraints.maxHeight >= 180;
         return Column(
           children: [
             if (showCoach) ...[
               Flexible(
-                flex: 5,
+                flex: 3,
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 220),
                   child: coachContent,
@@ -513,8 +516,8 @@ class _ActiveStudyBuddyContent extends StatelessWidget {
               ),
               const SizedBox(height: 12),
             ],
-            Flexible(
-              flex: showCoach ? 4 : 1,
+            Expanded(
+              flex: showCoach ? 7 : 1,
               child: _ChatSurface(
                 messages: chatMessages,
                 isLoading: isChatLoading,
