@@ -112,7 +112,6 @@ class AuthService:
         self._allow_legacy_password_sign_in = allow_legacy_password_sign_in
         self._lock = Lock()
         self._database.create_schema()
-        self._backfill_auth_users()
 
     def bootstrap_admin(
         self,
@@ -423,9 +422,6 @@ class AuthService:
         ensure_record = getattr(self._progress_service, "ensure_student_record", None)
         if callable(ensure_record):
             ensure_record(student_id=student_id, display_name=display_name)
-
-    def _backfill_auth_users(self) -> None:
-        pass  # StudentProgressRecord table removed; nothing to backfill from
 
     def _serialize_user(self, user: AuthUser) -> dict[str, Any]:
         return {

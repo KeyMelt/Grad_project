@@ -104,6 +104,7 @@ class GatewaySettings:
     visualization_output_dir: Path
     concept_video_dir: Path
     cors_allowed_origins: list[str]
+    cors_allow_local_regex: bool
     auth_token_secret: str
     auth_token_ttl_seconds: int
     shell_token_secret: str
@@ -118,6 +119,7 @@ class GatewaySettings:
         firebase_credentials = env_str("RL_IDE_FIREBASE_CREDENTIALS_PATH") or None
         bootstrap_uid = env_str("RL_IDE_BOOTSTRAP_ADMIN_FIREBASE_UID") or None
         cors_origins = env_csv("RL_IDE_ALLOWED_ORIGINS")
+        explicit_origins_configured = bool(cors_origins)
         if not cors_origins:
             cors_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
         return cls(
@@ -148,6 +150,7 @@ class GatewaySettings:
                 "backend/media/concept_videos",
             ),
             cors_allowed_origins=cors_origins,
+            cors_allow_local_regex=not explicit_origins_configured,
             auth_token_secret=runtime_secret("RL_IDE_AUTH_TOKEN_SECRET"),
             auth_token_ttl_seconds=env_int("RL_IDE_AUTH_TOKEN_TTL_SECONDS", 43_200),
             shell_token_secret=runtime_secret("RL_IDE_SHELL_TOKEN_SECRET"),

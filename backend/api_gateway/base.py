@@ -226,7 +226,7 @@ def create_app(services: ServiceContainer | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_allowed_origins,
-        allow_origin_regex=_LOCAL_DEV_CORS_ORIGIN_REGEX,
+        allow_origin_regex=_LOCAL_DEV_CORS_ORIGIN_REGEX if settings.cors_allow_local_regex else None,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -238,6 +238,14 @@ def create_app(services: ServiceContainer | None = None) -> FastAPI:
     @app.get("/")
     def read_root():
         return {"status": "Backend is running"}
+
+    @app.get("/health")
+    def health():
+        return {"status": "ok"}
+
+    @app.get("/ready")
+    def ready():
+        return {"status": "ready"}
 
     app.include_router(build_lessons_router(svc))
     app.include_router(build_concept_videos_router())

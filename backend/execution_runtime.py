@@ -124,25 +124,9 @@ def _execution_worker(submission_payload: dict[str, Any], queue: multiprocessing
 
 def _run_execution_pipeline(submission_payload: dict[str, Any]) -> dict[str, Any]:
     """Validate code, execute the lesson environment, and package replay output."""
-    validator = CodeValidator()
-    feedback_service = StudentFeedbackService()
-    settings = ExecutionSettings.from_env()
-    lesson = get_lesson_definition(submission_payload["lesson_id"])
-    if lesson is None:
-        raise ExecutionPipelineError(
-            status_code=404,
-            detail=f"Unknown lesson '{submission_payload['lesson_id']}'.",
-        )
-
-    logger = EventLogger(log_dir=settings.logger_dir)
-    visualization_output_dir = os.path.abspath(settings.visualization_output_dir)
-    visualizer = VisualizationService(output_dir=visualization_output_dir)
-    adapter = _create_environment_adapter(
-        lesson=lesson,
-        lesson_id=submission_payload["lesson_id"],
-        visualization_output_dir=visualization_output_dir,
+    validator, feedback_service, lesson, logger, visualizer, adapter = _validate_and_prepare(
+        submission_payload
     )
-
     try:
         validation_result = _validate_submission_code(
             validator=validator,
@@ -159,7 +143,46 @@ def _run_execution_pipeline(submission_payload: dict[str, Any]) -> dict[str, Any
         )
     finally:
         adapter.close()
+    return _package_results(
+        lesson=lesson,
+        logger=logger,
+        visualizer=visualizer,
+        validation_result=validation_result,
+        submission_payload=submission_payload,
+    )
 
+
+def _validate_and_prepare(
+    submission_payload: dict[str, Any],
+) -> tuple[CodeValidator, StudentFeedbackService, Any, EventLogger, VisualizationService, EnvironmentAdapter]:
+    validator = CodeValidator()
+    feedback_service = StudentFeedbackService()
+    settings = ExecutionSettings.from_env()
+    lesson = get_lesson_definition(submission_payload["lesson_id"])
+    if lesson is None:
+        raise ExecutionPipelineError(
+            status_code=404,
+            detail=f"Unknown lesson '{submission_payload['lesson_id']}'.",
+        )
+    logger = EventLogger(log_dir=settings.logger_dir)
+    visualization_output_dir = os.path.abspath(settings.visualization_output_dir)
+    visualizer = VisualizationService(output_dir=visualization_output_dir)
+    adapter = _create_environment_adapter(
+        lesson=lesson,
+        lesson_id=submission_payload["lesson_id"],
+        visualization_output_dir=visualization_output_dir,
+    )
+    return validator, feedback_service, lesson, logger, visualizer, adapter
+
+
+def _package_results(
+    *,
+    lesson: Any,
+    logger: EventLogger,
+    visualizer: VisualizationService,
+    validation_result: Any,
+    submission_payload: dict[str, Any],
+) -> dict[str, Any]:
     log_data = logger.get_logs()
     video_path = visualizer.generate_animation(log_data, submission_payload["lesson_id"])
     return _build_success_response(
