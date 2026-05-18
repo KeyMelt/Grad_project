@@ -631,6 +631,7 @@ class ActionBarChart(VGroup):
         super().__init__()
         n = len(actions)
         self._trackers = [ValueTracker(v) for v in values]
+        self._opacity_trackers = [ValueTracker(0.88) for _ in values]
         self._n = n
         bar_area_height = height * 0.62
         bar_width = width / (n * 1.6)
@@ -650,19 +651,21 @@ class ActionBarChart(VGroup):
         self._bars: list[Mobject] = []
         self._val_labels: list[Mobject] = []
 
-        for i, (action, tracker) in enumerate(zip(actions, self._trackers)):
+        for i, (action, tracker, op_tracker) in enumerate(
+            zip(actions, self._trackers, self._opacity_trackers)
+        ):
             # x position relative to bg, so bars follow when chart is moved
             rel_x = -width / 2 + width * (i + 0.5) / n
             bottom_rel_y = -height / 2 + 0.38
 
             bar = always_redraw(
-                lambda t=tracker, ref=bg, rx=rel_x, bry=bottom_rel_y,
+                lambda t=tracker, ot=op_tracker, ref=bg, rx=rel_x, bry=bottom_rel_y,
                 bw=bar_width, bah=bar_area_height, bc=bar_color:
                 Rectangle(
                     width=bw,
                     height=max(0.02, t.get_value() * bah),
                     fill_color=bc,
-                    fill_opacity=0.88,
+                    fill_opacity=ot.get_value(),
                     stroke_width=0,
                 ).move_to([
                     ref.get_center()[0] + rx,
@@ -704,11 +707,15 @@ class ActionBarChart(VGroup):
     def highlight_bar(self, idx: int) -> Indicate:
         return Indicate(self._bars[idx], color=YELLOW, scale_factor=1.15)
 
+    @property
+    def bars(self) -> list[Mobject]:
+        return self._bars
+
     def dim_all(self) -> list:
-        return [b.animate.set_opacity(OPACITY_SECONDARY) for b in self._bars]
+        return [ot.animate.set_value(OPACITY_SECONDARY) for ot in self._opacity_trackers]
 
     def reset_all(self) -> list:
-        return [b.animate.set_opacity(OPACITY_PRIMARY) for b in self._bars]
+        return [ot.animate.set_value(0.88) for ot in self._opacity_trackers]
 
 
 # ---------------------------------------------------------------------------
