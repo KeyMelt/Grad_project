@@ -63,50 +63,53 @@ class StudyBuddyService:
                 if record is not None
             ]
             for record in records:
-                self.mastery_service.record_event_evidence(session, record)
-                triggers = self.trigger_service.evaluate_event(session, record)
-                decision = self.coordinator.select(session, triggers)
-                if decision is None:
-                    continue
-                context = self.context_assembler.assemble(session, decision)
-                raw_intervention, metadata = self.llm_service.generate(context)
-                fallback = self.llm_service.fallback_intervention(context)
-                reflection = self.reflection_service.reflect(
-                    intervention=raw_intervention,
-                    fallback=fallback,
-                    lesson_id=decision.trigger.lesson_id,
-                )
-                response_payload = reflection.intervention.model_dump(mode="json")
-                response_payload["observability"] = {
-                    **metadata,
-                    "reflection_note": reflection.note,
-                }
-                intervention_record = StudyBuddyInterventionRecord(
-                    student_id=decision.trigger.student_id,
-                    lesson_id=decision.trigger.lesson_id,
-                    concept_id=decision.trigger.concept_id,
-                    session_id=decision.trigger.session_id,
-                    trigger_type=decision.trigger.trigger_type,
-                    trigger_score=decision.trigger.trigger_score,
-                    intervention_type=reflection.intervention.intervention_type,
-                    status="ready",
-                    llm_model=metadata.get("model"),
-                    prompt_version=metadata.get("prompt_version", "deterministic_v1"),
-                    context_hash=context.stable_hash(),
-                    response_json=json.dumps(
-                        response_payload,
-                        sort_keys=True,
-                        separators=(",", ":"),
-                    ),
-                    reflection_pass_result=reflection.pass_result,
-                )
-                session.add(intervention_record)
-                self.mastery_service.record_intervention_evidence(
-                    session,
-                    intervention_record,
-                )
+                self._process_single_event(session, record)
             session.commit()
         return event_ids
+
+    def _process_single_event(self, session: Any, record: LearningInteractionEvent) -> None:
+        self.mastery_service.record_event_evidence(session, record)
+        triggers = self.trigger_service.evaluate_event(session, record)
+        decision = self.coordinator.select(session, triggers)
+        if decision is None:
+            return
+        intervention_record = self._generate_intervention(session, decision)
+        session.add(intervention_record)
+        self.mastery_service.record_intervention_evidence(session, intervention_record)
+
+    def _generate_intervention(self, session: Any, decision: Any) -> StudyBuddyInterventionRecord:
+        context = self.context_assembler.assemble(session, decision)
+        raw_intervention, metadata = self.llm_service.generate(context)
+        fallback = self.llm_service.fallback_intervention(context)
+        reflection = self.reflection_service.reflect(
+            intervention=raw_intervention,
+            fallback=fallback,
+            lesson_id=decision.trigger.lesson_id,
+        )
+        response_payload = reflection.intervention.model_dump(mode="json")
+        response_payload["observability"] = {
+            **metadata,
+            "reflection_note": reflection.note,
+        }
+        return StudyBuddyInterventionRecord(
+            student_id=decision.trigger.student_id,
+            lesson_id=decision.trigger.lesson_id,
+            concept_id=decision.trigger.concept_id,
+            session_id=decision.trigger.session_id,
+            trigger_type=decision.trigger.trigger_type,
+            trigger_score=decision.trigger.trigger_score,
+            intervention_type=reflection.intervention.intervention_type,
+            status="ready",
+            llm_model=metadata.get("model"),
+            prompt_version=metadata.get("prompt_version", "deterministic_v1"),
+            context_hash=context.stable_hash(),
+            response_json=json.dumps(
+                response_payload,
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+            reflection_pass_result=reflection.pass_result,
+        )
 
     def pending_intervention(self, session_id: str) -> dict | None:
         with self._database.session() as session:
