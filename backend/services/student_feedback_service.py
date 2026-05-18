@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from backend.lessons import LessonDefinition
+from backend.services.env_loader import load_local_env
 
 FailureKind = Literal[
     "incomplete_template",
@@ -34,6 +35,7 @@ class StudentFeedbackService:
         model: str | None = None,
         timeout_seconds: float | None = None,
     ) -> None:
+        load_local_env()
         self.enabled = (
             enabled
             if enabled is not None

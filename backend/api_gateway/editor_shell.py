@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import json
 
-def build_editor_shell_html() -> str:
-    return """<!DOCTYPE html>
+
+def build_editor_shell_html(*, session_id: str, shell_token: str) -> str:
+    session_id_literal = json.dumps(session_id)
+    shell_token_literal = json.dumps(shell_token)
+    template = """<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -124,17 +128,12 @@ def build_editor_shell_html() -> str:
     <script src="/static/vendor/xterm/lib/xterm.js"></script>
     <script src="/static/vendor/monaco-editor/min/vs/loader.js"></script>
     <script>
-      const params = new URLSearchParams(window.location.search);
-      const sessionId = params.get("session_id");
+      const sessionId = __SESSION_ID_LITERAL__;
+      const shellToken = __SHELL_TOKEN_LITERAL__;
       const filePath = "script.py";
       const saveStatus = document.getElementById("save-status");
       const consoleStatus = document.getElementById("console-status");
       const runButton = document.getElementById("run-button");
-
-      if (!sessionId) {
-        document.body.innerHTML = "<div style='padding:24px;color:#fecaca'>Missing workspace session_id.</div>";
-        throw new Error("Missing session_id");
-      }
 
       const term = new Terminal({
         theme: {
@@ -170,7 +169,7 @@ def build_editor_shell_html() -> str:
       }
 
       async function loadFile() {
-        const response = await fetch(`/workspace/sessions/${sessionId}/files/${filePath}`);
+        const response = await fetch(`/workspace/sessions/${sessionId}/files/${filePath}?shell_token=${encodeURIComponent(shellToken)}`);
         if (!response.ok) {
           throw new Error("Unable to load workspace file.");
         }
@@ -180,7 +179,7 @@ def build_editor_shell_html() -> str:
       }
 
       async function saveFile(content) {
-        const response = await fetch(`/workspace/sessions/${sessionId}/files/${filePath}`, {
+        const response = await fetch(`/workspace/sessions/${sessionId}/files/${filePath}?shell_token=${encodeURIComponent(shellToken)}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ content }),
@@ -215,7 +214,7 @@ def build_editor_shell_html() -> str:
 
       function connectConsole() {
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        ws = new WebSocket(`${protocol}//${window.location.host}/workspace/sessions/${sessionId}/console`);
+        ws = new WebSocket(`${protocol}//${window.location.host}/workspace/sessions/${sessionId}/console?shell_token=${encodeURIComponent(shellToken)}`);
         ws.onopen = () => setConsoleStatus("Console: ready", "ok");
         ws.onclose = () => setConsoleStatus("Console: disconnected", "error");
         ws.onerror = () => setConsoleStatus("Console: failed", "error");
@@ -339,7 +338,7 @@ def build_editor_shell_html() -> str:
       runButton.addEventListener("click", async () => {
         runButton.disabled = true;
         try {
-          const response = await fetch(`/workspace/sessions/${sessionId}/run`, { method: "POST" });
+          const response = await fetch(`/workspace/sessions/${sessionId}/run?shell_token=${encodeURIComponent(shellToken)}`, { method: "POST" });
           if (!response.ok) {
             throw new Error("Unable to start run.");
           }
@@ -365,3 +364,9 @@ def build_editor_shell_html() -> str:
   </body>
 </html>
 """
+    return (
+        template.replace("__SESSION_ID_LITERAL__", session_id_literal).replace(
+            "__SHELL_TOKEN_LITERAL__",
+            shell_token_literal,
+        )
+    )

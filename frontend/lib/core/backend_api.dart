@@ -14,9 +14,9 @@ class BackendConnectionManager extends ChangeNotifier {
   static final BackendConnectionManager _instance =
       BackendConnectionManager._internal();
   factory BackendConnectionManager() => _instance;
-  BackendConnectionManager._internal();
+  BackendConnectionManager._internal() : _baseUrl = defaultBackendBaseUrl;
 
-  String _baseUrl = defaultBackendBaseUrl;
+  String _baseUrl;
   WorkspaceConnectionStatus _status = WorkspaceConnectionStatus.disconnected;
   String? _lastError;
   Timer? _healthTimer;
@@ -30,7 +30,7 @@ class BackendConnectionManager extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final savedUrl = prefs.getString(AppConstants.backendUrlPreferenceKey);
     if (savedUrl != null && savedUrl.isNotEmpty) {
-      _baseUrl = savedUrl;
+      _baseUrl = _normalizeBackendUrl(savedUrl);
     }
     notifyListeners();
     unawaited(checkHealth());
@@ -38,7 +38,9 @@ class BackendConnectionManager extends ChangeNotifier {
       AppConstants.backendHealthInterval,
       (_) => checkHealth(),
     );
-    unawaited(_autoDiscover());
+    if (_shouldAutoDiscoverBackend(savedUrl: savedUrl)) {
+      unawaited(_autoDiscover());
+    }
   }
 
   Future<void> _autoDiscover() async {
@@ -105,10 +107,57 @@ class BackendConnectionManager extends ChangeNotifier {
   }
 }
 
-const String defaultBackendBaseUrl = String.fromEnvironment(
-  'BACKEND_BASE_URL',
-  defaultValue: AppConstants.defaultBackendLocalUrl,
-);
+const String _configuredBackendBaseUrl =
+    String.fromEnvironment('BACKEND_BASE_URL', defaultValue: '');
+
+String get defaultBackendBaseUrl => resolveBackendBaseUrl(
+      configuredBaseUrl: _configuredBackendBaseUrl,
+      isWeb: kIsWeb,
+      isReleaseMode: kReleaseMode,
+      currentUri: kIsWeb ? Uri.base : null,
+    );
+
+@visibleForTesting
+String resolveBackendBaseUrl({
+  required String configuredBaseUrl,
+  required bool isWeb,
+  required bool isReleaseMode,
+  Uri? currentUri,
+}) {
+  final configured = configuredBaseUrl.trim();
+  if (configured.isNotEmpty) {
+    return _normalizeBackendUrl(configured);
+  }
+
+  if (!isWeb) {
+    return AppConstants.defaultBackendLocalUrl;
+  }
+
+  final runtimeUri = currentUri ?? Uri.base;
+  final host = runtimeUri.host.toLowerCase();
+  if (_isLocalDevelopmentHost(host)) {
+    return Uri(
+      scheme: 'http',
+      host: _normalizeLocalHost(host),
+      port: AppConstants.defaultBackendPort,
+    ).toString();
+  }
+
+  return _originWithoutTrailingSlash(runtimeUri);
+}
+
+bool _shouldAutoDiscoverBackend({required String? savedUrl}) {
+  if (savedUrl != null && savedUrl.trim().isNotEmpty) {
+    return false;
+  }
+  if (_configuredBackendBaseUrl.trim().isNotEmpty) {
+    return false;
+  }
+  if (!kIsWeb) {
+    return true;
+  }
+  return _isLocalDevelopmentHost(Uri.base.host.toLowerCase());
+}
 
 String _normalizeBackendUrl(String rawUrl) {
   var sanitized = rawUrl.trim();
@@ -119,6 +168,65 @@ String _normalizeBackendUrl(String rawUrl) {
     sanitized = sanitized.substring(0, sanitized.length - 1);
   }
   return sanitized;
+}
+
+String _originWithoutTrailingSlash(Uri uri) {
+  final origin = uri.origin;
+  return origin.endsWith('/') ? origin.substring(0, origin.length - 1) : origin;
+}
+
+bool _isLocalDevelopmentHost(String host) {
+  if (host.isEmpty ||
+      host == 'localhost' ||
+      host == '127.0.0.1' ||
+      host == '0.0.0.0' ||
+      host == '::1' ||
+      host == '[::1]' ||
+      host == '::' ||
+      host == '[::]') {
+    return true;
+  }
+
+  if (host.endsWith('.local')) {
+    return true;
+  }
+
+  final ipv4Match =
+      RegExp(r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$').firstMatch(host);
+  if (ipv4Match == null) {
+    return false;
+  }
+
+  final octets = ipv4Match
+      .groups([1, 2, 3, 4])
+      .whereType<String>()
+      .map(int.parse)
+      .toList();
+  if (octets.any((octet) => octet < 0 || octet > 255)) {
+    return false;
+  }
+
+  return octets[0] == 10 ||
+      (octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31) ||
+      (octets[0] == 192 && octets[1] == 168);
+}
+
+String _normalizeLocalHost(String host) {
+  switch (host) {
+    case '':
+    case '0.0.0.0':
+    case '::':
+    case '[::]':
+    case '::1':
+    case '[::1]':
+      return '127.0.0.1';
+    default:
+      return host;
+  }
+}
+
+class AuthSessionStore {
+  static String? accessToken;
 }
 
 class BackendApiException implements Exception {
@@ -197,16 +305,19 @@ ExecutionTaskStatus _parseTaskStatus(String? value) {
 class LearnerProfile {
   final String id;
   final String displayName;
+  final String platformRole;
 
   const LearnerProfile({
     required this.id,
     required this.displayName,
+    required this.platformRole,
   });
 
   factory LearnerProfile.fromJson(Map<String, dynamic> json) {
     return LearnerProfile(
       id: json['id'] as String? ?? '',
       displayName: json['display_name'] as String? ?? 'Student',
+      platformRole: (json['role'] as String? ?? 'student').toLowerCase(),
     );
   }
 }
@@ -303,6 +414,29 @@ class LearnerDashboard {
       progress: LearnerProgress.fromJson(
         (json['progress'] as Map<String, dynamic>?) ?? const {},
       ),
+    );
+  }
+}
+
+class StaffStudentSummary {
+  final String id;
+  final String displayName;
+  final String role;
+  final String status;
+
+  const StaffStudentSummary({
+    required this.id,
+    required this.displayName,
+    required this.role,
+    required this.status,
+  });
+
+  factory StaffStudentSummary.fromJson(Map<String, dynamic> json) {
+    return StaffStudentSummary(
+      id: json['id'] as String? ?? '',
+      displayName: json['display_name'] as String? ?? 'Student',
+      role: (json['role'] as String? ?? 'student').toLowerCase(),
+      status: (json['status'] as String? ?? 'active').toLowerCase(),
     );
   }
 }
@@ -782,6 +916,400 @@ class NGainMetricsExport {
   });
 }
 
+class LearningAnalyticsExport {
+  final String fileName;
+  final List<int> bytes;
+
+  const LearningAnalyticsExport({
+    required this.fileName,
+    required this.bytes,
+  });
+}
+
+class LearningTelemetryEvent {
+  final String lessonId;
+  final String? conceptId;
+  final String sessionId;
+  final String eventType;
+  final DateTime occurredAtUtc;
+  final Map<String, dynamic> payloadJson;
+  final String sourceVersion;
+
+  const LearningTelemetryEvent({
+    required this.lessonId,
+    required this.conceptId,
+    required this.sessionId,
+    required this.eventType,
+    required this.occurredAtUtc,
+    required this.payloadJson,
+    this.sourceVersion = 'study_buddy_v1_flutter',
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'lesson_id': lessonId,
+      if (conceptId != null) 'concept_id': conceptId,
+      'session_id': sessionId,
+      'event_type': eventType,
+      'occurred_at_utc': occurredAtUtc.toUtc().toIso8601String(),
+      'payload_json': payloadJson,
+      'source_version': sourceVersion,
+    };
+  }
+}
+
+class LearningTelemetryClient {
+  final BackendApi _api;
+  final Duration flushInterval;
+  final int maxBufferSize;
+  final List<LearningTelemetryEvent> _buffer = [];
+  Timer? _flushTimer;
+  Timer? _retryTimer;
+  bool _flushInProgress = false;
+  bool _disposed = false;
+  int _consecutiveFailures = 0;
+
+  LearningTelemetryClient({
+    required BackendApi api,
+    this.flushInterval = const Duration(seconds: 10),
+    this.maxBufferSize = 200,
+    bool autoStart = true,
+  }) : _api = api {
+    if (autoStart) {
+      start();
+    }
+  }
+
+  int get pendingCount => _buffer.length;
+
+  void start() {
+    if (_disposed || _flushTimer != null) {
+      return;
+    }
+    _flushTimer = Timer.periodic(
+      flushInterval,
+      (_) => unawaited(flush()),
+    );
+  }
+
+  void record(LearningTelemetryEvent event) {
+    if (_disposed) {
+      return;
+    }
+    while (_buffer.length >= maxBufferSize) {
+      _buffer.removeAt(0);
+    }
+    _buffer.add(event);
+  }
+
+  Future<void> flush({bool retryOnFailure = true}) async {
+    if (_disposed || _flushInProgress || _buffer.isEmpty) {
+      return;
+    }
+
+    _flushInProgress = true;
+    final batch = List<LearningTelemetryEvent>.from(_buffer);
+    try {
+      await _api.submitTelemetryBatch(events: batch);
+      for (final event in batch) {
+        _buffer.remove(event);
+      }
+      _consecutiveFailures = 0;
+      _retryTimer?.cancel();
+      _retryTimer = null;
+    } catch (_) {
+      _consecutiveFailures += 1;
+      if (retryOnFailure) {
+        _scheduleRetry();
+      }
+    } finally {
+      _flushInProgress = false;
+    }
+  }
+
+  Future<void> dispose() async {
+    _flushTimer?.cancel();
+    _retryTimer?.cancel();
+    await flush(retryOnFailure: false);
+    _disposed = true;
+  }
+
+  void _scheduleRetry() {
+    if (_disposed || (_retryTimer?.isActive ?? false)) {
+      return;
+    }
+    final cappedFailures = _consecutiveFailures > 6 ? 6 : _consecutiveFailures;
+    final seconds = 1 << (cappedFailures - 1);
+    _retryTimer = Timer(
+      Duration(seconds: seconds),
+      () => unawaited(flush()),
+    );
+  }
+}
+
+class StudyBuddyInterventionContent {
+  final String interventionType;
+  final String title;
+  final String message;
+  final String diagnosticQuestion;
+  final List<String> choices;
+  final String? checkpoint;
+  final String nextStep;
+  final List<String> conceptIds;
+  final String solutionLeakageRisk;
+
+  const StudyBuddyInterventionContent({
+    required this.interventionType,
+    required this.title,
+    required this.message,
+    required this.diagnosticQuestion,
+    required this.choices,
+    required this.checkpoint,
+    required this.nextStep,
+    required this.conceptIds,
+    required this.solutionLeakageRisk,
+  });
+
+  factory StudyBuddyInterventionContent.fromJson(Map<String, dynamic> json) {
+    return StudyBuddyInterventionContent(
+      interventionType: json['intervention_type'] as String? ?? '',
+      title: json['title'] as String? ?? 'Study Buddy',
+      message: json['message'] as String? ?? '',
+      diagnosticQuestion: json['diagnostic_question'] as String? ?? '',
+      choices: (json['choices'] as List<dynamic>? ?? const [])
+          .map((value) => value.toString())
+          .toList(growable: false),
+      checkpoint: json['checkpoint'] as String?,
+      nextStep: json['next_step'] as String? ?? '',
+      conceptIds: (json['concept_ids'] as List<dynamic>? ?? const [])
+          .map((value) => value.toString())
+          .toList(growable: false),
+      solutionLeakageRisk: json['solution_leakage_risk'] as String? ?? 'low',
+    );
+  }
+}
+
+class StudyBuddyIntervention {
+  final String id;
+  final String lessonId;
+  final String? conceptId;
+  final String sessionId;
+  final String triggerType;
+  final double triggerScore;
+  final String interventionType;
+  final String status;
+  final String promptVersion;
+  final String reflectionPassResult;
+  final StudyBuddyInterventionContent content;
+
+  const StudyBuddyIntervention({
+    required this.id,
+    required this.lessonId,
+    required this.conceptId,
+    required this.sessionId,
+    required this.triggerType,
+    required this.triggerScore,
+    required this.interventionType,
+    required this.status,
+    required this.promptVersion,
+    required this.reflectionPassResult,
+    required this.content,
+  });
+
+  factory StudyBuddyIntervention.fromJson(Map<String, dynamic> json) {
+    final response = (json['response'] as Map<String, dynamic>?) ?? const {};
+    return StudyBuddyIntervention(
+      id: json['id'] as String? ?? '',
+      lessonId: json['lesson_id'] as String? ?? '',
+      conceptId: json['concept_id'] as String?,
+      sessionId: json['session_id'] as String? ?? '',
+      triggerType: json['trigger_type'] as String? ?? '',
+      triggerScore: (json['trigger_score'] as num?)?.toDouble() ?? 0,
+      interventionType: json['intervention_type'] as String? ?? '',
+      status: json['status'] as String? ?? '',
+      promptVersion: json['prompt_version'] as String? ?? '',
+      reflectionPassResult: json['reflection_pass_result'] as String? ?? '',
+      content: StudyBuddyInterventionContent.fromJson(response),
+    );
+  }
+}
+
+class StudyBuddyChatMessage {
+  final String role;
+  final String content;
+
+  const StudyBuddyChatMessage({
+    required this.role,
+    required this.content,
+  });
+
+  bool get isUser => role == 'user';
+
+  Map<String, dynamic> toJson() {
+    return {
+      'role': role,
+      'content': content,
+    };
+  }
+
+  factory StudyBuddyChatMessage.fromJson(Map<String, dynamic> json) {
+    return StudyBuddyChatMessage(
+      role: json['role'] as String? ?? 'assistant',
+      content: json['content'] as String? ?? '',
+    );
+  }
+}
+
+class StudyBuddyChatResponse {
+  final StudyBuddyChatMessage message;
+  final bool usedFallback;
+  final String? suggestedNextStep;
+  final List<String> conceptIds;
+  final String solutionLeakageRisk;
+  final Map<String, dynamic> observability;
+
+  const StudyBuddyChatResponse({
+    required this.message,
+    required this.usedFallback,
+    required this.suggestedNextStep,
+    required this.conceptIds,
+    required this.solutionLeakageRisk,
+    required this.observability,
+  });
+
+  factory StudyBuddyChatResponse.fromJson(Map<String, dynamic> json) {
+    final message = json['message'];
+    return StudyBuddyChatResponse(
+      message: StudyBuddyChatMessage.fromJson(
+        message is Map<String, dynamic>
+            ? message
+            : {
+                'role': 'assistant',
+                'content': json['reply'] as String? ?? '',
+              },
+      ),
+      usedFallback: json['used_fallback'] as bool? ?? false,
+      suggestedNextStep: json['suggested_next_step'] as String?,
+      conceptIds: (json['concept_ids'] as List<dynamic>? ?? const [])
+          .map((value) => value.toString())
+          .toList(growable: false),
+      solutionLeakageRisk: json['solution_leakage_risk'] as String? ?? 'low',
+      observability:
+          (json['observability'] as Map<String, dynamic>?) ?? const {},
+    );
+  }
+}
+
+class StudyBuddyMasterySnapshot {
+  final String id;
+  final String lessonId;
+  final String conceptId;
+  final double masteryScore;
+  final double supportNeedScore;
+  final double confidenceScore;
+  final int stalenessDays;
+  final Map<String, dynamic> evidenceSummary;
+  final DateTime? recordedAtUtc;
+
+  const StudyBuddyMasterySnapshot({
+    required this.id,
+    required this.lessonId,
+    required this.conceptId,
+    required this.masteryScore,
+    required this.supportNeedScore,
+    required this.confidenceScore,
+    required this.stalenessDays,
+    required this.evidenceSummary,
+    required this.recordedAtUtc,
+  });
+
+  bool get isLowConfidence => confidenceScore < 0.30;
+
+  factory StudyBuddyMasterySnapshot.fromJson(Map<String, dynamic> json) {
+    return StudyBuddyMasterySnapshot(
+      id: json['id'] as String? ?? '',
+      lessonId: json['lesson_id'] as String? ?? '',
+      conceptId: json['concept_id'] as String? ?? '',
+      masteryScore: (json['mastery_score'] as num?)?.toDouble() ?? 0.50,
+      supportNeedScore: (json['support_need_score'] as num?)?.toDouble() ?? 0.0,
+      confidenceScore: (json['confidence_score'] as num?)?.toDouble() ?? 0.10,
+      stalenessDays: (json['staleness_days'] as num?)?.toInt() ?? 0,
+      evidenceSummary:
+          (json['evidence_summary'] as Map<String, dynamic>?) ?? const {},
+      recordedAtUtc:
+          DateTime.tryParse(json['recorded_at_utc'] as String? ?? ''),
+    );
+  }
+}
+
+class StudyBuddyReviewRecommendation {
+  final String conceptId;
+  final String lessonId;
+  final double masteryScore;
+  final double supportNeedScore;
+  final double confidenceScore;
+  final int stalenessDays;
+  final double reviewPriority;
+
+  const StudyBuddyReviewRecommendation({
+    required this.conceptId,
+    required this.lessonId,
+    required this.masteryScore,
+    required this.supportNeedScore,
+    required this.confidenceScore,
+    required this.stalenessDays,
+    required this.reviewPriority,
+  });
+
+  factory StudyBuddyReviewRecommendation.fromJson(Map<String, dynamic> json) {
+    return StudyBuddyReviewRecommendation(
+      conceptId: json['concept_id'] as String? ?? '',
+      lessonId: json['lesson_id'] as String? ?? '',
+      masteryScore: (json['mastery_score'] as num?)?.toDouble() ?? 0.50,
+      supportNeedScore: (json['support_need_score'] as num?)?.toDouble() ?? 0.0,
+      confidenceScore: (json['confidence_score'] as num?)?.toDouble() ?? 0.10,
+      stalenessDays: (json['staleness_days'] as num?)?.toInt() ?? 0,
+      reviewPriority: (json['review_priority'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
+class StudyBuddySummary {
+  final List<StudyBuddyMasterySnapshot> masterySnapshots;
+  final StudyBuddyReviewRecommendation? reviewRecommendation;
+  final List<StudyBuddyIntervention> recentInterventions;
+
+  const StudyBuddySummary({
+    required this.masterySnapshots,
+    required this.reviewRecommendation,
+    required this.recentInterventions,
+  });
+
+  const StudyBuddySummary.empty()
+      : masterySnapshots = const [],
+        reviewRecommendation = null,
+        recentInterventions = const [];
+
+  factory StudyBuddySummary.fromJson(Map<String, dynamic> json) {
+    final recommendation = json['review_recommendation'];
+    return StudyBuddySummary(
+      masterySnapshots:
+          (json['mastery_snapshots'] as List<dynamic>? ?? const [])
+              .whereType<Map<String, dynamic>>()
+              .map(StudyBuddyMasterySnapshot.fromJson)
+              .toList(growable: false),
+      reviewRecommendation: recommendation is Map<String, dynamic>
+          ? StudyBuddyReviewRecommendation.fromJson(recommendation)
+          : null,
+      recentInterventions:
+          (json['recent_interventions'] as List<dynamic>? ?? const [])
+              .whereType<Map<String, dynamic>>()
+              .map(StudyBuddyIntervention.fromJson)
+              .toList(growable: false),
+    );
+  }
+}
+
 abstract class BackendApi {
   Future<List<LessonSection>> fetchLessonSections();
 
@@ -791,17 +1319,19 @@ abstract class BackendApi {
     String? firebaseIdToken,
   });
 
-  Future<LearnerDashboard> getDashboard({
-    required String studentId,
-  });
+  Future<void> signOut() async {}
+
+  Future<LearnerDashboard> getDashboard();
+
+  Future<List<StaffStudentSummary>> fetchStaffStudents();
+
+  Future<LearnerDashboard> fetchStaffStudentDashboard(String studentId);
 
   Future<QuizSessionData> startQuiz({
-    required String studentId,
     required QuizPhase phase,
   });
 
   Future<QuizAttemptSummary> submitQuiz({
-    required String studentId,
     required String sessionId,
     required Map<String, int> answers,
   });
@@ -810,11 +1340,50 @@ abstract class BackendApi {
     required String lessonId,
     required String code,
     String? studentId,
+    String? sessionId,
   });
+
+  Future<void> submitTelemetryBatch({
+    required List<LearningTelemetryEvent> events,
+  }) async {}
+
+  Future<StudyBuddyIntervention?> fetchPendingStudyBuddyIntervention({
+    required String sessionId,
+  }) async {
+    return null;
+  }
+
+  Future<StudyBuddyIntervention?> respondToStudyBuddyIntervention({
+    required String interventionId,
+    required String response,
+  }) async {
+    return null;
+  }
+
+  Future<StudyBuddySummary?> fetchStudyBuddySummary() async {
+    return null;
+  }
+
+  Future<StudyBuddyChatResponse> sendStudyBuddyChat({
+    required String lessonId,
+    required String sessionId,
+    required String message,
+    required List<StudyBuddyChatMessage> history,
+    String? currentCode,
+    List<String> unresolvedBlanks = const [],
+    String? failureKind,
+    Map<String, dynamic> latestFeedback = const {},
+  }) {
+    throw UnimplementedError();
+  }
 
   Future<ExecutionTaskSnapshot> getTaskStatus(String taskId);
 
   Future<NGainMetricsExport> exportNGainMetrics();
+
+  Future<LearningAnalyticsExport> exportLearningAnalytics() {
+    throw UnimplementedError();
+  }
 
   Future<WorkspaceSessionData> createWorkspaceSession({
     required String lessonId,
@@ -844,7 +1413,11 @@ abstract class BackendApi {
     required String runId,
   });
 
-  String workspaceEditorShellUrl(String sessionId);
+  Future<String> workspaceEditorShellUrl(String sessionId);
+
+  String? get accessToken;
+
+  void clearAuthToken();
 
   Future<ExecutionResult> executeCode({
     required String lessonId,
@@ -892,6 +1465,7 @@ List<LessonSection> _groupLessonsByCategory(List<LessonDefinition> lessons) {
 
 class HttpBackendApi extends BackendApi {
   final http.Client _client;
+  String? _accessToken;
   String get baseUrl => BackendConnectionManager().baseUrl;
   static const Map<String, String> _jsonHeaders = {
     'Content-Type': 'application/json',
@@ -900,6 +1474,15 @@ class HttpBackendApi extends BackendApi {
   HttpBackendApi({
     http.Client? client,
   }) : _client = client ?? http.Client();
+
+  @override
+  String? get accessToken => _accessToken;
+
+  @override
+  void clearAuthToken() {
+    _accessToken = null;
+    AuthSessionStore.accessToken = null;
+  }
 
   @override
   Future<List<LessonSection>> fetchLessonSections() async {
@@ -942,26 +1525,49 @@ class HttpBackendApi extends BackendApi {
         if (firebaseIdToken != null) 'firebase_id_token': firebaseIdToken,
       },
     );
+    _accessToken = responseJson['access_token'] as String?;
+    AuthSessionStore.accessToken = _accessToken;
     return LearnerDashboard.fromJson(responseJson);
   }
 
   @override
-  Future<LearnerDashboard> getDashboard({
-    required String studentId,
-  }) async {
-    final responseJson = await _getJson('/students/$studentId/dashboard');
+  Future<void> signOut() async {
+    try {
+      await _postJson('/auth/sign-out', const {});
+    } catch (_) {}
+    _accessToken = null;
+    AuthSessionStore.accessToken = null;
+  }
+
+  @override
+  Future<LearnerDashboard> getDashboard() async {
+    final responseJson = await _getJson('/me/dashboard');
+    return LearnerDashboard.fromJson(responseJson);
+  }
+
+  @override
+  Future<List<StaffStudentSummary>> fetchStaffStudents() async {
+    final responseJson = await _getJson('/staff/students');
+    final students = responseJson['students'] as List<dynamic>? ?? const [];
+    return students
+        .whereType<Map<String, dynamic>>()
+        .map(StaffStudentSummary.fromJson)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<LearnerDashboard> fetchStaffStudentDashboard(String studentId) async {
+    final responseJson = await _getJson('/staff/students/$studentId/dashboard');
     return LearnerDashboard.fromJson(responseJson);
   }
 
   @override
   Future<QuizSessionData> startQuiz({
-    required String studentId,
     required QuizPhase phase,
   }) async {
     final responseJson = await _postJson(
       '/quiz/start',
       {
-        'student_id': studentId,
         'phase': quizPhaseApiValue(phase),
       },
     );
@@ -970,14 +1576,12 @@ class HttpBackendApi extends BackendApi {
 
   @override
   Future<QuizAttemptSummary> submitQuiz({
-    required String studentId,
     required String sessionId,
     required Map<String, int> answers,
   }) async {
     final responseJson = await _postJson(
       '/quiz/submit',
       {
-        'student_id': studentId,
         'session_id': sessionId,
         'answers': answers.entries
             .map(
@@ -997,16 +1601,96 @@ class HttpBackendApi extends BackendApi {
     required String lessonId,
     required String code,
     String? studentId,
+    String? sessionId,
   }) async {
     final responseJson = await _postJson(
       '/submit',
       {
         'lesson_id': lessonId,
         'code': code,
-        if (studentId != null) 'student_id': studentId,
+        if (sessionId != null) 'session_id': sessionId,
       },
     );
     return SubmittedExecutionTask.fromJson(responseJson);
+  }
+
+  @override
+  Future<void> submitTelemetryBatch({
+    required List<LearningTelemetryEvent> events,
+  }) async {
+    if (events.isEmpty) {
+      return;
+    }
+    await _postJson(
+      '/telemetry/events',
+      {
+        'events': events.map((event) => event.toJson()).toList(growable: false),
+      },
+    );
+  }
+
+  @override
+  Future<StudyBuddyIntervention?> fetchPendingStudyBuddyIntervention({
+    required String sessionId,
+  }) async {
+    final responseJson = await _getJson(
+      '/study-buddy/interventions/$sessionId/pending',
+    );
+    final intervention = responseJson['intervention'];
+    if (intervention is Map<String, dynamic>) {
+      return StudyBuddyIntervention.fromJson(intervention);
+    }
+    return null;
+  }
+
+  @override
+  Future<StudyBuddyIntervention?> respondToStudyBuddyIntervention({
+    required String interventionId,
+    required String response,
+  }) async {
+    final responseJson = await _postJson(
+      '/study-buddy/interventions/$interventionId/respond',
+      {'response': response},
+    );
+    final intervention = responseJson['intervention'];
+    if (intervention is Map<String, dynamic>) {
+      return StudyBuddyIntervention.fromJson(intervention);
+    }
+    return null;
+  }
+
+  @override
+  Future<StudyBuddySummary?> fetchStudyBuddySummary() async {
+    final responseJson = await _getJson('/me/study-buddy/summary');
+    return StudyBuddySummary.fromJson(responseJson);
+  }
+
+  @override
+  Future<StudyBuddyChatResponse> sendStudyBuddyChat({
+    required String lessonId,
+    required String sessionId,
+    required String message,
+    required List<StudyBuddyChatMessage> history,
+    String? currentCode,
+    List<String> unresolvedBlanks = const [],
+    String? failureKind,
+    Map<String, dynamic> latestFeedback = const {},
+  }) async {
+    final responseJson = await _postJson(
+      '/me/study-buddy/chat',
+      {
+        'lesson_id': lessonId,
+        'session_id': sessionId,
+        'message': message,
+        if (currentCode != null) 'current_code': currentCode,
+        'unresolved_blanks': unresolvedBlanks,
+        if (failureKind != null) 'failure_kind': failureKind,
+        'latest_feedback': latestFeedback,
+        'history':
+            history.map((entry) => entry.toJson()).toList(growable: false),
+      },
+    );
+    return StudyBuddyChatResponse.fromJson(responseJson);
   }
 
   @override
@@ -1019,6 +1703,7 @@ class HttpBackendApi extends BackendApi {
   Future<NGainMetricsExport> exportNGainMetrics() async {
     final response = await _client.get(
       Uri.parse('$baseUrl/admin/metrics/n-gain/export'),
+      headers: _authorizedHeaders(),
     );
 
     if (response.statusCode >= 400) {
@@ -1027,8 +1712,30 @@ class HttpBackendApi extends BackendApi {
 
     final fileName = _extractExportFileName(
       response.headers['content-disposition'],
+      fallback: 'n_gain_metrics.xlsx',
     );
     return NGainMetricsExport(
+      fileName: fileName,
+      bytes: response.bodyBytes,
+    );
+  }
+
+  @override
+  Future<LearningAnalyticsExport> exportLearningAnalytics() async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/admin/metrics/learning-analytics/export'),
+      headers: _authorizedHeaders(),
+    );
+
+    if (response.statusCode >= 400) {
+      throw _buildBackendException(_decodeBody(response.body));
+    }
+
+    final fileName = _extractExportFileName(
+      response.headers['content-disposition'],
+      fallback: 'learning_analytics.xlsx',
+    );
+    return LearningAnalyticsExport(
       fileName: fileName,
       bytes: response.bodyBytes,
     );
@@ -1104,25 +1811,43 @@ class HttpBackendApi extends BackendApi {
   }
 
   @override
-  String workspaceEditorShellUrl(String sessionId) {
-    final encodedSession = Uri.encodeComponent(sessionId);
-    return '$baseUrl/workspace/editor-shell?session_id=$encodedSession';
+  Future<String> workspaceEditorShellUrl(String sessionId) async {
+    final responseJson =
+        await _getJson('/workspace/sessions/$sessionId/editor-shell');
+    final rawUrl = responseJson['editor_shell_url'] as String?;
+    if (rawUrl == null || rawUrl.trim().isEmpty) {
+      throw const BackendApiException(
+        'Backend did not provide a workspace shell URL.',
+      );
+    }
+    return Uri.parse(baseUrl).resolve(rawUrl).toString();
   }
 
   Future<Map<String, dynamic>> _postJson(
     String path,
     Map<String, dynamic> payload,
   ) async {
-    final response = await _client.post(
-      Uri.parse('$baseUrl$path'),
-      headers: _jsonHeaders,
-      body: jsonEncode(payload),
-    );
+    final response = await _client
+        .post(
+          Uri.parse('$baseUrl$path'),
+          headers: _authorizedHeaders(_jsonHeaders),
+          body: jsonEncode(payload),
+        )
+        .timeout(
+          path == '/auth/sign-in'
+              ? AppConstants.backendAuthTimeout
+              : AppConstants.backendRequestTimeout,
+        );
     return _decodeAndValidateResponse(response);
   }
 
   Future<Map<String, dynamic>> _getJson(String path) async {
-    final response = await _client.get(Uri.parse('$baseUrl$path'));
+    final response = await _client
+        .get(
+          Uri.parse('$baseUrl$path'),
+          headers: _authorizedHeaders(),
+        )
+        .timeout(AppConstants.backendRequestTimeout);
     return _decodeAndValidateResponse(response);
   }
 
@@ -1131,12 +1856,25 @@ class HttpBackendApi extends BackendApi {
     Map<String, dynamic> body,
   ) async {
     final uri = Uri.parse('$baseUrl$path');
-    final response = await _client.put(
-      uri,
-      headers: _jsonHeaders,
-      body: jsonEncode(body),
-    );
+    final response = await _client
+        .put(
+          uri,
+          headers: _authorizedHeaders(_jsonHeaders),
+          body: jsonEncode(body),
+        )
+        .timeout(AppConstants.backendRequestTimeout);
     return _decodeAndValidateResponse(response);
+  }
+
+  Map<String, String> _authorizedHeaders([
+    Map<String, String> base = const {},
+  ]) {
+    final headers = <String, String>{...base};
+    final token = _accessToken;
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+    return headers;
   }
 
   Map<String, dynamic> _decodeAndValidateResponse(http.Response response) {
@@ -1161,9 +1899,12 @@ class HttpBackendApi extends BackendApi {
   }
 }
 
-String _extractExportFileName(String? contentDisposition) {
+String _extractExportFileName(
+  String? contentDisposition, {
+  required String fallback,
+}) {
   if (contentDisposition == null) {
-    return 'n_gain_metrics.xlsx';
+    return fallback;
   }
 
   final parts = contentDisposition.split(';');
@@ -1175,7 +1916,7 @@ String _extractExportFileName(String? contentDisposition) {
     }
   }
 
-  return 'n_gain_metrics.xlsx';
+  return fallback;
 }
 
 BackendApiException _buildBackendException(Map<String, dynamic> responseJson) {

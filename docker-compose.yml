@@ -12,8 +12,15 @@ services:
       RL_IDE_USER_SERVICE_MODE: remote
       RL_IDE_USER_SERVICE_URL: http://user-evaluation-service:8200
       RL_IDE_INTERNAL_TOKEN: ${RL_IDE_INTERNAL_TOKEN:-local-dev-internal-token}
+      RL_IDE_FIREBASE_CREDENTIALS_PATH: ${RL_IDE_FIREBASE_CREDENTIALS_PATH:-}
+      RL_IDE_FIREBASE_APP_NAME: ${RL_IDE_FIREBASE_APP_NAME:-rl-ide-backend}
+      RL_IDE_BOOTSTRAP_ADMIN_FIREBASE_UID: ${RL_IDE_BOOTSTRAP_ADMIN_FIREBASE_UID:-}
+      RL_IDE_BOOTSTRAP_ADMIN_DISPLAY_NAME: ${RL_IDE_BOOTSTRAP_ADMIN_DISPLAY_NAME:-Platform Admin}
+      RL_IDE_OPEN_PROVISIONING: ${RL_IDE_OPEN_PROVISIONING:-1}
+      RL_IDE_ALLOW_LEGACY_PASSWORD_SIGN_IN: ${RL_IDE_ALLOW_LEGACY_PASSWORD_SIGN_IN:-1}
     volumes:
       - .:${PROJECT_ROOT:-/Users/ultramarine/Desktop/grad_project}
+      - ${RL_IDE_FIREBASE_CREDENTIALS_PATH:-/tmp/firebase-adminsdk-missing.json}:${RL_IDE_FIREBASE_CREDENTIALS_PATH:-/tmp/firebase-adminsdk-missing.json}:ro
     ports:
       - "8000:8000"
     depends_on:
@@ -44,6 +51,7 @@ services:
       RL_IDE_WORKSPACE_USE_DOCKER: ${RL_IDE_WORKSPACE_USE_DOCKER:-1}
     volumes:
       - .:${PROJECT_ROOT:-/Users/ultramarine/Desktop/grad_project}
+      - ${RL_IDE_FIREBASE_CREDENTIALS_PATH:-/tmp/firebase-adminsdk-missing.json}:${RL_IDE_FIREBASE_CREDENTIALS_PATH:-/tmp/firebase-adminsdk-missing.json}:ro
       - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8100/"]
@@ -59,11 +67,12 @@ services:
     command: python -m backend.user_evaluation_service.main
     environment:
       RL_IDE_BACKEND_HOST: 0.0.0.0
-      RL_IDE_PROGRESS_BACKEND: ${RL_IDE_PROGRESS_BACKEND:-sql}
-      RL_IDE_FIREBASE_CREDENTIALS_PATH: ${RL_IDE_FIREBASE_CREDENTIALS_PATH:-}
+      RL_IDE_INTERNAL_TOKEN: ${RL_IDE_INTERNAL_TOKEN:-local-dev-internal-token}
+      RL_IDE_FIREBASE_CREDENTIALS_PATH: ${PROJECT_ROOT:-/Users/ultramarine/Desktop/grad_project}/backend/secrets/firebase-admin-key.json
       RL_IDE_FIREBASE_APP_NAME: ${RL_IDE_FIREBASE_APP_NAME:-rl-ide-backend}
     volumes:
       - .:${PROJECT_ROOT:-/Users/ultramarine/Desktop/grad_project}
+      - ${RL_IDE_FIREBASE_CREDENTIALS_PATH:-/tmp/firebase-adminsdk-missing.json}:${RL_IDE_FIREBASE_CREDENTIALS_PATH:-/tmp/firebase-adminsdk-missing.json}:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8200/"]
       interval: 5s

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import socket
 
 import uvicorn
@@ -63,7 +62,7 @@ if __name__ == "__main__":
     try:
         uvicorn.run(
             "backend.api_gateway.base:create_app",
-            host=os.getenv("RL_IDE_BACKEND_HOST", "0.0.0.0"),
+            host=settings.backend_host,
             port=settings.gateway_port,
             reload=settings.backend_reload,
             factory=True,

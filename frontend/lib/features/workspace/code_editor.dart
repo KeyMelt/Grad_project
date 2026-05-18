@@ -22,6 +22,8 @@ class CodeEditorTab extends StatelessWidget {
   final VoidCallback onSubmit;
   final VoidCallback onStop;
   final VoidCallback onReset;
+  final VoidCallback onReconnect;
+  final VoidCallback? onRun;
 
   const CodeEditorTab({
     super.key,
@@ -42,12 +44,19 @@ class CodeEditorTab extends StatelessWidget {
     required this.onSubmit,
     required this.onStop,
     required this.onReset,
+    required this.onReconnect,
+    this.onRun,
   });
 
   @override
   Widget build(BuildContext context) {
-    final editorStatus = _workspaceStatusLabel(editorConnectionStatus);
-    final consoleStatus = _workspaceStatusLabel(consoleConnectionStatus);
+    final hasLocalDraft = code.trim().isNotEmpty;
+    final shellLoading =
+        editorConnectionStatus == WorkspaceConnectionStatus.connecting ||
+            (!workspaceReady && workspaceSessionId == null);
+    final shellMessage = shellLoading
+        ? 'Connecting to workspace...'
+        : 'Connection failed, Try again.';
 
     return Container(
       decoration: BoxDecoration(
@@ -58,30 +67,6 @@ class CodeEditorTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    lesson.exercise.title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                ),
-                _StatusChip(
-                  label: editorStatus.label,
-                  color: editorStatus.color,
-                ),
-                const SizedBox(width: 8),
-                _StatusChip(
-                  label: 'Console ${consoleStatus.label.toLowerCase()}',
-                  color: consoleStatus.color,
-                ),
-              ],
-            ),
-          ),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
@@ -93,98 +78,14 @@ class CodeEditorTab extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
-                    Container(
-                      height: 46,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF0F172A),
-                        borderRadius:
-                            BorderRadius.vertical(top: Radius.circular(18)),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 7,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1F2937),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              'script.py',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: const Color(0xFFE5E7EB),
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            workspaceSessionId == null
-                                ? 'No workspace session'
-                                : 'v$scriptVersion',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: const Color(0xFF94A3B8)),
-                          ),
-                          const Spacer(),
-                          _EditorActionButton(
-                            onPressed: lesson.backendEnabled ? onSubmit : null,
-                            icon: Icons.task_alt_rounded,
-                            label: 'Submit',
-                            variant: _EditorActionVariant.primary,
-                          ),
-                          const SizedBox(width: 8),
-                          _EditorActionButton(
-                            onPressed: onStop,
-                            icon: Icons.stop_rounded,
-                            label: 'Stop',
-                          ),
-                          const SizedBox(width: 8),
-                          _EditorActionButton(
-                            onPressed: onReset,
-                            icon: Icons.refresh_rounded,
-                            label: 'Reset',
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF0B1220),
-                        border: Border(
-                          bottom: BorderSide(color: Color(0xFF1F2937)),
-                        ),
-                      ),
-                      child: Text(
-                        '$runStatusLabel: $statusMessage',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: const Color(0xFFCBD5E1),
-                              fontWeight: FontWeight.w600,
-                            ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
                     if (studentFeedback != null)
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
                         decoration: const BoxDecoration(
                           color: Color(0xFF111827),
                           border: Border(
-                            bottom: BorderSide(color: Color(0xFF1F2937)),
+                            bottom: BorderSide(color: Color(0x00000000)),
                           ),
                         ),
                         child: Column(
@@ -200,11 +101,11 @@ class CodeEditorTab extends StatelessWidget {
                     if (studentFeedback != null || testResults.isNotEmpty)
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
                         decoration: const BoxDecoration(
                           color: Color(0xFF111827),
                           border: Border(
-                            bottom: BorderSide(color: Color(0xFF1F2937)),
+                            bottom: BorderSide(color: Color(0x00000000)),
                           ),
                         ),
                         child: _EvaluationSummaryPanel(
@@ -216,29 +117,32 @@ class CodeEditorTab extends StatelessWidget {
                       ),
                     Expanded(
                       child: Padding(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
                         child: WorkspaceShellHost(
                           url: editorShellUrl,
                           workspaceReady: workspaceReady,
-                          fallbackMessage: workspaceReady
-                              ? 'Workspace host unavailable for this platform.'
-                              : 'Preparing the lesson workspace for ${lesson.title}...',
+                          isLoading: shellLoading,
+                          placeholderMessage: shellMessage,
                         ),
                       ),
                     ),
-                    if (!workspaceReady)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                        child: Text(
-                          code.trim().isEmpty
-                              ? 'Starter code will appear when the workspace session is ready.'
-                              : 'Latest starter snapshot loaded while the remote workspace connects.',
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: const Color(0xFF94A3B8),
-                                  ),
-                        ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                      child: _EditorFooterBar(
+                        runStatusLabel: runStatusLabel,
+                        statusMessage: statusMessage,
+                        scriptVersion: scriptVersion,
+                        hasLocalDraft: hasLocalDraft,
+                        canUseWorkspace: workspaceSessionId != null,
+                        canSubmit:
+                            lesson.backendEnabled && workspaceSessionId != null,
+                        onSubmit: onSubmit,
+                        onStop: onStop,
+                        onReset: onReset,
+                        onReconnect: onReconnect,
+                        onRun: onRun,
                       ),
+                    ),
                   ],
                 ),
               ),
@@ -249,54 +153,158 @@ class CodeEditorTab extends StatelessWidget {
     );
   }
 
-  _WorkspaceVisual _workspaceStatusLabel(WorkspaceConnectionStatus status) {
-    switch (status) {
-      case WorkspaceConnectionStatus.connecting:
-        return const _WorkspaceVisual('Connecting', Color(0xFF1D4ED8));
-      case WorkspaceConnectionStatus.ready:
-        return const _WorkspaceVisual('Ready', Color(0xFF059669));
-      case WorkspaceConnectionStatus.failed:
-        return const _WorkspaceVisual('Failed', Color(0xFFDC2626));
-      case WorkspaceConnectionStatus.disconnected:
-        return const _WorkspaceVisual('Offline', Color(0xFF64748B));
-    }
-  }
 }
 
-class _StatusChip extends StatelessWidget {
-  final String label;
-  final Color color;
+class _RunStatusFooter extends StatelessWidget {
+  final String runStatusLabel;
+  final String statusMessage;
+  final int scriptVersion;
+  final bool hasLocalDraft;
 
-  const _StatusChip({
-    required this.label,
-    required this.color,
+  const _RunStatusFooter({
+    required this.runStatusLabel,
+    required this.statusMessage,
+    required this.scriptVersion,
+    required this.hasLocalDraft,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.25)),
+        color: const Color(0xCC0F172A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF334155)),
       ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
-            ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            runStatusLabel,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFF93C5FD),
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            statusMessage,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFFE2E8F0),
+                  height: 1.4,
+                ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${hasLocalDraft ? 'Local draft ready' : 'Waiting for draft'} • v$scriptVersion',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFF94A3B8),
+                ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _WorkspaceVisual {
-  final String label;
-  final Color color;
+class _EditorFooterBar extends StatelessWidget {
+  final String runStatusLabel;
+  final String statusMessage;
+  final int scriptVersion;
+  final bool hasLocalDraft;
+  final bool canUseWorkspace;
+  final bool canSubmit;
+  final VoidCallback onSubmit;
+  final VoidCallback onStop;
+  final VoidCallback onReset;
+  final VoidCallback onReconnect;
+  final VoidCallback? onRun;
 
-  const _WorkspaceVisual(this.label, this.color);
+  const _EditorFooterBar({
+    required this.runStatusLabel,
+    required this.statusMessage,
+    required this.scriptVersion,
+    required this.hasLocalDraft,
+    required this.canUseWorkspace,
+    required this.canSubmit,
+    required this.onSubmit,
+    required this.onStop,
+    required this.onReset,
+    required this.onReconnect,
+    this.onRun,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 720;
+        final status = _RunStatusFooter(
+          runStatusLabel: runStatusLabel,
+          statusMessage: statusMessage,
+          scriptVersion: scriptVersion,
+          hasLocalDraft: hasLocalDraft,
+        );
+        final actions = Wrap(
+          alignment: WrapAlignment.end,
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _EditorActionButton(
+              onPressed: onReconnect,
+              icon: Icons.sync_rounded,
+              label: 'Reconnect',
+            ),
+            _EditorActionButton(
+              onPressed: canUseWorkspace ? onRun : null,
+              icon: Icons.play_arrow_rounded,
+              label: 'Run',
+            ),
+            _EditorActionButton(
+              onPressed: canSubmit ? onSubmit : null,
+              icon: Icons.task_alt_rounded,
+              label: 'Submit',
+              variant: _EditorActionVariant.primary,
+            ),
+            _EditorActionButton(
+              onPressed: canUseWorkspace ? onStop : null,
+              icon: Icons.stop_rounded,
+              label: 'Stop',
+            ),
+            _EditorActionButton(
+              onPressed: canUseWorkspace ? onReset : null,
+              icon: Icons.refresh_rounded,
+              label: 'Reset',
+            ),
+          ],
+        );
+
+        if (isNarrow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              status,
+              const SizedBox(height: 10),
+              Align(alignment: Alignment.centerRight, child: actions),
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(child: status),
+            const SizedBox(width: 12),
+            Flexible(child: actions),
+          ],
+        );
+      },
+    );
+  }
 }
 
 class _FeedbackPanel extends StatelessWidget {

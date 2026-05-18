@@ -3,14 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-try:  # pragma: no cover - import availability depends on environment
-    import firebase_admin
-    from firebase_admin import auth, credentials, firestore
-except Exception:  # pragma: no cover
-    firebase_admin = None
-    auth = None
-    credentials = None
-    firestore = None
+import firebase_admin
+from firebase_admin import auth, credentials, firestore
 
 
 class FirebaseProgressService:
@@ -26,13 +20,8 @@ class FirebaseProgressService:
         credentials_path: Optional[str] = None,
         app_name: str = "rl-ide-backend",
     ) -> None:
-        if firebase_admin is None or auth is None or firestore is None:
-            raise RuntimeError(
-                "firebase-admin is not installed. Add dependency and configure credentials."
-            )
-
-        app = self._get_or_create_app(credentials_path=credentials_path, app_name=app_name)
-        self._db = firestore.client(app=app)
+        self._app = self._get_or_create_app(credentials_path=credentials_path, app_name=app_name)
+        self._db = firestore.client(app=self._app)
         self._users = self._db.collection("users")
 
     def sign_in(
@@ -46,7 +35,7 @@ class FirebaseProgressService:
                 "Firebase sign-in requires firebase_id_token. Legacy password flow is disabled."
             )
 
-        decoded = auth.verify_id_token(firebase_id_token)
+        decoded = auth.verify_id_token(firebase_id_token, app=self._app)
         uid = decoded.get("uid")
         if not uid:
             raise ValueError("Invalid Firebase token.")
@@ -194,6 +183,42 @@ class FirebaseProgressService:
 
         rows.sort(key=lambda item: (item.get("display_name") or "").lower())
         return rows
+
+    def ensure_student_record(self, *, student_id: str, display_name: str) -> dict[str, Any]:
+        normalized_name = " ".join((display_name or "").split()) or "Student"
+        user_ref = self._users.document(student_id)
+        snapshot = user_ref.get()
+        if snapshot.exists:
+            payload = snapshot.to_dict() or {}
+        else:
+            payload = {}
+
+        if payload.get("display_name") != normalized_name:
+            payload["display_name"] = normalized_name
+        payload.setdefault(
+            "progress",
+            {
+                "completed_lesson_ids": [],
+                "successful_runs": 0,
+                "latest_lesson_id": None,
+                "pretest_score": None,
+                "posttest_score": None,
+                "n_gain": None,
+                "quiz_attempts": {
+                    "pretest": 0,
+                    "posttest": 0,
+                },
+                "question_history": [],
+                "total_submission_attempts": 0,
+                "passed_submission_attempts": 0,
+                "validation_failures": 0,
+                "runtime_failures": 0,
+                "test_failures": 0,
+            },
+        )
+        payload["updated_at_utc"] = datetime.now(timezone.utc).isoformat()
+        user_ref.set(payload)
+        return self._dashboard_payload(student_id, payload)
 
     def close(self) -> None:
         return None

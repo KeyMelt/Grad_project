@@ -71,6 +71,7 @@ void main() {
             onSubmit: () {},
             onStop: () {},
             onReset: () {},
+            onReconnect: () {},
           ),
         ),
       ),
@@ -84,5 +85,9 @@ void main() {
       find.text('The submission still contains guided blanks.'),
       findsOneWidget,
     );
+    expect(find.text('script.py'), findsNothing);
+    expect(find.text('Editor'), findsNothing);
+    expect(find.text('Console'), findsNothing);
+    expect(find.text('Connection failed, Try again.'), findsOneWidget);
   });
 }

@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
 
+import 'dart:async';
 import 'dart:html' as html;
 import 'dart:ui_web' as ui_web;
 
@@ -11,14 +12,16 @@ Widget buildWorkspaceShellHost({
   required BuildContext context,
   required String? url,
   required bool workspaceReady,
-  required String fallbackMessage,
+  required bool isLoading,
+  required String placeholderMessage,
 }) {
   if (url == null) {
     return stub.buildWorkspaceShellHost(
       context: context,
       url: url,
       workspaceReady: workspaceReady,
-      fallbackMessage: fallbackMessage,
+      isLoading: isLoading,
+      placeholderMessage: placeholderMessage,
     );
   }
 
@@ -38,12 +41,15 @@ class _WebWorkspaceShellHost extends StatefulWidget {
 
 class _WebWorkspaceShellHostState extends State<_WebWorkspaceShellHost> {
   late String _viewType;
+  Timer? _loadTimeout;
+  bool _loadFailed = false;
   bool _loaded = false;
 
   @override
   void initState() {
     super.initState();
     _viewType = _registerView(widget.url);
+    _startLoadTimeout();
   }
 
   @override
@@ -51,7 +57,9 @@ class _WebWorkspaceShellHostState extends State<_WebWorkspaceShellHost> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url) {
       _loaded = false;
+      _loadFailed = false;
       _viewType = _registerView(widget.url);
+      _startLoadTimeout();
     }
   }
 
@@ -68,9 +76,11 @@ class _WebWorkspaceShellHostState extends State<_WebWorkspaceShellHost> {
         ..setAttribute('sandbox',
             'allow-scripts allow-same-origin allow-forms allow-modals allow-downloads');
       frame.onLoad.listen((_) {
+        _loadTimeout?.cancel();
         if (mounted) {
           setState(() {
             _loaded = true;
+            _loadFailed = false;
           });
         }
       });
@@ -79,8 +89,35 @@ class _WebWorkspaceShellHostState extends State<_WebWorkspaceShellHost> {
     return viewType;
   }
 
+  void _startLoadTimeout() {
+    _loadTimeout?.cancel();
+    _loadTimeout = Timer(const Duration(seconds: 10), () {
+      if (mounted && !_loaded) {
+        setState(() {
+          _loadFailed = true;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _loadTimeout?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_loadFailed) {
+      return stub.buildWorkspaceShellHost(
+        context: context,
+        url: null,
+        workspaceReady: false,
+        isLoading: false,
+        placeholderMessage: 'Connection failed, Try again.',
+      );
+    }
+
     return Stack(
       children: [
         ClipRRect(
@@ -93,7 +130,8 @@ class _WebWorkspaceShellHostState extends State<_WebWorkspaceShellHost> {
               context: context,
               url: null,
               workspaceReady: false,
-              fallbackMessage: 'Loading workspace shell...',
+              isLoading: true,
+              placeholderMessage: 'Connecting to workspace...',
             ),
           ),
       ],

@@ -5,19 +5,25 @@ import '../../core/workbench_state.dart';
 Future<void> showOnboardingTutorial(
   BuildContext context, {
   required ValueChanged<AppSection> onNavigate,
+  String role = 'guest',
 }) {
   return showDialog<void>(
     context: context,
     barrierDismissible: false,
-    builder: (_) => _OnboardingTutorialDialog(onNavigate: onNavigate),
+    builder: (_) => _OnboardingTutorialDialog(
+      onNavigate: onNavigate,
+      role: role,
+    ),
   );
 }
 
 class _OnboardingTutorialDialog extends StatefulWidget {
   final ValueChanged<AppSection> onNavigate;
+  final String role;
 
   const _OnboardingTutorialDialog({
     required this.onNavigate,
+    required this.role,
   });
 
   @override
@@ -28,7 +34,7 @@ class _OnboardingTutorialDialog extends StatefulWidget {
 class _OnboardingTutorialDialogState extends State<_OnboardingTutorialDialog> {
   int _index = 0;
 
-  static const List<_TutorialStep> _steps = [
+  static const List<_TutorialStep> _coreSteps = [
     _TutorialStep(
       title: 'Home dashboard',
       body: 'Sign in, review lessons, and check progress.',
@@ -47,13 +53,25 @@ class _OnboardingTutorialDialogState extends State<_OnboardingTutorialDialog> {
       section: AppSection.quiz,
       icon: Icons.quiz_outlined,
     ),
-    _TutorialStep(
-      title: 'Admin tools',
-      body: 'Manage lessons and export evaluation data.',
-      section: AppSection.admin,
-      icon: Icons.admin_panel_settings_outlined,
-    ),
   ];
+
+  List<_TutorialStep> get _steps {
+    final role = widget.role.toLowerCase();
+    if (role == 'instructor' || role == 'admin') {
+      return [
+        ..._coreSteps,
+        _TutorialStep(
+          title: 'Authoring tools',
+          body: role == 'admin'
+              ? 'Manage lessons and admin evaluation exports.'
+              : 'Manage lesson content in the authoring workspace.',
+          section: AppSection.admin,
+          icon: Icons.admin_panel_settings_outlined,
+        ),
+      ];
+    }
+    return _coreSteps;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -182,7 +200,7 @@ class _OnboardingTutorialDialogState extends State<_OnboardingTutorialDialog> {
       case AppSection.quiz:
         return 'Quiz';
       case AppSection.admin:
-        return 'Admin';
+        return 'Authoring';
     }
   }
 }

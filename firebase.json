@@ -1,0 +1,49 @@
+{
+  "auth": {
+    "providers": {
+      "emailPassword": true
+    }
+  },
+  "firestore": {
+    "database": "(default)",
+    "location": "us-central1",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "ios": {
+        "default": {
+          "projectId": "rlplat",
+          "appId": "1:262941037092:ios:989f303f2cc7a322d9feb1",
+          "uploadDebugSymbols": false,
+          "fileOutput": "frontend/ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "rlplat",
+          "appId": "1:262941037092:ios:2c44364b5615739bd9feb1",
+          "uploadDebugSymbols": false,
+          "fileOutput": "frontend/macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "web": {
+        "default": {
+          "projectId": "rlplat",
+          "appId": "1:262941037092:web:1dc3da7c2e0281e8d9feb1"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "rlplat",
+          "configurations": {
+            "ios": "1:262941037092:ios:989f303f2cc7a322d9feb1",
+            "macos": "1:262941037092:ios:2c44364b5615739bd9feb1",
+            "web": "1:262941037092:web:1dc3da7c2e0281e8d9feb1"
+          }
+        }
+      }
+    }
+  }
+}

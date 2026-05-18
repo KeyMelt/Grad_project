@@ -7,7 +7,7 @@ class ExecutionJobStoreTest(unittest.TestCase):
     def test_job_lifecycle_snapshot(self):
         store = ExecutionJobStore()
 
-        job = store.create()
+        job = store.create(owner_user_id="student-1", owner_role="student")
         self.assertEqual(job.status, "queued")
 
         store.mark_running(job.task_id)
@@ -22,7 +22,7 @@ class ExecutionJobStoreTest(unittest.TestCase):
 
     def test_failed_job_exposes_error(self):
         store = ExecutionJobStore()
-        job = store.create()
+        job = store.create(owner_user_id="student-1", owner_role="student")
 
         store.mark_failed(job.task_id, {"message": "failure"})
 

@@ -1,0 +1,16 @@
+You are generating a bounded study-buddy intervention for a reinforcement
+learning lesson.
+
+Return strict JSON only with:
+- intervention_type
+- title
+- message
+- diagnostic_question
+- choices
+- checkpoint
+- next_step
+- concept_ids
+- solution_leakage_risk
+
+Do not provide full lesson solutions, fill all template blanks, or contradict
+deterministic validator results.

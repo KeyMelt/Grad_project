@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from typing import Any
 
 from fastapi.testclient import TestClient
@@ -106,12 +107,24 @@ class _FakeUserEvaluationService:
 
 
 def _make_client(service: _FakeUserEvaluationService | None = None) -> TestClient:
-    app = create_app(
-        services=ServiceContainer(
-            user_evaluation=service or _FakeUserEvaluationService(),
+    previous_token = os.environ.get("RL_IDE_INTERNAL_TOKEN")
+    os.environ["RL_IDE_INTERNAL_TOKEN"] = "test-internal-token"
+    try:
+        app = create_app(
+            services=ServiceContainer(
+                user_evaluation=service or _FakeUserEvaluationService(),
+            )
         )
-    )
+    finally:
+        if previous_token is None:
+            os.environ.pop("RL_IDE_INTERNAL_TOKEN", None)
+        else:
+            os.environ["RL_IDE_INTERNAL_TOKEN"] = previous_token
     return TestClient(app)
+
+
+def _internal_headers() -> dict[str, str]:
+    return {"X-Internal-Token": "test-internal-token"}
 
 
 def test_internal_sign_in_returns_dashboard_payload():
@@ -123,6 +136,7 @@ def test_internal_sign_in_returns_dashboard_payload():
             "password": "SecurePass123!",
             "firebase_id_token": "firebase-token",
         },
+        headers=_internal_headers(),
     )
 
     assert response.status_code == 200
@@ -139,6 +153,7 @@ def test_internal_sign_in_maps_validation_error_to_400():
             "password": "SecurePass123!",
             "firebase_id_token": "bad-token",
         },
+        headers=_internal_headers(),
     )
 
     assert response.status_code == 400
@@ -146,7 +161,10 @@ def test_internal_sign_in_maps_validation_error_to_400():
 
 def test_internal_dashboard_returns_404_for_missing_student():
     client = _make_client()
-    response = client.get("/internal/students/missing/dashboard")
+    response = client.get(
+        "/internal/students/missing/dashboard",
+        headers=_internal_headers(),
+    )
 
     assert response.status_code == 404
 
@@ -156,6 +174,7 @@ def test_internal_quiz_start_omits_answer_key():
     response = client.post(
         "/internal/quiz/start",
         json={"student_id": "student-1", "phase": "pretest"},
+        headers=_internal_headers(),
     )
 
     assert response.status_code == 200
@@ -172,6 +191,7 @@ def test_internal_quiz_submit_returns_score_payload():
             "session_id": "session-1",
             "answers": [{"question_id": "q1", "selected_index": 0}],
         },
+        headers=_internal_headers(),
     )
 
     assert response.status_code == 200
@@ -180,7 +200,10 @@ def test_internal_quiz_submit_returns_score_payload():
 
 def test_internal_n_gain_metrics_returns_export_rows():
     client = _make_client()
-    response = client.get("/internal/metrics/n-gain")
+    response = client.get(
+        "/internal/metrics/n-gain",
+        headers=_internal_headers(),
+    )
 
     assert response.status_code == 200
     payload = response.json()

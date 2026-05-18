@@ -68,6 +68,11 @@ output/
 # Local-only research and scratch directories
 .codex-skills/
 .codex_artifacts/
+
+# Claude Code / AI tooling system files
+.agents/
+.playwright-cli/
+skills-lock.json
 RL_manim/
 _tmp_grad1/
 /media/
@@ -89,3 +94,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase service account credentials — never commit
+backend/secrets/

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from random import SystemRandom
 from uuid import uuid4
 
-from backend.services.student_progress_service import StudentProgressService
+from backend.services.firebase_progress_service import FirebaseProgressService
 
 
 @dataclass(frozen=True)
@@ -201,7 +201,7 @@ class QuizService:
 
     quiz_length = 6
 
-    def __init__(self, progress_service: StudentProgressService) -> None:
+    def __init__(self, progress_service: FirebaseProgressService) -> None:
         self._progress_service = progress_service
         self._rng = SystemRandom()
         self._sessions: dict[str, QuizSession] = {}
@@ -263,9 +263,20 @@ class QuizService:
 
         answer_map = {answer["question_id"]: answer["selected_index"] for answer in answers}
         score = 0
+        concept_results: list[dict] = []
+        question_by_id = {question["id"]: question for question in session.questions}
         for question_id in session.question_ids:
-            if answer_map.get(question_id) == session.correct_indices[question_id]:
+            correct = answer_map.get(question_id) == session.correct_indices[question_id]
+            if correct:
                 score += 1
+            question = question_by_id.get(question_id, {})
+            concept_results.append(
+                {
+                    "question_id": question_id,
+                    "concept": question.get("concept", "Unknown Concept"),
+                    "correct": correct,
+                }
+            )
 
         total_questions = len(session.question_ids)
         percentage = round((score / total_questions) * 100, 2)
@@ -287,6 +298,7 @@ class QuizService:
             "percentage": percentage,
             "n_gain": dashboard["progress"]["n_gain"],
             "progress": dashboard["progress"],
+            "concept_results": concept_results,
         }
 
     def _select_questions(self, student_id: str) -> list[QuizQuestionTemplate]:

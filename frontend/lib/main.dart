@@ -1,12 +1,17 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:rl_ide/core/backend_api.dart';
 import 'package:rl_ide/core/theme.dart';
 import 'package:rl_ide/core/onboarding_prefs.dart';
 import 'package:rl_ide/features/onboarding/splash_screen.dart';
 import 'package:rl_ide/layout/main_layout.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   await BackendConnectionManager().init();
   runApp(const RLSimulationIDE());
 }
