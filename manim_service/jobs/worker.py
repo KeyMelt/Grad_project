@@ -47,8 +47,8 @@ class SceneRef:
 # Lesson → scene registry. New entries are added as scenes are authored.
 CONCEPT_VIDEO_SCENES: dict[str, SceneRef] = {
     "dp_value_iteration": SceneRef(
-        scene_file=ROOT / "manim_service" / "concept_videos" / "transition_prob_concept.py",
-        scene_class="TransitionProbConcept",
+        scene_file=ROOT / "manim_service" / "concept_videos" / "dp_value_iteration_concept.py",
+        scene_class="ValueIterationConcept",
     ),
 }
 

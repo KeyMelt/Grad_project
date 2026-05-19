@@ -1,6 +1,9 @@
-Produce a full concept video for the given lesson_id, orchestrating all pipeline agents
-in the canonical sequence. Invoked as:
+Produce a full concept video for the given lesson_id by orchestrating all pipeline
+agents as autonomous subagents. Each pipeline step spawns a separate Agent instance —
+the current session acts only as the Producer orchestrator. Run end-to-end without
+stopping for user confirmation unless a PRODUCTION HOLD condition is reached.
 
+Invoked as:
   /project:produce-video lesson_id=<id>
 
 ---
@@ -15,40 +18,30 @@ Valid IDs: dp_policy_eval, dp_policy_improvement, dp_value_iteration,
            mc_first_visit, td_sarsa, td_q_learning
 ```
 
-Verify the lesson_id is in `KNOWN_LESSON_IDS`:
-`dp_policy_eval` · `dp_policy_improvement` · `dp_value_iteration` ·
-`mc_first_visit` · `td_sarsa` · `td_q_learning`
-
-If the lesson_id is not in the set, stop and print the PRODUCER REJECTION format from
-the producer skill.
+If the lesson_id is not in the set above, stop and print:
+```
+PRODUCER REJECTION — [lesson_id]
+Reason: unknown lesson_id. Valid IDs listed above.
+```
 
 ---
 
-## Step 1 — Read SESSION_LOG.md and determine pipeline state
+## Step 1 — Read SESSION_LOG and determine pipeline state
 
 Read `manim_service/SESSION_LOG.md`. Search for any prior production run for this
-`lesson_id`. Look for entries matching:
-- "PRODUCER APPROVAL — [lesson_id]" → video is already in the library; report this and stop.
-- "PRODUCTION HOLD — [lesson_id]" → pipeline is on hold; report and stop pending human review.
-- A partial gate table for this lesson_id → resume from the last open gate (skip completed steps).
+`lesson_id`:
+- "PRODUCER APPROVAL — [lesson_id]" → already in library; report and stop.
+- "PRODUCTION HOLD — [lesson_id]" → on hold; report and stop pending human review.
+- A partial gate table for this lesson_id → resume from the last open gate.
 
-If no prior production run is found, start fresh from Step 2.
+If no prior run found, start fresh from Step 2.
 
-Print your determination:
+Print:
 ```
 Pipeline state for [lesson_id]: [NEW | RESUMING from gate N | ALREADY IN LIBRARY | ON HOLD]
 ```
 
----
-
-## Step 2 — Invoke the Producer skill
-
-Invoke the `producer` skill now. It governs the entire pipeline. Read:
-- `manim_service/concept_videos/docs/STYLE_BIBLE.md` (§13 convergence gates)
-- `manim_service/concept_videos/docs/rl_knowledge_base.md` (lesson entry for this lesson_id)
-- `backend/concept_videos/specs.py` (confirm the lesson_id is registered)
-
-Initialize the convergence gate table:
+Initialize the convergence gate table and carry it through all steps:
 ```
 Gate  Agent                   Status    Notes
 ─────────────────────────────────────────────────────────────────
@@ -63,252 +56,391 @@ Gate  Agent                   Status    Notes
 ─────────────────────────────────────────────────────────────────
 ```
 
-If resuming, mark gates already confirmed open as [✓] and skip their steps below.
+If resuming, mark already-confirmed gates [✓] and skip their steps.
 
 ---
 
-## Step 3 — RL Expert pre-brief review (advisory)
+## Step 2 — Load reference documents (orchestrator reads these once)
 
-Invoke the `rl-expert` skill with:
+Before spawning any agents, read these files into your context:
+- `manim_service/concept_videos/docs/STYLE_BIBLE.md`
+- `manim_service/concept_videos/docs/rl_knowledge_base.md` (the entry for this lesson_id)
+- `backend/concept_videos/specs.py` (the LessonVideoSpec entry for this lesson_id)
+
+You will pass the relevant excerpts into each agent's prompt below.
+
+---
+
+## Step 3 — RL Expert pre-brief (advisory, no gate)
+
+Spawn an Agent:
 ```
-mode: pre-brief
-lesson_id: [lesson_id]
-brief_summary: [1–3 sentences describing the planned concept video scope]
+description: "RL Expert pre-brief — [lesson_id]"
+subagent_type: claude
+prompt: |
+  You are the RL Expert for an RL teaching video production pipeline.
+  Read your full skill file at: ~/.claude/skills/rl-expert/SKILL.md
+
+  Task: pre-brief review (advisory — no gate decision required)
+  lesson_id: [lesson_id]
+  specs_entry: [paste the full LessonVideoSpec entry from specs.py]
+  rl_knowledge_base_entry: [paste the full lesson entry from rl_knowledge_base.md]
+
+  Follow the 5-step review protocol in your skill.
+  Flag any prerequisite violations, scope issues, or theory concerns.
+  Output: a brief bullet list of flags (or "No flags") for the Script Writer to carry
+  into the production brief. Do not issue a gate verdict — this is advisory only.
 ```
 
-The RL Expert reviews the knowledge base entry and flags any concept-level issues
-(prerequisite lesson not in library yet, scope too broad for duration, etc.).
-
-This step is advisory — it does not open a gate. Record any flags and carry them
-into the Script Writer brief.
+Collect the flags. Carry them into Step 4.
 
 ---
 
 ## Step 4 — Script Writer produces plan.md
 
-Invoke the `script-writer` skill with a production brief:
+Spawn an Agent:
 ```
-lesson_id: [lesson_id]
-specs_entry: [the entry from backend/concept_videos/specs.py]
-rl_expert_guidance: [flags and notes from Step 3, or "None"]
-target_duration_seconds: 120
+description: "Script Writer — plan.md for [lesson_id]"
+subagent_type: claude
+prompt: |
+  You are the Script Writer for an RL teaching video production pipeline.
+  Read your full skill file at: ~/.claude/skills/script-writer/SKILL.md
+
+  Production brief:
+  lesson_id: [lesson_id]
+  specs_entry: [paste the full LessonVideoSpec entry]
+  rl_knowledge_base_entry: [paste the full lesson entry]
+  rl_expert_flags: [paste the flags from Step 3, or "None"]
+  style_bible_path: manim_service/concept_videos/docs/STYLE_BIBLE.md
+  target_duration_seconds: 120
+
+  Follow the 3-phase internal workflow in your skill (Pedagogical Architect →
+  Code Agent → Pacing Linter) before writing. Then produce a complete plan.md
+  covering all 10 required sections. Write the file to:
+  manim_service/concept_videos/[lesson_id]_plan.md
+
+  Return the full plan.md content in your response.
 ```
 
-The Script Writer will produce a `plan.md` covering:
-phase sequence, MathTex decomposition, Gymnasium code snippets,
-pacing table, and visual component list.
-
-Save or display the resulting `plan.md` for Gate 1 review.
+Save the returned plan.md path for subsequent steps.
 
 ---
 
 ## Step 5 — Gate 1: RL Expert plan sign-off
 
-Invoke the `rl-expert` skill with:
+Spawn an Agent (up to 2 attempts before escalation):
 ```
-mode: plan-review
-lesson_id: [lesson_id]
-plan_md: [the plan.md from Step 4]
+description: "RL Expert plan review — [lesson_id] (attempt N)"
+subagent_type: claude
+prompt: |
+  You are the RL Expert for an RL teaching video production pipeline.
+  Read your full skill file at: ~/.claude/skills/rl-expert/SKILL.md
+
+  Task: plan-review (Gate 1)
+  lesson_id: [lesson_id]
+  plan_md: [paste the full plan.md content from Step 4]
+  rl_knowledge_base_entry: [paste the full lesson entry]
+  attempt: N (of 2 allowed before Producer escalation)
+
+  Follow the 5-step review protocol in your skill.
+  Use the APPROVED or REJECTED output template from your skill.
+  If REJECTED, list specific corrections with S&B citations.
 ```
 
-- If `APPROVED`: mark Gate 1 [✓].
-- If `REJECTED`: route feedback to the Script Writer (Step 4 redo).
-  On second rejection, invoke the `producer` skill's escalation protocol.
-
-Do not proceed to Step 6 until Gate 1 is open.
+- `APPROVED` → mark Gate 1 [✓], proceed to Step 6.
+- `REJECTED` → re-spawn Step 4 with the rejection notes appended to the brief, then
+  re-spawn this step. On second rejection, place the lesson on PRODUCTION HOLD,
+  append the hold to SESSION_LOG.md, and stop.
 
 ---
 
 ## Step 6 — Gate 2: Technical Validator
 
-Invoke the `technical-validator` skill with:
+Spawn an Agent:
 ```
-lesson_id: [lesson_id]
-plan_md: [the Gate 1-approved plan.md]
+description: "Technical Validator — [lesson_id]"
+subagent_type: claude
+prompt: |
+  You are the Technical Validator for an RL teaching video production pipeline.
+  Read your full skill file at: ~/.claude/skills/technical-validator/SKILL.md
+
+  Task: validate all numerical claims and code snippets in the plan.
+  lesson_id: [lesson_id]
+  plan_md: [paste the Gate-1-approved plan.md content]
+  python_interpreter: /Users/ultramarine/.venvs/manim/bin/python
+  rl_knowledge_base_entry: [paste the full lesson entry]
+
+  Follow the 5-step validation protocol in your skill. Use Bash to run every
+  numerical claim against the live Gymnasium environment. Include raw Bash output
+  in your report. Use the PASS or discrepancy-list output template from your skill.
 ```
 
-The Technical Validator runs live Gymnasium code against every numerical claim
-in `plan.md` using `/Users/ultramarine/.venvs/manim/bin/python`.
-
-- If `PASS`: mark Gate 2 [✓].
-- If discrepancy list returned: route corrected values to the Script Writer.
-  Script Writer updates `plan.md` and resubmits to Technical Validator.
-  On second failure, invoke the `producer` skill's escalation protocol.
-
-Do not proceed to Step 7 until Gate 2 is open.
+- `PASS` → mark Gate 2 [✓], proceed to Step 7.
+- Discrepancy list → re-spawn Step 4 with corrected values appended to the brief,
+  re-run Gate 1 RL Expert review, then re-spawn this step.
+  On second failure, place on PRODUCTION HOLD and stop.
 
 ---
 
 ## Step 7 — Manim Expert: scene production
 
-Invoke the `manim-rl-animation-style-lock` skill with:
+Spawn an Agent (this is the most tool-intensive step — it writes files and renders):
 ```
-lesson_id: [lesson_id]
-plan_md: [the Gate 2-verified plan.md]
-phase: raw
+description: "Manim Expert — scene production for [lesson_id]"
+subagent_type: claude
+prompt: |
+  You are the Manim Expert for an RL teaching video production pipeline.
+  Read your full skill file at: ~/.claude/skills/manim-rl-animation-style-lock/SKILL.md
+  Also read: manim_service/concept_videos/docs/STYLE_BIBLE.md
+
+  Task: implement the concept video scene from the approved plan.
+  lesson_id: [lesson_id]
+  plan_md: [paste the Gate-2-verified plan.md content]
+  output_scene_path: manim_service/concept_videos/[lesson_id]_concept.py
+  manim_python: /Users/ultramarine/.venvs/manim/bin/python
+  render_quality: -ql (480p15, development quality)
+
+  Phase 1 — raw implementation:
+  Write raw_scene.py following the plan.md phase sequence exactly. Use helpers from
+  manim_service/scenes/ (panels, motion, rl_visuals). Apply the geometry-before-algebra
+  rule (STYLE_BIBLE §7). Decompose all MathTex as component arrays.
+
+  Phase 2 — self-lint and polish:
+  Review raw_scene.py against the style checklist in your skill. Fix pacing, wait
+  times, layout overlaps, opacity hierarchy. Write the polished version to:
+  manim_service/concept_videos/[lesson_id]_concept.py
+
+  Phase 3 — render:
+  Run: /Users/ultramarine/.venvs/manim/bin/python -m manim -ql \
+    manim_service/concept_videos/[lesson_id]_concept.py [SceneClassName]
+  Confirm no import errors and that the MP4 is produced.
+
+  Return: the polished scene file path and the rendered MP4 path.
 ```
 
-The Manim Expert produces `raw_scene.py` from `plan.md` following the
-geometry-before-algebra rule (STYLE_BIBLE §7). Then:
-
-```
-phase: polish
-raw_scene_path: [path to raw_scene.py]
-```
-
-The Manim Expert self-renders at 480p15, reviews, and delivers `polished_scene.py`.
-
-Save `polished_scene.py` to `manim_service/concept_videos/[lesson_id]_concept.py`.
-
-Note: This step has no convergence gate of its own — the scene proceeds directly
-to Gate 3 (Voice & BGM), Gate 5 (QA Agent), and Gate 6 (Series Continuity) review.
+Record the polished scene path and MP4 path. Proceed to Steps 8–12 in parallel
+where possible (Gates 3 and 4 can run concurrently; Gates 5 and 6 require the MP4).
 
 ---
 
 ## Step 8 — Gate 3: Voice & BGM Agent
 
-Invoke the `voice-bgm` skill with:
+Spawn an Agent:
 ```
-lesson_id: [lesson_id]
-plan_md: [the approved plan.md]
-mp4_path: [path to 480p15 polished render]
+description: "Voice & BGM Agent — [lesson_id]"
+subagent_type: claude
+prompt: |
+  You are the Voice & BGM Agent for an RL teaching video production pipeline.
+  Read your full skill file at: ~/.claude/skills/voice-bgm/SKILL.md
+  Also read STYLE_BIBLE §12 (BGM palette): manim_service/concept_videos/docs/STYLE_BIBLE.md
+
+  Task: produce narration script and BGM brief.
+  lesson_id: [lesson_id]
+  plan_md: [paste the approved plan.md]
+  mp4_path: [path to 480p15 render from Step 7]
+
+  Follow the phase-timing workflow in your skill. Write output files to:
+  - manim_service/concept_videos/[lesson_id]_narration_script.md
+  - manim_service/concept_videos/[lesson_id]_audio_brief.md
+
+  Return the paths to both files and confirm delivery.
 ```
 
-The Voice & BGM Agent delivers:
-- `narration_script.md` — line-by-line narration with per-line timing cues
-- `audio_brief.md` — BGM track selection + volume envelope from STYLE_BIBLE §12
-
-When both files are delivered with no outstanding revision requests:
-mark Gate 3 [✓].
+When both files are written with no outstanding revision requests: mark Gate 3 [✓].
 
 ---
 
 ## Step 9 — Gate 4: Transcript Writer
 
-Invoke the `transcript-writer` skill with:
+Spawn an Agent:
 ```
-narration_script_path: [path to narration_script.md from Step 8]
+description: "Transcript Writer — [lesson_id]"
+subagent_type: claude
+prompt: |
+  You are the Transcript Writer for an RL teaching video production pipeline.
+  Read your full skill file at: ~/.claude/skills/transcript-writer/SKILL.md
+
+  Task: produce closed caption files from the narration script.
+  narration_script_path: manim_service/concept_videos/[lesson_id]_narration_script.md
+
+  Read the narration script. Apply the 7 accessibility rules in your skill.
+  Write output files to:
+  - manim_service/concept_videos/[lesson_id]_captions.srt
+  - manim_service/concept_videos/[lesson_id]_captions.vtt
+
+  Flag any audio-only content gaps (narration that describes a visual without spoken
+  description inaccessible to a deaf viewer). List flagged segments explicitly.
+  Return the paths to both files and any flagged gaps.
 ```
 
-The Transcript Writer delivers:
-- `captions.srt` — SubRip format, UTF-8, max 2 lines per caption
-- `captions.vtt` — WebVTT format, UTF-8, max 2 lines per caption
-
-- If no audio-only gaps flagged: mark Gate 4 [✓].
-- If gaps flagged: route back to the Script Writer to add narration coverage.
-  Script Writer updates `plan.md` sections where gaps exist, Voice & BGM re-delivers
-  the affected lines, Transcript Writer re-reviews.
-  On second failure, invoke the `producer` skill's escalation protocol.
-
-Do not proceed to Step 10 until Gate 4 is open.
+- No gaps flagged → mark Gate 4 [✓].
+- Gaps flagged → re-spawn Step 4 (Script Writer) with gap descriptions appended,
+  re-run Gates 1–2–Step 7–Step 8, then re-spawn this step.
+  On second failure, place on PRODUCTION HOLD and stop.
 
 ---
 
 ## Step 10 — Gate 5: QA Agent
 
-Invoke the `qa-agent` skill with:
+Spawn an Agent:
 ```
-lesson_id: [lesson_id]
-polished_scene_path: [path to polished_scene.py]
-mp4_path: [path to 480p15 render]
-rejection_history: [list of prior QA rejections, or "None"]
+description: "QA Agent — [lesson_id] (attempt N)"
+subagent_type: claude
+prompt: |
+  You are the QA Agent for an RL teaching video production pipeline.
+  Read your full skill file at: ~/.claude/skills/qa-agent/SKILL.md
+
+  Task: full quality review of the rendered video, narration, and captions.
+  lesson_id: [lesson_id]
+  polished_scene_path: manim_service/concept_videos/[lesson_id]_concept.py
+  mp4_path: [path to 480p15 render]
+  narration_script_path: manim_service/concept_videos/[lesson_id]_narration_script.md
+  captions_srt_path: manim_service/concept_videos/[lesson_id]_captions.srt
+  rejection_history: [list of prior QA rejections for this lesson, or "None"]
+  attempt: N (of 2 allowed before Producer escalation)
+
+  Apply the full 20-item quality checklist in your skill. Check visual quality,
+  pacing, style-lock compliance, three-way sync (equation/grid/code), Gymnasium
+  asset fidelity, narration timing alignment, and caption accuracy.
+  Use the APPROVED or REJECTED output template. If REJECTED, list pain points
+  with frame references where possible, ordered by severity.
 ```
 
-- If `APPROVED`: mark Gate 5 [✓].
-- If `REJECTED`: route blocking issues to the Manim Expert for fixes.
-  Manim Expert re-renders at 480p15 and resubmits.
-  On second rejection, invoke the `producer` skill's escalation protocol.
-
-Do not proceed to Step 11 until Gate 5 is open.
+- `APPROVED` → mark Gate 5 [✓].
+- `REJECTED` (first time) → re-spawn Step 7 (Manim Expert) with pain points appended,
+  then re-spawn this step.
+- `REJECTED` (second time, same root issue) → escalate to Script Writer (re-spawn
+  Step 4 with QA diagnosis), re-run pipeline from Step 5. On third failure, place
+  on PRODUCTION HOLD and stop.
 
 ---
 
 ## Step 11 — Gate 6: Series Continuity Agent
 
-Invoke the `series-continuity` skill with:
+Spawn an Agent:
 ```
-lesson_id: [lesson_id]
-polished_scene_path: [path to polished_scene.py]
-mp4_path: [path to 480p15 render]
+description: "Series Continuity Agent — [lesson_id]"
+subagent_type: claude
+prompt: |
+  You are the Series Continuity Agent for an RL teaching video production pipeline.
+  Read your full skill file at: ~/.claude/skills/series-continuity/SKILL.md
+
+  Task: cross-series consistency check.
+  lesson_id: [lesson_id]
+  polished_scene_path: manim_service/concept_videos/[lesson_id]_concept.py
+  mp4_path: [path to 480p15 render]
+  session_log_path: manim_service/SESSION_LOG.md
+  style_bible_path: manim_service/concept_videos/docs/STYLE_BIBLE.md
+  narration_script_path: manim_service/concept_videos/[lesson_id]_narration_script.md
+
+  Read SESSION_LOG.md to identify all previously approved videos in the library.
+  Check the 5 categories in your skill: color conventions, terminology,
+  cross-video references, prerequisite scaffolding, and visual grammar.
+  Use the CONSISTENT or INCONSISTENT output template.
+  If INCONSISTENT, list each conflict with the specific prior video it contradicts.
 ```
 
-The Series Continuity Agent reads `manim_service/SESSION_LOG.md` to understand the
-full series history, then checks for color convention conflicts, terminology
-inconsistencies, and prerequisite scaffolding gaps.
-
-- If `CONSISTENT`: mark Gate 6 [✓].
-- If `INCONSISTENT`: route specific conflicts to the Manim Expert (visual fixes) or
-  Script Writer (terminology/scaffolding fixes). Re-render and resubmit.
-  On second failure, invoke the `producer` skill's escalation protocol.
-
-Do not proceed to Step 12 until Gate 6 is open.
+- `CONSISTENT` → mark Gate 6 [✓].
+- `INCONSISTENT` → route visual conflicts to Step 7 (Manim Expert), terminology
+  conflicts to Step 4 (Script Writer). Re-run affected gates. On second failure,
+  place on PRODUCTION HOLD and stop.
 
 ---
 
 ## Step 12 — Gate 7: RL Expert final sign-off
 
-Invoke the `rl-expert` skill with:
+Spawn an Agent:
 ```
-mode: final-review
-lesson_id: [lesson_id]
-polished_scene_path: [path to polished_scene.py]
-mp4_path: [path to 480p15 render]
+description: "RL Expert final review — [lesson_id]"
+subagent_type: claude
+prompt: |
+  You are the RL Expert for an RL teaching video production pipeline.
+  Read your full skill file at: ~/.claude/skills/rl-expert/SKILL.md
+
+  Task: final academic sign-off (Gate 7)
+  lesson_id: [lesson_id]
+  polished_scene_path: manim_service/concept_videos/[lesson_id]_concept.py
+  mp4_path: [path to 480p15 render]
+  rl_knowledge_base_entry: [paste the full lesson entry]
+  note: The plan.md was approved at Gate 1. This review checks whether the rendered
+        scene faithfully implements the plan or introduced new errors during production.
+
+  Follow the 5-step review protocol. Focus on misconceptions or oversimplifications
+  that may have been introduced by the Manim Expert during scene production.
+  Use the APPROVED or REJECTED output template with S&B citations for any issues.
 ```
 
-The RL Expert reviews the rendered video against Sutton & Barto (2018) for any
-misconceptions, oversimplifications, or prerequisite violations introduced during
-scene production (the rendering phase may have diverged from the approved plan).
-
-- If `APPROVED`: mark Gate 7 [✓].
-- If `REJECTED`: route findings to the Manim Expert (scene edits), re-render,
-  and resubmit to RL Expert.
-  On second rejection, invoke the `producer` skill's escalation protocol.
-
-Do not proceed to Step 13 until Gate 7 is open.
+- `APPROVED` → mark Gate 7 [✓].
+- `REJECTED` → re-spawn Step 7 (Manim Expert) with RL Expert corrections, re-run
+  Gates 5–6, then re-spawn this step. On second rejection, place on PRODUCTION HOLD.
 
 ---
 
 ## Step 13 — Gate 8: Producer library approval
 
-Invoke the `producer` skill to run the library approval checklist:
+Run the library approval checklist directly (no agent spawn needed — this is the
+orchestrator's own gate):
 
-1. Verify all 7 prior gates are marked [✓].
-2. Verify `lesson_id` is in `KNOWN_LESSON_IDS` and `backend/concept_videos/specs.py`.
-3. Verify `lesson_id` is registered in `CONCEPT_VIDEO_SCENES` in
-   `manim_service/jobs/worker.py`. If not registered, instruct the Manim Expert to
-   add the entry before the final render (see producer skill for exact format).
-4. Verify the prerequisite DAG: all prerequisite lesson_ids are already in the library
-   or approved in the same release batch.
-5. Verify file inventory: `polished_scene.py`, 480p15 MP4, `narration_script.md`,
-   `audio_brief.md`, `captions.srt`, `captions.vtt`, `plan.md` all exist.
+1. Confirm all 7 prior gates are marked [✓].
+2. Confirm `lesson_id` is in `backend/concept_videos/specs.py`.
+3. Check `CONCEPT_VIDEO_SCENES` in `manim_service/jobs/worker.py`. If not registered,
+   spawn a minimal Agent to add the entry:
+   ```
+   description: "Register scene in CONCEPT_VIDEO_SCENES — [lesson_id]"
+   subagent_type: claude
+   prompt: |
+     Edit manim_service/jobs/worker.py. Find the CONCEPT_VIDEO_SCENES dict and add:
+     "[lesson_id]": SceneRef(
+         scene_file="manim_service/concept_videos/[lesson_id]_concept.py",
+         scene_class="[ClassName]",
+     ),
+     Also add "[lesson_id]" to KNOWN_LESSON_IDS if not already present.
+     Confirm the edit was made.
+   ```
+4. Confirm prerequisite DAG: all prerequisite lesson_ids are approved in SESSION_LOG.
+5. Confirm file inventory exists:
+   - `manim_service/concept_videos/[lesson_id]_concept.py`
+   - 480p15 MP4
+   - `[lesson_id]_narration_script.md`
+   - `[lesson_id]_audio_brief.md`
+   - `[lesson_id]_captions.srt`
+   - `[lesson_id]_captions.vtt`
+   - `[lesson_id]_plan.md`
 
-When all checks pass, issue the PRODUCER APPROVAL statement (see producer skill output
-format) and mark Gate 8 [✓].
+When all checks pass, print:
+```
+PRODUCER APPROVAL — [lesson_id]
+All 8 convergence gates open. Proceeding to final 720p render.
+```
+Mark Gate 8 [✓].
 
 ---
 
 ## Step 14 — Final 720p30 render
 
-With all 8 gates open, trigger the final production render:
-
 ```bash
-# Start manim_service if not already running:
-# uvicorn manim_service.api.main:app --host 0.0.0.0 --port 8200
-
-curl -X POST http://localhost:8200/render/concept-video \
+curl -s -X POST http://localhost:8200/render/concept-video \
   -H "Content-Type: application/json" \
-  -d '{"lesson_id": "[lesson_id]", "quality": "720p30", "force": true}'
+  -d '{"lesson_id": "[lesson_id]", "quality": "720p30", "force": true}' \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['job_id'])"
 ```
 
-Poll `/jobs/{job_id}` until `status` is `"complete"` or `"failed"`.
+Poll until complete:
+```bash
+while true; do
+  STATUS=$(curl -s http://localhost:8200/jobs/{job_id} | python3 -c \
+    "import sys,json; d=json.load(sys.stdin); print(d['status'])")
+  echo "Status: $STATUS"
+  [ "$STATUS" = "complete" ] || [ "$STATUS" = "failed" ] && break
+  sleep 5
+done
+```
 
-If `"complete"`: the final MP4 is at
-`backend/media/concept_videos/[lesson_id]_concept.mp4`.
-
-If `"failed"` due to 404 (scene not yet registered): follow the producer skill's
-registration recovery procedure, then re-trigger.
-
-If `"failed"` for any other reason: report the error. Do not mark the run as complete.
+- `complete` → final MP4 is at `backend/media/concept_videos/[lesson_id]_concept.mp4`
+- `failed` (404 / scene not registered) → re-run the registration sub-step from
+  Step 13 then re-trigger. Do not mark the pipeline failed.
+- `failed` (other) → report the error. Pipeline stays at Gate 8 open; render is a
+  separate retry. Do not place on PRODUCTION HOLD for a render-only failure.
 
 ---
 
@@ -329,7 +461,7 @@ Append to `manim_service/SESSION_LOG.md`:
 - Gate 7 (RL Expert final sign-off): [date/time]
 - Gate 8 (Producer approval): [date/time]
 
-**Rejections encountered:** [N total, with gate and agent details, or "None"]
+**Rejections encountered:** [N total — list gate, agent, and resolution, or "None"]
 **Exceptions granted:** [list, or "None"]
 **Final MP4:** backend/media/concept_videos/[lesson_id]_concept.mp4
 **Series position:** [N of 6]
@@ -345,7 +477,8 @@ Append to `manim_service/SESSION_LOG.md`:
 | Invalid lesson_id | Stop. Print PRODUCER REJECTION. |
 | lesson_id already in library | Stop. Report library status. |
 | lesson_id on PRODUCTION HOLD | Stop. Direct to human review. |
-| Agent rejects twice at same gate | Invoke producer escalation protocol. |
-| Agent rejects three times | Place on PRODUCTION HOLD in SESSION_LOG. |
-| Worker returns 404 at render | Register scene, re-trigger render. Do not cancel pipeline. |
-| Final render fails (non-404) | Report error. Pipeline stays at Gate 8 open; render is a separate retry. |
+| Agent rejects twice at same gate | Escalate: re-spawn upstream agent with diagnosis. |
+| Agent rejects three times | Append PRODUCTION HOLD to SESSION_LOG. Stop. |
+| Worker 404 at render | Register scene via agent spawn. Re-trigger render. |
+| Render fails (non-404) | Report. Pipeline stays complete; render is a retry. |
+| manim_service unreachable | Start with: uvicorn manim_service.api.main:app --host 0.0.0.0 --port 8200 |

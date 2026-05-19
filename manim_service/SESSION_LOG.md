@@ -359,3 +359,121 @@
   end-to-end pipeline test, or (b) implementing a second concept scene (dp_policy_eval is the
   canonical first lesson in the prerequisite DAG and is the recommended next scene).
 - No Python written this session — all session 9 work is skill/command content only.
+
+---
+
+## Production Run — dp_value_iteration — 2026-05-19
+
+**Gate status:**
+```
+Gate  Agent                   Status    Notes
+─────────────────────────────────────────────────────────────────
+ 1    RL Expert               [✓]       plan.md approved — S&B eq.(4.10) p.83 confirmed
+ 2    Technical Validator     [✓]       PASS — V* converged values verified via env.unwrapped.P
+ —    Manim Expert            [✓]       scene written + rendered (60 animations, 480p15)
+ 3    Voice & BGM Agent       [ ]       NEXT — narration_script.md + audio_brief.md
+ 4    Transcript Writer       [ ]       captions.srt + captions.vtt; 0 gaps
+ 5    QA Agent                [ ]       APPROVED
+ 6    Series Continuity Agent [ ]       CONSISTENT
+ 7    RL Expert               [ ]       Final sign-off
+ 8    Producer                [ ]       Library approval
+─────────────────────────────────────────────────────────────────
+```
+
+**Artifacts on disk:**
+- `manim_service/concept_videos/dp_value_iteration_concept.py` — `ValueIterationConcept`, 511 lines, 7 phases, geometry-first
+- `manim_service/_manim_media/videos/dp_value_iteration_concept/480p15/ValueIterationConcept.mp4` — 60 animations rendered (480p15 dev quality)
+- `manim_service/jobs/worker.py` — CONCEPT_VIDEO_SCENES registered with correct scene entry
+
+**Known state:**
+- Gates 1 & 2 approved and Manim Expert complete in a prior session (artifacts confirmed on disk 2026-05-19)
+- plan.md was generated in-context only and not persisted to disk; not required for remaining gates
+- Resume from Gate 3 (Voice & BGM Agent)
+
+**Rejections encountered:** None so far
+**Exceptions granted:** None
+
+**Status:** IN PROGRESS — resuming from Gate 3
+
+---
+
+## Production Run — dp_value_iteration — 2026-05-19 (PARTIAL — stopped before Gate 3)
+
+### Pipeline state
+
+```
+Gate  Agent                   Status    Notes
+─────────────────────────────────────────────────────────────────
+ 1    RL Expert               [✓]       plan.md APPROVED
+ 2    Technical Validator     [✓]       PASS (after one patch cycle)
+      Manim Expert            [✓]       Scene written + 480p15 render complete
+ 3    Voice & BGM Agent       [ ]       PENDING — next gate to run
+ 4    Transcript Writer       [ ]       PENDING
+ 5    QA Agent                [ ]       PENDING
+ 6    Series Continuity Agent [ ]       PENDING
+ 7    RL Expert               [ ]       Final sign-off PENDING
+ 8    Producer                [ ]       Library approval PENDING
+─────────────────────────────────────────────────────────────────
+```
+
+### What was produced
+
+**Scene file:** `manim_service/concept_videos/dp_value_iteration_concept.py`
+**Class:** `ValueIterationConcept(BaseConceptScene)`
+**Rendered MP4 (480p15):** `media/videos/dp_value_iteration_concept/480p15/ValueIterationConcept.mp4`
+**Duration:** 66.87 s (1m 6s)
+**Animations played:** 60
+
+### Plan patches applied (from Technical Validator Gate 2)
+
+- **DISC-1 — V_k=zeros gives all-zero backups:** Used converged V* values as V_k for the demo.
+  Bar heights: LEFT=0.358, DOWN=0.203, RIGHT=0.358, UP=0.155.
+  Added "fast-forward" context caption before Phase 2 backup loop.
+- **NOTE-1 — LEFT/RIGHT tied (both 0.358):** Phase 5 Step 3 flashes *both* tied bars (idx 0 and 2)
+  and updates caption: "Two actions tie — value iteration can produce multiple optimal policies."
+  Phase 7 final caption reflects the tie.
+
+### Scene structure (7 phases, geometry-first)
+
+- Phase 1: FrozenLake grid centered (state 6, height=4.0), dim action arrows overlay, caption,
+  `wait(2.0)`
+- Phase 2: Per-action backup loop ×4 (highlight arrow → outcome arrows → chart bar grows → dim).
+  Fast-forward context caption pre-loop. `wait(1.0)` per action, `wait(1.5)` end-of-phase.
+- Phase 3: Grid (scaled to 2.85) + chart shift to anchors; update equation panel LEFT (component
+  array MathTex, color-bound); `wait(2.0)`.
+- Phase 4: CodeStepper fades in RIGHT (chart dims); 4 lines from specs.py; `wait(1.5)`.
+- Phase 5: SynchronizedFocusGroup + CodeStepper.step() ×4; tied bars flash in Phase 5 Step 3;
+  `wait(1.5)` per step.
+- Phase 6: `equation_morph(v_update → v_star)` convergence insight; `wait(1.5)`.
+- Phase 7: Hold frame (code reset, arrows dim, chart dim, final caption); `wait(2.5)`.
+
+### Key API decisions (confirmed from code inspection)
+
+- Used `panel("Update Rule", v_update_mob, accent=VALUE_COLOR)` — NOT `equation_panel()`, since
+  the latter takes a string and creates MathTex internally; cannot accept pre-colored MathTex.
+- Bar opacity managed via `chart.dim_all()` / `chart._opacity_trackers[i].animate.set_value()`
+  — NOT `.animate.set_color()` (bar color is baked into always_redraw closures).
+- `equation_morph(self, v_update, v_star, move_to_old=True)` handles positioning automatically.
+- `place_caption(text)` returns a Text mob but does NOT add to scene — must `self.play(FadeIn(...))`.
+
+### Rejections encountered
+
+- Gate 2 (Technical Validator): 1 discrepancy (DISC-1) + 1 note (NOTE-1). Resolved by Script
+  Writer patch accepted by user. Revalidation PASS on second run.
+- Gates 3–8: not yet run.
+
+### Exceptions granted
+
+- Prerequisite DAG: dp_value_iteration has prerequisites (dp_policy_eval, dp_policy_improvement)
+  not yet in the library. RL Expert advisory noted. Producer granted exception for pipeline-test
+  run; scene made self-contained with inline concept context.
+
+### To resume from Gate 3
+
+Run `/project:produce-video lesson_id=dp_value_iteration`.
+SESSION_LOG will be detected as RESUMING from Gate 3.
+All artifacts from Gates 1–2 and the Manim Expert phase are on disk.
+480p15 render is at `media/videos/dp_value_iteration_concept/480p15/ValueIterationConcept.mp4`.
+Gate 3 Voice & BGM Agent reads plan.md and the MP4 to produce:
+- `manim_service/concept_videos/dp_value_iteration_narration_script.md`
+- `manim_service/concept_videos/dp_value_iteration_audio_brief.md`
