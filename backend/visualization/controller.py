@@ -1,98 +1,122 @@
-import json
+"""Thin HTTP client for `manim_service`.
+
+Replaces the previous in-process subprocess controller (which has been moved
+into `manim_service`). The backend now only knows *what* should be rendered;
+the manim service owns *how* and *where* it is rendered.
+
+Public API is preserved so existing callers continue to work unchanged:
+
+    controller = VisualizationController()
+    url = controller.generate_animation(log_data, lesson_id)
+
+`url` is the manim_service `/videos/{filename}` path on success, or `""` on
+failure (transport error, render failure, or poll timeout).
+"""
+from __future__ import annotations
+
 import logging
 import os
-import subprocess
-from pathlib import Path
+import time
+from typing import Any
 
-from backend.logger.event_logger import NpEncoder
+import requests
+
 from backend.settings import VisualizationSettings
 
-logging.basicConfig(level=logging.INFO)
-
-REPLAY_TEMPLATE_PATH = Path(__file__).resolve().parent / "templates" / "replay_scene.py.tmpl"
+logger = logging.getLogger(__name__)
 
 
 class VisualizationController:
-    """Ingests EventLogger data to dynamically generate Manim animations."""
+    """HTTP client that submits trace renders to manim_service and polls for completion."""
+
+    DEFAULT_BASE_URL = "http://localhost:8200"
 
     def __init__(
         self,
         output_dir: str | None = None,
         manim_python_path: str | None = None,
+        *,
+        base_url: str | None = None,
+        poll_interval_seconds: float = 1.0,
+        http_client: requests.Session | None = None,
     ):
         settings = VisualizationSettings.from_env()
-        self.output_dir = output_dir or settings.output_dir
-        self.manim_python_path = manim_python_path or settings.manim_python_path
+        # output_dir and manim_python_path are retained for API compatibility
+        # but no longer used here; manim_service owns those concerns.
+        del output_dir
+        del manim_python_path
         self.manim_timeout_seconds = settings.manim_timeout_seconds
-        os.makedirs(self.output_dir, exist_ok=True)
-        self.scenes_dir = os.path.join(self.output_dir, "scenes")
-        os.makedirs(self.scenes_dir, exist_ok=True)
+        self.base_url = (
+            base_url
+            or os.environ.get("RL_IDE_MANIM_SERVICE_URL", self.DEFAULT_BASE_URL)
+        ).rstrip("/")
+        self.poll_interval_seconds = poll_interval_seconds
+        self._http = http_client or requests
 
     def generate_animation(self, log_data: list, lesson_id: str) -> str:
         if not log_data or not log_data[0]:
-            logging.warning("No log data provided for Manim visualization.")
+            logger.warning("No log data provided for Manim visualization.")
             return ""
 
         latest_episode = log_data[-1]
-        data_path = self._write_trace_data(latest_episode)
-        scene_file = os.path.join(self.scenes_dir, f"{lesson_id}_scene.py")
-        self._write_manim_script(scene_file, data_path, lesson_id)
-        return self._render_scene(scene_file, lesson_id)
-
-    def _write_trace_data(self, latest_episode: list) -> str:
-        data_path = os.path.join(self.scenes_dir, "temp_data.json")
-        with open(data_path, "w", encoding="utf-8") as file_handle:
-            json.dump(latest_episode, file_handle, cls=NpEncoder)
-        return data_path
-
-    def _render_scene(self, scene_file: str, lesson_id: str) -> str:
-        video_output_dir = os.path.abspath(self.output_dir)
-        cmd = [
-            self.manim_python_path,
-            "-m",
-            "manim",
-            "-pqL",
-            "--media_dir",
-            video_output_dir,
-            scene_file,
-            "RLEpisodeScene",
-        ]
-
-        logging.info("Triggering Manim generation: %s", " ".join(cmd))
-        if not os.path.exists(self.manim_python_path):
-            logging.warning("Manim python path does not exist: %s", self.manim_python_path)
-            return ""
+        payload = {
+            "lesson_id": lesson_id,
+            "episode_trace": {
+                "steps": [self._normalize_step(step) for step in latest_episode],
+            },
+        }
 
         try:
-            subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=self.manim_timeout_seconds,
-            )
-            logging.info("Manim generated successfully.")
-            expected_mp4 = self._expected_video_path(lesson_id)
-            return expected_mp4 if os.path.exists(expected_mp4) else ""
-        except subprocess.TimeoutExpired as error:
-            logging.error("Manim generation timed out after %s seconds.", error.timeout)
-            return ""
-        except subprocess.CalledProcessError as error:
-            logging.error("Manim failure output: %s\n%s", error.stdout, error.stderr)
+            job = self._post_json(f"{self.base_url}/render/trace", payload)
+        except requests.RequestException as error:
+            logger.error("manim_service trace enqueue failed: %s", error)
             return ""
 
-    def _expected_video_path(self, lesson_id: str) -> str:
-        return os.path.join(
-            os.path.abspath(self.output_dir),
-            "videos",
-            f"{lesson_id}_scene",
-            "480p15",
-            "RLEpisodeScene.mp4",
-        )
+        job_id = job.get("job_id")
+        if not job_id:
+            logger.error("manim_service did not return a job_id: %s", job)
+            return ""
 
-    def _write_manim_script(self, script_path: str, data_path: str, lesson_id: str):
-        script_content = REPLAY_TEMPLATE_PATH.read_text(encoding="utf-8")
-        script_content = script_content.replace("__DATA_PATH__", repr(data_path))
-        script_content = script_content.replace("__LESSON_ID__", repr(lesson_id))
-        with open(script_path, "w", encoding="utf-8") as file_handle:
-            file_handle.write(script_content)
+        return self._poll_until_complete(job_id)
+
+    def _post_json(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._http.post(url, json=payload, timeout=self.manim_timeout_seconds)
+        response.raise_for_status()
+        return response.json()
+
+    def _poll_until_complete(self, job_id: str) -> str:
+        deadline = time.monotonic() + self.manim_timeout_seconds
+        url = f"{self.base_url}/jobs/{job_id}"
+        while time.monotonic() < deadline:
+            try:
+                response = self._http.get(url, timeout=self.manim_timeout_seconds)
+                response.raise_for_status()
+                data = response.json()
+            except requests.RequestException as error:
+                logger.error("manim_service poll failed for job %s: %s", job_id, error)
+                return ""
+
+            status = data.get("status")
+            if status == "complete":
+                video_url = data.get("video_url") or ""
+                if not video_url:
+                    logger.error("Job %s complete but no video_url returned", job_id)
+                    return ""
+                return f"{self.base_url}{video_url}" if video_url.startswith("/") else video_url
+            if status == "failed":
+                logger.error("manim_service job %s failed: %s", job_id, data.get("error"))
+                return ""
+            time.sleep(self.poll_interval_seconds)
+
+        logger.error("manim_service job %s did not complete within %ss", job_id, self.manim_timeout_seconds)
+        return ""
+
+    @staticmethod
+    def _normalize_step(step: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "state": int(step["state"]),
+            "action": int(step["action"]),
+            "reward": float(step.get("reward", 0.0)),
+            "next_state": int(step["next_state"]),
+            "done": bool(step.get("done", False)),
+        }

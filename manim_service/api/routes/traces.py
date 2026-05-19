@@ -1,2 +1,92 @@
-"""POST /render/trace endpoint. Implemented in Session 6."""
-# TODO(Session 6)
+"""Trace + job-status + video-serving endpoints.
+
+- `POST /render/trace`     — enqueue an episode-trace render
+- `GET  /jobs/{job_id}`    — poll job status (works for both kinds)
+- `GET  /videos/{filename}` — serve a rendered MP4 from shared media
+"""
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
+
+from manim_service.jobs.queue import JobKind, JobStatus, get_queue
+from manim_service.jobs.worker import KNOWN_LESSON_IDS
+from manim_service.storage import output as storage
+
+router = APIRouter()
+
+
+class TraceStep(BaseModel):
+    state: int
+    action: int
+    reward: float
+    next_state: int
+    done: bool = False
+
+
+class EpisodeTrace(BaseModel):
+    steps: list[TraceStep]
+    q_table: dict[str, Any] | None = None
+
+
+class TraceRequest(BaseModel):
+    lesson_id: str = Field(..., description="Canonical lesson id (e.g. td_q_learning)")
+    episode_trace: EpisodeTrace
+
+
+class JobAccepted(BaseModel):
+    job_id: str
+    status: str
+
+
+class JobStatusResponse(BaseModel):
+    job_id: str
+    status: str
+    video_url: str | None = None
+    error: str | None = None
+
+
+@router.post("/render/trace", response_model=JobAccepted, status_code=202)
+def enqueue_trace(request: TraceRequest) -> JobAccepted:
+    if request.lesson_id not in KNOWN_LESSON_IDS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown lesson_id={request.lesson_id!r}; "
+                   f"expected one of {sorted(KNOWN_LESSON_IDS)}",
+        )
+    job_id = get_queue().enqueue(
+        JobKind.TRACE,
+        {
+            "lesson_id": request.lesson_id,
+            "episode_trace": request.episode_trace.model_dump(),
+        },
+    )
+    return JobAccepted(job_id=job_id, status="queued")
+
+
+@router.get("/jobs/{job_id}", response_model=JobStatusResponse)
+def get_job(job_id: str) -> JobStatusResponse:
+    job = get_queue().get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"job_id={job_id!r} not found")
+    video_url: str | None = None
+    if job.status == JobStatus.COMPLETE and job.video_path:
+        from pathlib import Path
+        video_url = f"/videos/{Path(job.video_path).name}"
+    return JobStatusResponse(
+        job_id=job.job_id,
+        status=job.status.value,
+        video_url=video_url,
+        error=job.error,
+    )
+
+
+@router.get("/videos/{filename}")
+def get_video(filename: str) -> FileResponse:
+    resolved = storage.resolve_safe_video_path(filename)
+    if resolved is None:
+        raise HTTPException(status_code=404, detail=f"video {filename!r} not found")
+    return FileResponse(path=str(resolved), media_type="video/mp4", filename=resolved.name)

@@ -240,7 +240,7 @@ def pill(label: str, color: str) -> VGroup:
 
 def frozenlake_frame(state: int, height: float = 2.8) -> Mobject:
     """ImageMobject for a FrozenLake state, or fallback colored rect."""
-    asset_dir = Path(__file__).resolve().parents[3] / "frontend" / "assets" / "lesson_media" / "frozenlake"
+    asset_dir = Path(__file__).resolve().parents[2] / "frontend" / "assets" / "lesson_media" / "frozenlake"
     img_path = asset_dir / f"state_{state:02d}.png"
     if img_path.exists():
         mob = ImageMobject(str(img_path))

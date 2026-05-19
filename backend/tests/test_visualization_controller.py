@@ -1,57 +1,98 @@
 from __future__ import annotations
 
-import subprocess
-import sys
+from typing import Any
+
+import pytest
 
 from backend.visualization.controller import VisualizationController
 
 
-def test_visualization_controller_returns_empty_path_on_manim_timeout(
-    monkeypatch,
-    tmp_path,
-):
-    captured_timeout: list[int] = []
+class _StubResponse:
+    def __init__(self, status_code: int = 200, payload: dict[str, Any] | None = None):
+        self.status_code = status_code
+        self._payload = payload or {}
 
-    def fake_run(*args, **kwargs):
-        del args
-        captured_timeout.append(kwargs["timeout"])
-        raise subprocess.TimeoutExpired(cmd="manim", timeout=kwargs["timeout"])
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise AssertionError(f"unexpected status {self.status_code}")
 
-    monkeypatch.setenv("RL_IDE_MANIM_TIMEOUT_SECONDS", "7")
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    def json(self) -> dict[str, Any]:
+        return self._payload
 
+
+class _StubHttp:
+    """Records calls and replays a scripted sequence of responses."""
+
+    def __init__(self, responses: list[_StubResponse]):
+        self.calls: list[tuple[str, str, dict[str, Any]]] = []
+        self._responses = list(responses)
+
+    def post(self, url: str, *, json: dict[str, Any], timeout: int):
+        self.calls.append(("POST", url, json))
+        return self._responses.pop(0)
+
+    def get(self, url: str, *, timeout: int):
+        self.calls.append(("GET", url, {}))
+        return self._responses.pop(0)
+
+
+@pytest.fixture
+def log_data() -> list:
+    return [[{"state": 0, "action": 1, "reward": 0, "next_state": 1}]]
+
+
+def test_returns_video_url_when_job_completes(monkeypatch, log_data):
+    monkeypatch.setenv("RL_IDE_MANIM_TIMEOUT_SECONDS", "10")
+    http = _StubHttp(
+        [
+            _StubResponse(payload={"job_id": "abc123", "status": "queued"}),
+            _StubResponse(payload={"job_id": "abc123", "status": "rendering"}),
+            _StubResponse(
+                payload={
+                    "job_id": "abc123",
+                    "status": "complete",
+                    "video_url": "/videos/td_q_learning.mp4",
+                }
+            ),
+        ]
+    )
     controller = VisualizationController(
-        output_dir=str(tmp_path / "animations"),
-        manim_python_path=sys.executable,
+        base_url="http://manim:8200",
+        poll_interval_seconds=0,
+        http_client=http,
     )
 
-    video_path = controller.generate_animation(
-        [[{"state": 0, "action": 1, "reward": 0, "next_state": 1}]],
-        "td_q_learning",
+    url = controller.generate_animation(log_data, "td_q_learning")
+
+    assert url == "http://manim:8200/videos/td_q_learning.mp4"
+    assert http.calls[0][0] == "POST"
+    assert http.calls[0][1] == "http://manim:8200/render/trace"
+    assert http.calls[0][2]["lesson_id"] == "td_q_learning"
+    assert http.calls[0][2]["episode_trace"]["steps"][0]["done"] is False
+
+
+def test_returns_empty_string_when_job_fails(monkeypatch, log_data):
+    monkeypatch.setenv("RL_IDE_MANIM_TIMEOUT_SECONDS", "10")
+    http = _StubHttp(
+        [
+            _StubResponse(payload={"job_id": "abc123", "status": "queued"}),
+            _StubResponse(
+                payload={"job_id": "abc123", "status": "failed", "error": "render error"}
+            ),
+        ]
     )
-
-    assert video_path == ""
-    assert captured_timeout == [7]
-
-
-def test_visualization_controller_writes_stepwise_equation_replay_scene(tmp_path):
     controller = VisualizationController(
-        output_dir=str(tmp_path / "animations"),
-        manim_python_path=sys.executable,
-    )
-    scene_path = tmp_path / "td_q_learning_scene.py"
-    data_path = tmp_path / "temp_data.json"
-
-    controller._write_manim_script(
-        script_path=str(scene_path),
-        data_path=str(data_path),
-        lesson_id="td_q_learning",
+        base_url="http://manim:8200",
+        poll_interval_seconds=0,
+        http_client=http,
     )
 
-    script = scene_path.read_text()
-    assert "Manim replay: agent step to Bellman update" in script
-    assert "build_backup" in script
-    assert "build_update" in script
-    assert "equation_update" in script
-    assert "stack = Group(title, state_line, visual)" in script
-    assert "Circumscribe(current_backup" in script
+    url = controller.generate_animation(log_data, "td_q_learning")
+
+    assert url == ""
+
+
+def test_returns_empty_string_on_empty_log_data():
+    controller = VisualizationController(base_url="http://manim:8200")
+    assert controller.generate_animation([], "td_q_learning") == ""
+    assert controller.generate_animation([[]], "td_q_learning") == ""

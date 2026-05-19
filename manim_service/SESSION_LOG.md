@@ -78,3 +78,284 @@
 - EpisodeTrail trail dots are added to the VGroup's submobjects and stored in `_trail_dots` list; clear_trail() handles FadeOut + removal cleanly
 - ValueHeatmap.update_values() plays two animation phases: (1) cell recolor + old label FadeOut together, (2) new labels LaggedStart FadeIn
 - Import smoke test (expanded): `/Users/ultramarine/.venvs/manim/bin/python -W error::SyntaxWarning -c "import sys; sys.path.insert(0, '.'); from manim_service.scenes import equation_morph, token_expand, staggered_write, staggered_fadein, reactive_bar, BackupDiagram, PolicyArrowGrid, ValueHeatmap, QValueTable, EpisodeTrail, BaseConceptScene, ActionBarChart"`
+
+---
+
+## Session 3 — 2026-05-18
+
+**Completed:**
+- `manim_service/scenes/__init__.py` — verified complete; all symbols from panels.py, motion.py, rl_visuals.py present; full smoke test passed
+- `manim_service/concept_videos/docs/STYLE_BIBLE.md` — created (13 sections: color palette, opacity hierarchy, typography, layout standards, animation grammar, pacing, geometry-before-algebra rule, 3-phase workflow, render quality policy, Gymnasium asset inventory, terminology glossary, BGM palette, convergence gates)
+- `~/.claude/skills/manim-rl-animation-style-lock/SKILL.md` (symlink → `~/.codex/skills/manim-rl-animation-style-lock/SKILL.md`) — full rewrite: 500 lines, 6 sections (imports & helper reference, 3-panel layout, synchronized animation pattern, Gymnasium code integration, 3-phase generation workflow with Phase 1 prompt template, reference scene skeleton)
+
+**Deviations from plan:**
+- None. `__init__.py` was already complete from Session 2; no changes needed beyond verification.
+- STYLE_BIBLE path is `manim_service/concept_videos/docs/STYLE_BIBLE.md` (matches plan after decoupling decision from Session 1).
+- SKILL.md written to the codex symlink target (`~/.codex/skills/`) as that is where the file physically lives.
+
+**Next session should know:**
+- Session 4 target: reference scene `manim_service/concept_videos/transition_prob_concept.py` + smoke test + render
+- The reference scene skeleton (phase structure + MathTex decomposition pattern) is in SKILL.md Section F — use it as the implementation template
+- Render command: `/Users/ultramarine/.venvs/manim/bin/python -m manim -ql manim_service/concept_videos/transition_prob_concept.py TransitionProbConcept`
+- `concept_videos/docs/.gitkeep` exists; add `transition_prob_concept.py` at `manim_service/concept_videos/transition_prob_concept.py`
+- The plan's corrected phase order (geometry-before-algebra from §A of "Additions from the 3Blue1Brown Methodology Document") is the canonical sequence — not the original Phase 1 equation-first sequence
+
+---
+
+## Session 4 — 2026-05-18
+
+**Completed:**
+- `manim_service/scenes/panels.py` — fixed one-line bug: `parents[3]` → `parents[2]` in `frozenlake_frame()` asset path resolution (was pointing at Desktop/, now correctly points at grad_project/)
+- `manim_service/concept_videos/transition_prob_concept.py` — canonical reference scene (7 phases, geometry-first order)
+- Import smoke test: passed (TransitionProbConcept imports cleanly)
+- Render: passed — 46 animations, 1.1 MB MP4 at 480p15 with no errors (Courier font fallback warning is non-critical)
+
+**Reference scene contents:**
+- Phase 1: FrozenLake grid centered (state 6, height=4.0), caption, 2.0s wait
+- Phase 2: 3 trial outcomes for RIGHT action (states 7/2/5 via ReplacementTransform), 1.5s wait
+- Phase 3: ActionBarChart appears RIGHT of grid, animates to [0.33,0.0,0.33,0.33], 1.5s wait
+- Phase 4: Grid scales+moves LEFT, chart moves RIGHT, equation p(s'|s,a) written center, transforms to formal notation, action labels added below, 2.0s wait
+- Phase 5: action_arrows_overlay on grid; SynchronizedFocusGroup(eq_labels, arrows); per-action dim/highlight + chart.update_bars(), 1.5s/action
+- Phase 6: CodeStepper with 3 Gymnasium lines (gym.make, env.unwrapped.P lookup, comment), stepped through, 1.5s wait
+- Phase 7: Final caption, 2.5s hold
+
+**Deviations from plan:**
+- `frozenlake_frame()` asset path bug fixed (parents[3] → parents[2]) — not in Session 4 scope but required for actual image rendering
+- chart._bars excluded from SynchronizedFocusGroup (always_redraw mobs reset opacity each frame; bars are highlighted separately via `.animate.set_opacity()` per-index and `chart.update_bars()`)
+- 46 animations rendered vs ~30 estimated — more individual animation beats from the split FadeOut/FadeIn caption pattern
+- Courier font fallback warning: Manim uses a system monospace font instead; visually acceptable
+
+**Next session should know:**
+- Session 5 target: `rl_knowledge_base.md` — requires S&B book upload (ask user BEFORE starting)
+- Rendered MP4 is at `media/videos/transition_prob_concept/480p15/TransitionProbConcept.mp4`
+- The `frozenlake_frame` fix is the only change to `panels.py` — all other panels infrastructure is unchanged
+- The `always_redraw` bars in ActionBarChart do not persist opacity changes set via `.animate.set_opacity()`; this is a known limitation. A future improvement would be to track opacity via a separate ValueTracker in ActionBarChart. Flag for panels.py update if QA raises it.
+- Import path in `transition_prob_concept.py`: `sys.path.insert(0, str(Path(__file__).resolve().parents[2]))` ensures the scene can be run with `python -m manim` from the project root
+
+---
+
+## Session 5 — 2026-05-19
+
+**Completed:**
+- `manim_service/concept_videos/docs/rl_knowledge_base.md` — 518-line per-lesson theory map for all 6 lessons, built directly from Sutton & Barto (2nd ed., 2018) with verified chapter/section/page references and equation numbers
+- Cross-checked all canonical lesson_ids against `backend/concept_videos/specs.py`: `dp_policy_eval`, `dp_policy_improvement`, `dp_value_iteration`, `mc_first_visit`, `td_sarsa`, `td_q_learning` (these are now the lesson keys used in the doc)
+- Prerequisite DAG validated via Kahn's algorithm: 6 nodes, 8 edges, no cycles. Valid topo order: `dp_policy_eval → dp_policy_improvement → mc_first_visit → dp_value_iteration → td_sarsa → td_q_learning`
+
+**Document structure (per lesson):**
+- S&B Reference (chapter, section, printed page range)
+- Key equation (rendered in LaTeX/MathJax; equation numbers match S&B's own)
+- Intuition (1–3 sentence plain-language explanation)
+- Prerequisites (cross-referenced to other lesson_ids via `[[lesson_id]]` style)
+- Common misconceptions (4–5 per lesson, each with the corrected explanation)
+- Boundary conditions (terminal states, γ=1 limits, γ=0, convergence requirements, stochastic vs deterministic, ε→0 limits)
+- Gymnasium connection (real API fields: `env.unwrapped.P[s][a]` for DP, `env.step()/reset()` for MC/TD, 5-tuple step return, `Discrete` action space `.n`, `terminated or truncated` semantics; cliff-walking and Blackjack specifics)
+- Reputable supplementary sources (David Silver UCL, Spinning Up, Csaba Szepesvári, Gymnasium env docs, Watkins thesis, Singh & Sutton 1996, van Hasselt double-Q)
+
+**Equations verified against S&B (printed-page references):**
+- Policy Evaluation update: eq. (4.5), p. 75
+- Policy Improvement greedy step: eq. (4.9), p. 79
+- Value Iteration update: eq. (4.10), p. 83
+- First-Visit MC: pseudocode box p. 92 ($V(S_t) \leftarrow \mathrm{average}(\mathrm{Returns}(S_t))$, backward $G \leftarrow \gamma G + R_{t+1}$, first-visit guard)
+- SARSA update: eq. (6.7), p. 129
+- Q-learning update: eq. (6.8), p. 131
+
+**Deviations from plan:**
+- The plan's structure block lists "Reputable supplementary sources" as "URLs if S&B coverage is thin"; I included sources for every lesson rather than only the thin ones, because the Technical Validator and RL Expert benefit from a consistent reference set. None of the lessons are thin in S&B coverage; the extra sources are genuine value-adds (Silver lectures, Spinning Up, Szepesvári).
+- The path in the plan is `backend/concept_videos/docs/rl_knowledge_base.md`. I wrote to `manim_service/concept_videos/docs/rl_knowledge_base.md` to match the Session 1 decoupling decision (docs live with the manim_service, not backend). Same rationale as STYLE_BIBLE.md placement.
+- The plan says "ask the user to upload the book before starting"; the user supplied the book via `@`-attachment in the initial session prompt this turn, so the implicit upload preceded any writing. Confirmed via direct PDF read (548 pages, hash matched).
+- Used pypdf 6.9.2 (already installed in system Python) for text extraction; also installed poppler via Homebrew for future PDF rendering needs. The poppler install does not affect this session's output.
+
+**Next session should know:**
+- Session 6 target: API/queue decoupling — `manim_service/api/main.py`, `api/routes/concept_videos.py`, `api/routes/traces.py`, `jobs/queue.py`, `jobs/worker.py`, `storage/output.py` (all marked TODO(Session 6) from Session 1). This is independent of the agent/skill work.
+- The lesson_id keys used by `rl_knowledge_base.md` are now canonical: `dp_policy_eval`, `dp_policy_improvement`, `dp_value_iteration`, `mc_first_visit`, `td_sarsa`, `td_q_learning`. These match `backend/concept_videos/specs.py` exactly. Any future skill (RL Expert, Technical Validator, Script Writer) reading the doc should key off these strings.
+- The Gymnasium API conventions used in the doc are the **modern Gymnasium 5-tuple** (`obs, reward, terminated, truncated, info`) — *not* the legacy OpenAI Gym 4-tuple. The episode-end check is consistently `terminated or truncated`. If the codebase is still on the old API somewhere, the doc and the code will need reconciling; check `backend/concept_videos/specs.py` and any RL example scripts.
+- `env.unwrapped.P[s][a]` is the canonical Gymnasium access path for the model — *not* `env.P[s][a]`. Wrappers (TimeLimit, OrderEnforcing) hide `P`, hence the `.unwrapped` requirement. The doc states this explicitly; downstream agents should not silently change it.
+- The doc uses LaTeX math via `$...$` and `$$...$$` (MathJax-compatible). If rendered through a Markdown renderer without MathJax (e.g. plain GitHub), the equations will display as raw LaTeX source — this is acceptable since the RL Expert and Technical Validator agents read the raw text and parse the symbols, not a rendered version.
+- Prerequisite cross-references use `[[lesson_id]]` Obsidian-style link syntax. No live linking yet; treat as plain text. If we ever migrate to a wiki, the syntax is forward-compatible.
+- Sutton & Barto 2nd ed. PDF lives at `/Users/ultramarine/Downloads/Reinforcement Learning An introduction (Second Edition) by Richard S. Sutton and Andrew G. Barto.pdf`. PDF page → printed page offset is **+22** (printed p. N = PDF p. N+22). pypdf 6.9.2 emits a noisy stream of `Ignoring wrong pointing object` warnings on this file; they are benign — text extraction still works correctly.
+- Maximization bias is mentioned in the Q-learning entry but Double Q-learning itself is *not* a lesson in this knowledge base. If a future lesson adds it, the prerequisite edge would be `td_q_learning → td_double_q_learning`.
+
+---
+
+## Session 6 — 2026-05-19
+
+**Completed:**
+- `manim_service/jobs/queue.py` — `JobKind`/`JobStatus` enums, `Job` dataclass, `JobQueue` Protocol, full `MemoryJobQueue` implementation, `get_queue()` factory + `reset_queue_for_tests()` helper; Redis backend stubbed to raise `NotImplementedError` until the production switch
+- `manim_service/storage/output.py` — `concept_video_path()`, `trace_video_path()`, `ensure_subdirs()`, `store_rendered_video()`, `resolve_safe_video_path()` (with path-traversal guard)
+- `manim_service/jobs/worker.py` — `KNOWN_LESSON_IDS`, `CONCEPT_VIDEO_SCENES` registry (currently `dp_value_iteration → transition_prob_concept.py:TransitionProbConcept` only), `process_job()`, `_render_concept_video()`, `_invoke_manim()`, `run_worker_loop()`, `start_background_worker()`
+- `manim_service/api/routes/concept_videos.py` — `POST /render/concept-video` (202; 400 unknown lesson; 404 no scene yet)
+- `manim_service/api/routes/traces.py` — `POST /render/trace`, `GET /jobs/{job_id}`, `GET /videos/{filename}` (FileResponse + traversal guard via storage)
+- `manim_service/api/main.py` — `create_app()` factory, lifespan that spins up an in-process worker when `QUEUE_BACKEND=memory`, mounted routes, `/health` endpoint; `app = create_app()` for `uvicorn manim_service.api.main:app`
+- `backend/visualization/controller.py` — fully rewritten as a thin HTTP client (`VisualizationController` posts to `/render/trace`, polls `/jobs/{job_id}`, returns absolute `{base_url}{video_url}` on success or `""` on any failure). Uses `requests` (already in backend requirements). Reuses `RL_IDE_MANIM_TIMEOUT_SECONDS` as the overall job-completion timeout. New env var `RL_IDE_MANIM_SERVICE_URL` (defaults to `http://localhost:8200`).
+- `backend/tests/test_visualization_controller.py` — replaced subprocess-coupled tests with HTTP stub tests: `test_returns_video_url_when_job_completes`, `test_returns_empty_string_when_job_fails`, `test_returns_empty_string_on_empty_log_data` (all passing)
+
+**Smoke tests passed:**
+- Import + FastAPI app construction: 9 routes mounted (including `/health`, the 4 functional routes, and OpenAPI docs)
+- End-to-end worker render: enqueue `dp_value_iteration` with `force=True` → Manim subprocess invocation → MP4 copied to `backend/media/concept_videos/dp_value_iteration_concept.mp4` (1.1 MB, 46 animations rendered, terminal `JobStatus.COMPLETE` with `video_path` populated)
+- TestClient integration: bogus lesson → 400, known-but-unimplemented lesson → 404, valid → 202; `/jobs/{id}` returns complete/failed/404 correctly; `/videos/<name>` serves 1.19 MB MP4; `/videos/..%2Fpasswd` returns 404 (path traversal blocked)
+- `backend/tests/test_visualization_controller.py` — 3/3 passed under the rewritten HTTP-client controller
+
+**Deviations from plan:**
+- Plan's `traces.py` bullet says it owns `POST /render/trace` *and* `GET /jobs/{id}` and `GET /videos/{filename}`; kept all three in `traces.py` per the prompt rather than splitting jobs/videos into a separate `jobs.py` route module. Working note for future sessions: when more route types appear, consider moving job-status and video-serving to their own module.
+- The `Job` dataclass includes a `to_dict()` method but the routes return pydantic models (`JobStatusResponse`) rather than calling `to_dict()` directly. Cleaner separation; `to_dict()` retained for debug/log use.
+- The `JobQueue` Protocol uses a `pop(timeout)` style rather than blocking-forever pull. The memory backend wraps `queue.Queue.get(timeout=...)` and returns `None` on empty so worker loops can check `stop_event` between polls. Same shape works for a future Redis BLPOP wrapper.
+- Trace rendering is **not** implemented in the worker — `process_job()` raises `RenderError("Trace rendering is not yet implemented...")` for `JobKind.TRACE`. The API still accepts trace requests cleanly, and the resulting `Job` ends up in `JobStatus.FAILED` with a clear error message. This is the honest contract until the trace pipeline plan is written.
+- The new `VisualizationController` exposes a `base_url` constructor argument and an `http_client` injection point (for tests). Default base URL `http://localhost:8200` matches the plan's port assignment for `manim_service`. Override via `RL_IDE_MANIM_SERVICE_URL`.
+- The old `_write_manim_script` private method (which loaded a template and substituted lesson_id) is gone; that responsibility now lives entirely in `manim_service`. The replay scene template at `backend/visualization/templates/replay_scene.py.tmpl` is no longer referenced by the backend — it should be moved to `manim_service/concept_videos/templates/` when the trace pipeline is implemented, per plan line 107.
+- The legacy `RL_IDE_VISUALIZATION_OUTPUT_DIR` / `RL_IDE_MANIM_PYTHON` env vars are read by `VisualizationSettings.from_env()` but the new controller ignores them (the manim_service owns those concerns now). Constructor still accepts the parameters for API compatibility; they are silently discarded. Backend callers that rely on those env vars indirectly (e.g. test harnesses) will not break, but a future cleanup can drop them from `backend/settings.py`.
+
+**Next session should know:**
+- Session 7 target: write the **content agents** as Claude skills under `~/.claude/skills/` — `rl-expert/SKILL.md`, `script-writer/SKILL.md`, `technical-validator/SKILL.md`. Plan lines 1265–1287.
+- The `KNOWN_LESSON_IDS` frozen set lives in `manim_service/jobs/worker.py`; any new lesson must be added there *and* registered with a `SceneRef` in `CONCEPT_VIDEO_SCENES` before the concept-video endpoint will accept it.
+- The `manim_service` HTTP service runs on port 8200 (plan's existing assignment). Start with: `uvicorn manim_service.api.main:app --host 0.0.0.0 --port 8200`. The in-process worker is started automatically by the lifespan when `QUEUE_BACKEND=memory` (the default).
+- Output convention: rendered MP4s land in `{SHARED_MEDIA_DIR}/concept_videos/{lesson_id}_concept.mp4` and `{SHARED_MEDIA_DIR}/traces/{job_id}.mp4`. `SHARED_MEDIA_DIR` defaults to `backend/media/` and is configurable via the env var of the same name. The legacy Session-4 output at `media/videos/transition_prob_concept/480p15/TransitionProbConcept.mp4` is no longer produced by the worker — only the canonical `dp_value_iteration_concept.mp4` is. The intermediate Manim media tree now lives at `manim_service/_manim_media/` and is treated as a scratch dir.
+- `backend/services/visualization_service.py` was *not* touched — it still imports `VisualizationController` from `backend.visualization.controller`, which still exposes the same constructor signature and `generate_animation(log_data, lesson_id) -> str` method. The signature compatibility is intentional so existing service consumers continue to work.
+- `backend/concept_videos/render.py` is still present and functional as a CLI tool for ad-hoc renders. It is NOT used by manim_service; the worker has its own subprocess invocation logic in `_invoke_manim()`. Whether to keep render.py or fold it into manim_service is a Session-7+ decision.
+- The Trace rendering pipeline is the next big missing piece (mentioned in the plan but deferred). When that plan lands, `process_job()`'s `JobKind.TRACE` branch is the integration point — currently just `raise RenderError(...)`.
+- Path of rendered MP4 returned from `/jobs/{id}` is the absolute filesystem path on the manim_service side; the `video_url` in `/jobs/{id}` is the public `/videos/{filename}` path. The controller correctly prepends `base_url` when surfacing the URL to backend callers.
+- The known limitation in `ActionBarChart._bars` (always_redraw losing opacity changes) is *still* present and unchanged in this session. Flagged for a future panels.py update; not blocking.
+
+---
+
+## Session 7 — 2026-05-19
+
+**Completed:**
+- `~/.codex/skills/rl-expert/SKILL.md` — 323 lines; academic gatekeeper skill
+- `~/.codex/skills/script-writer/SKILL.md` — 402 lines; animation director skill
+- `~/.codex/skills/technical-validator/SKILL.md` — 412 lines; code/numerical auditor skill
+- `~/.claude/skills/rl-expert` — symlink → `~/.codex/skills/rl-expert`
+- `~/.claude/skills/script-writer` — symlink → `~/.codex/skills/script-writer`
+- `~/.claude/skills/technical-validator` — symlink → `~/.codex/skills/technical-validator`
+
+**Skill contents summary:**
+
+`rl-expert/SKILL.md`:
+- Knowledge source priority: S&B PDF (path + page offset +22) → rl_knowledge_base.md → Gymnasium → reputable web (with mandatory citations)
+- Canonical lesson_ids table + prerequisite DAG diagram
+- Input formats: plan.md / polished_scene.py / rendered MP4
+- 5-step review protocol (identify lesson → load KB → check claims → check prereqs → verdict)
+- APPROVED and REJECTED output templates with S&B citation format
+- Escalation rules: prerequisite violation (auto-reject), second-rejection escalation to Producer, numerical discrepancy (recommend TV rerun)
+- Common pitfall reference table (8 recurring errors across 6 lessons)
+- Instruction priority ordering
+
+`script-writer/SKILL.md`:
+- Reference documents: STYLE_BIBLE, rl_knowledge_base.md, manim-rl-animation-style-lock SKILL.md, reference scene
+- Production brief format (lesson_id + specs_entry + rl_expert_guidance + target_duration)
+- 3-phase internal workflow: Pedagogical Architect → Code Agent → Pacing Linter (all done before writing)
+- Canonical plan.md structure: 10 required sections, complete with example fill-ins
+- RL Expert collaboration protocol: pre-brief before writing phase sequence; submit complete plan for sign-off before TV
+- Reference scene cross-reference: transition_prob_concept.py as structural template
+- Geometry-before-algebra rule (equation never before Phase 3)
+- Output checklist (10-item self-verify before submitting)
+- MathTex decomposition rule in plan.md (component array shown for every morphable equation)
+
+`technical-validator/SKILL.md`:
+- Python interpreter: `/Users/ultramarine/.venvs/manim/bin/python` (only this interpreter)
+- Copy-paste Bash commands for: FrozenLake (slippery + deterministic), full state model dump, CliffWalking, live episode run, action/state space queries
+- P[s][a] 4-tuple format explained (different from env.step() 5-tuple)
+- Reference values for FrozenLake-v1 P[6][2] (canonical demo state)
+- 5-step validation protocol (parse claims → run Bash → check code → cross-ref KB → verdict)
+- PASS and discrepancy report output templates with raw Bash output requirement
+- FrozenLake and CliffWalking action/state conventions tables
+- Rounding policy (display rounding OK with ≈ qualifier; qualitative distortion = discrepancy)
+- rl_knowledge_base.md cross-reference + KB-UPDATE note format
+- Common discrepancy patterns table (8 patterns)
+
+**Deviations from plan:**
+- None. All three skills follow the plan's Session 7 spec exactly.
+- Skills physically live at `~/.codex/skills/<name>/SKILL.md` with symlinks at `~/.claude/skills/<name>`, matching the Session 3 convention for manim-rl-animation-style-lock.
+- Skill descriptions confirmed live in system-reminder after creation.
+
+**Next session should know:**
+- Session 8 target: write `qa-agent`, `series-continuity`, `voice-bgm`, and `transcript-writer` skills (plan lines 1288–1320).
+- The 3-agent pipeline is now: RL Expert (plan.md review) → Script Writer (plan.md author) → Technical Validator (numerical check). Session 8 adds the post-render QA layer.
+- `qa-agent/SKILL.md` should reference the Technical Validator's output format (PASS / discrepancy list) to understand what a "clean plan" looks like when it arrives.
+- `series-continuity/SKILL.md` must reference both SESSION_LOG.md (for series history) and STYLE_BIBLE.md. These paths are stable.
+- `voice-bgm/SKILL.md` needs BGM palette from STYLE_BIBLE §12 and a narration timing format compatible with the transcript-writer's SRT/VTT output.
+- `transcript-writer/SKILL.md` output format: captions.srt + captions.vtt; max 2 lines per caption; plain-text math notation rules.
+- No Python written this session — all session 7 work is skill content only.
+
+---
+
+## Session 8 — 2026-05-19
+
+**Completed:**
+- `~/.codex/skills/qa-agent/SKILL.md` — strict visual + audio + caption gatekeeper (20-item quality checklist, two-rejection escalation rule, APPROVED/REJECTED output templates with frame-referenced pain points)
+- `~/.codex/skills/series-continuity/SKILL.md` — cross-series consistency guardian (5 check categories: color conventions, terminology, cross-video references, prerequisite scaffolding, visual grammar; CONSISTENT/INCONSISTENT verdicts)
+- `~/.codex/skills/voice-bgm/SKILL.md` — narration script + BGM envelope author (6 register rules, phase-timing workflow, narration_script.md + audio_brief.md output formats with BGM palette from STYLE_BIBLE §12)
+- `~/.codex/skills/transcript-writer/SKILL.md` — closed caption author (captions.srt + captions.vtt; 7 accessibility rules; plain-text math notation table; self-verification checklist; audio-only gap escalation)
+- `~/.claude/skills/qa-agent` — symlink → `~/.codex/skills/qa-agent`
+- `~/.claude/skills/series-continuity` — symlink → `~/.codex/skills/series-continuity`
+- `~/.claude/skills/voice-bgm` — symlink → `~/.codex/skills/voice-bgm`
+- `~/.claude/skills/transcript-writer` — symlink → `~/.codex/skills/transcript-writer`
+
+**Deviations from plan:**
+- None. All four skills follow the plan's Session 8 spec exactly (plan lines 1288–1320).
+- Skills physically live at `~/.codex/skills/<name>/SKILL.md` with symlinks at `~/.claude/skills/<name>`, consistent with the Session 3/7 convention.
+- All four skills confirmed live in system-reminder after symlink creation.
+
+**Next session should know:**
+- Session 9 target: `~/.codex/skills/producer/SKILL.md` (pipeline governor and library curator) + `.claude/commands/produce-video.md` (slash command for `/project:produce-video lesson_id=...`). Plan lines 1317–1330.
+- The Producer skill must know the correct invocation sequence for all agents in order: RL Expert (pre-brief) → Script Writer (plan.md) → RL Expert (plan sign-off) → Technical Validator (numerical check) → Manim Expert (raw_scene.py + polished_scene.py) → Voice & BGM (narration_script.md + audio_brief.md) → Transcript Writer (captions.srt + captions.vtt) → QA Agent → Series Continuity → RL Expert (final) → Producer (library approval) → final 720p render.
+- The Producer tracks all 8 convergence gates from STYLE_BIBLE §13 (RL Expert sign-off, TV PASS, Voice/BGM delivery, Transcript delivery, QA APPROVED, Continuity CONSISTENT, RL Expert final, Producer approval).
+- The `produce-video.md` slash command reads SESSION_LOG.md to resume interrupted pipelines — this means the command must be aware of the log's structure and all prior completed sessions.
+- `KNOWN_LESSON_IDS` in `manim_service/jobs/worker.py` and `CONCEPT_VIDEO_SCENES` registry currently only has `dp_value_iteration`. The produce-video command must handle unknown lesson registry entries gracefully (the worker returns 404 for unregistered scenes).
+- No Python written this session — all session 8 work is skill content only.
+
+---
+
+## Session 9 — 2026-05-19
+
+**Completed:**
+- `~/.codex/skills/producer/SKILL.md` — 357 lines; pipeline governor and library curator skill
+- `~/.claude/skills/producer` — symlink → `~/.codex/skills/producer`
+- `.claude/commands/produce-video.md` — 351 lines; `/project:produce-video lesson_id=...` slash command
+
+**producer/SKILL.md contents:**
+- Role and authority (first and last agent; can override any verdict with documented justification)
+- Reference documents (SESSION_LOG.md, STYLE_BIBLE.md, rl_knowledge_base.md, specs.py)
+- Input format: production brief (lesson_id, target_duration_seconds, target_quality, constraints)
+- KNOWN_LESSON_IDS set (6 canonical IDs)
+- CONCEPT_VIDEO_SCENES registry table (current state: only dp_value_iteration registered)
+- Canonical 12-step invocation sequence table (11 agent steps + final render)
+- 8-gate convergence tracker table with open/closed status and gate conditions
+- Gate-specific notes (Gate 3 opens on file delivery not audio; Gate 4 remains closed on flagged gaps)
+- Escalation rules: 1st failure → redirect; 2nd failure → Producer escalation; 3rd → production hold
+- Conflict resolution protocol: STYLE_BIBLE-grounded wins; RL accuracy over visual style
+- Exception granting protocol with SESSION_LOG.md documentation format
+- Library approval checklist (4 sections: gates, metadata, file inventory, final render)
+- PRODUCER APPROVAL output statement format
+- Final 720p render trigger (curl + Python snippets)
+- 404 recovery procedure (register scene in CONCEPT_VIDEO_SCENES, re-trigger)
+- Instruction priority ordering
+
+**produce-video.md contents:**
+- 15-step orchestration procedure (Step 0 arg parse → Step 15 SESSION_LOG update)
+- Step 1: SESSION_LOG resume logic (NEW / RESUMING from gate N / ALREADY IN LIBRARY / ON HOLD)
+- Steps 2–15: full pipeline with per-gate invocation instructions for all 9 skills
+- Error handling table (invalid lesson_id, already-in-library, on-hold, double-rejection, 404 recovery)
+- All agent invocation blocks specify exact skill name and input format
+
+**Deviations from plan:**
+- None. Both artifacts follow the plan's Session 9 spec exactly (plan lines 1317–1330).
+- The producer skill separates the "pre-brief RL Expert review" (advisory, Step 3) from Gate 1
+  (binding plan.md sign-off, Step 5) — the plan's step count implies this but does not spell it out.
+  Documented explicitly because downstream sessions need to know it is advisory-only.
+- The produce-video command is 15 steps rather than a shorter form; the extra steps break out
+  file-check, symlink-verify, and SESSION_LOG update phases that the plan lists implicitly.
+
+**Next session should know:**
+- The full pipeline agent skill set is now complete: rl-expert, script-writer, technical-validator,
+  qa-agent, series-continuity, voice-bgm, transcript-writer, manim-rl-animation-style-lock, producer.
+- To produce the first concept video, run `/project:produce-video lesson_id=dp_value_iteration`.
+  dp_value_iteration is the only lesson with both KNOWN_LESSON_IDS membership AND a registered
+  CONCEPT_VIDEO_SCENES entry — it is the correct first production target.
+- The other 5 lesson_ids (dp_policy_eval, dp_policy_improvement, mc_first_visit, td_sarsa,
+  td_q_learning) are known but not yet registered in CONCEPT_VIDEO_SCENES. Each needs a new
+  scene file under manim_service/concept_videos/ and a CONCEPT_VIDEO_SCENES entry before the
+  final render step will succeed.
+- Session 10 should consider: (a) running /project:produce-video for dp_value_iteration as an
+  end-to-end pipeline test, or (b) implementing a second concept scene (dp_policy_eval is the
+  canonical first lesson in the prerequisite DAG and is the recommended next scene).
+- No Python written this session — all session 9 work is skill/command content only.
