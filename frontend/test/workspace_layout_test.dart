@@ -66,18 +66,32 @@ class _FakeVideoPlayerPlatform extends VideoPlayerPlatform {
 }
 
 class _WorkspaceLayoutApi extends BackendApi {
-  @override
-  String? get accessToken => null;
+  String? _token;
+  String _fileContent = 'print("policy evaluation")';
+  int _fileVersion = 1;
+  Map<String, dynamic>? latestChatRequest;
 
   @override
-  void clearAuthToken() {}
+  String? get accessToken => _token;
+
+  @override
+  void clearAuthToken() {
+    _token = null;
+  }
 
   @override
   Future<List<LessonSection>> fetchLessonSections() async => const [];
 
   @override
-  Future<LearnerDashboard> getDashboard() {
-    throw UnimplementedError();
+  Future<LearnerDashboard> getDashboard() async {
+    return const LearnerDashboard(
+      student: LearnerProfile(
+        id: 'student-1',
+        displayName: 'Maya',
+        platformRole: 'student',
+      ),
+      progress: LearnerProgress.empty(),
+    );
   }
 
   @override
@@ -89,13 +103,26 @@ class _WorkspaceLayoutApi extends BackendApi {
   Future<WorkspaceFileSnapshot> getWorkspaceFile({
     required String sessionId,
     String path = 'script.py',
-  }) {
-    throw UnimplementedError();
+  }) async {
+    return WorkspaceFileSnapshot(
+      path: path,
+      content: _fileContent,
+      version: _fileVersion,
+      diagnostics: const [],
+    );
   }
 
   @override
-  Future<WorkspaceHealthData> getWorkspaceHealth() {
-    throw UnimplementedError();
+  Future<WorkspaceHealthData> getWorkspaceHealth() async {
+    return const WorkspaceHealthData(
+      ready: true,
+      workerReachable: true,
+      dockerCliAvailable: true,
+      dockerDaemonReachable: true,
+      runtimeMode: 'test',
+      message: 'ready',
+      issues: [],
+    );
   }
 
   @override
@@ -107,8 +134,13 @@ class _WorkspaceLayoutApi extends BackendApi {
   }
 
   @override
-  Future<WorkspaceSessionData> getWorkspaceSession(String sessionId) {
-    throw UnimplementedError();
+  Future<WorkspaceSessionData> getWorkspaceSession(String sessionId) async {
+    return WorkspaceSessionData(
+      sessionId: sessionId,
+      lessonId: 'dp_policy_eval',
+      visibleFiles: const ['script.py'],
+      consoleReady: true,
+    );
   }
 
   @override
@@ -129,8 +161,13 @@ class _WorkspaceLayoutApi extends BackendApi {
   @override
   Future<WorkspaceSessionData> createWorkspaceSession({
     required String lessonId,
-  }) {
-    throw UnimplementedError();
+  }) async {
+    return WorkspaceSessionData(
+      sessionId: 'workspace-session-1',
+      lessonId: lessonId,
+      visibleFiles: const ['script.py'],
+      consoleReady: true,
+    );
   }
 
   @override
@@ -168,8 +205,16 @@ class _WorkspaceLayoutApi extends BackendApi {
     required String displayName,
     required String password,
     String? firebaseIdToken,
-  }) {
-    throw UnimplementedError();
+  }) async {
+    _token = 'fake-token';
+    return LearnerDashboard(
+      student: LearnerProfile(
+        id: 'student-1',
+        displayName: displayName,
+        platformRole: 'student',
+      ),
+      progress: const LearnerProgress.empty(),
+    );
   }
 
   @override
@@ -177,13 +222,73 @@ class _WorkspaceLayoutApi extends BackendApi {
     required String sessionId,
     String path = 'script.py',
     required String content,
-  }) {
-    throw UnimplementedError();
+  }) async {
+    _fileContent = content;
+    _fileVersion += 1;
+    return WorkspaceFileSnapshot(
+      path: path,
+      content: _fileContent,
+      version: _fileVersion,
+      diagnostics: const [],
+    );
   }
 
   @override
-  Future<String> workspaceEditorShellUrl(String sessionId) {
-    throw UnimplementedError();
+  Future<String> workspaceEditorShellUrl(String sessionId) async {
+    return 'http://127.0.0.1:8000/workspace/editor-shell?session_id=$sessionId';
+  }
+
+  @override
+  Future<StudyBuddyChatResponse> sendStudyBuddyChat({
+    required String lessonId,
+    required String sessionId,
+    required String message,
+    required List<StudyBuddyChatMessage> history,
+    String? currentCode,
+    List<String> unresolvedBlanks = const [],
+    String? failureKind,
+    Map<String, dynamic> latestFeedback = const {},
+  }) async {
+    latestChatRequest = {
+      'lesson_id': lessonId,
+      'session_id': sessionId,
+      'message': message,
+      'history_count': history.length,
+      'current_code': currentCode,
+      'unresolved_blanks': unresolvedBlanks,
+      'failure_kind': failureKind,
+      'latest_feedback': latestFeedback,
+    };
+    return const StudyBuddyChatResponse(
+      message: StudyBuddyChatMessage(
+        role: 'assistant',
+        content: 'Start by checking the Bellman update target.',
+      ),
+      usedFallback: false,
+      suggestedNextStep: 'Run one small check.',
+      conceptIds: ['dp_policy_eval'],
+      solutionLeakageRisk: 'low',
+      observability: {'prompt_version': 'test_chat_prompt_v1'},
+    );
+  }
+}
+
+class _WorkspaceHarness {
+  final RLWorkbenchCubit cubit;
+  final _WorkspaceLayoutApi api;
+  bool _closed = false;
+
+  _WorkspaceHarness({
+    required this.cubit,
+    required this.api,
+  });
+
+  Future<void> close() async {
+    if (_closed) {
+      return;
+    }
+    _closed = true;
+    await cubit.close();
   }
 }
 
@@ -215,25 +320,80 @@ void main() {
 
     expect(find.text('Course Outline'), findsOneWidget);
     expect(find.text('Study Buddy'), findsOneWidget);
-    expect(find.text('Current Exercise'), findsOneWidget);
+    expect(find.byKey(const ValueKey('study-buddy-drawer-handle')),
+        findsOneWidget);
     expect(
         find.byKey(const ValueKey('study-buddy-chat-input')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('workspace study buddy drawer drags and coach actions send chat',
+      (
+    tester,
+  ) async {
+    final harness = await _pumpWorkspace(tester, const Size(1440, 900));
+
+    await harness.cubit.signIn('maya@example.com', 'Password123!');
+    harness.cubit.openLesson(harness.cubit.state.selectedLesson);
+    await tester.pumpAndSettle();
+
+    final handle = find.byKey(const ValueKey('study-buddy-drawer-handle'));
+    expect(handle, findsOneWidget);
+
+    final closedHandleCenter = tester.getCenter(handle);
+    await tester.drag(handle, const Offset(-180, 0));
+    await tester.pumpAndSettle();
+    final openHandleCenter = tester.getCenter(handle);
+    expect(openHandleCenter.dx, lessThan(closedHandleCenter.dx - 100));
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('study-buddy-quick-recap')),
+    );
+    await tester.tap(find.byKey(const ValueKey('study-buddy-quick-recap')));
+    await tester.pumpAndSettle();
+    expect(harness.api.latestChatRequest?['message'], contains('quick recap'));
+    expect(
+      find.text('Start by checking the Bellman update target.'),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('study-buddy-find-blocker')),
+    );
+    await tester.tap(find.byKey(const ValueKey('study-buddy-find-blocker')));
+    await tester.pumpAndSettle();
+    expect(
+      harness.api.latestChatRequest?['message'],
+      contains('most likely blocker'),
+    );
+
+    await tester.drag(handle, const Offset(180, 0));
+    await tester.pumpAndSettle();
+    expect(tester.getCenter(handle).dx, greaterThan(openHandleCenter.dx + 100));
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await harness.close();
+  });
 }
 
-Future<void> _pumpWorkspace(WidgetTester tester, Size size) async {
+Future<_WorkspaceHarness> _pumpWorkspace(WidgetTester tester, Size size) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
 
+  final api = _WorkspaceLayoutApi();
   final cubit = RLWorkbenchCubit(
-    api: _WorkspaceLayoutApi(),
+    api: api,
     autoStartTelemetry: false,
   );
+  final harness = _WorkspaceHarness(cubit: cubit, api: api);
   addTearDown(() async {
-    await cubit.close();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await harness.close();
   });
   cubit.openLesson(cubit.state.selectedLesson);
 
@@ -243,4 +403,5 @@ Future<void> _pumpWorkspace(WidgetTester tester, Size size) async {
     ),
   );
   await tester.pumpAndSettle();
+  return harness;
 }

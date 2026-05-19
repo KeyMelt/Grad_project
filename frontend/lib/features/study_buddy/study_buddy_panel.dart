@@ -37,6 +37,7 @@ class StudyBuddyPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
+      key: const ValueKey('study-buddy-panel'),
       elevation: 10,
       color: AppTheme.surfaceWhite,
       borderRadius: BorderRadius.circular(24),
@@ -91,6 +92,7 @@ class StudyBuddyPanel extends StatelessWidget {
     } else {
       coachContent = _IdleContent(
         key: const ValueKey('study-buddy-idle'),
+        isChatLoading: isChatLoading,
         onQuickRecap: () => onSendChatMessage(
           'Give me a quick recap of the current exercise and what I should focus on next.',
         ),
@@ -419,11 +421,13 @@ class _DismissedContent extends StatelessWidget {
 }
 
 class _IdleContent extends StatelessWidget {
+  final bool isChatLoading;
   final VoidCallback onQuickRecap;
   final VoidCallback onFindBlocker;
 
   const _IdleContent({
     super.key,
+    required this.isChatLoading,
     required this.onQuickRecap,
     required this.onFindBlocker,
   });
@@ -466,12 +470,18 @@ class _IdleContent extends StatelessWidget {
                   runSpacing: 8,
                   children: [
                     ActionChip(
+                      key: const ValueKey('study-buddy-quick-recap'),
+                      tooltip: 'Ask for a quick recap',
+                      avatar: const Icon(Icons.summarize_rounded, size: 18),
                       label: const Text('Quick recap'),
-                      onPressed: onQuickRecap,
+                      onPressed: isChatLoading ? null : onQuickRecap,
                     ),
                     ActionChip(
+                      key: const ValueKey('study-buddy-find-blocker'),
+                      tooltip: 'Ask for blocker help',
+                      avatar: const Icon(Icons.troubleshoot_rounded, size: 18),
                       label: const Text('Find blocker'),
-                      onPressed: onFindBlocker,
+                      onPressed: isChatLoading ? null : onFindBlocker,
                     ),
                   ],
                 ),

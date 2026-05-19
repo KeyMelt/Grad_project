@@ -170,13 +170,13 @@ class _MainLayoutState extends State<MainLayout> {
                     right: 0,
                     child: _StudyBuddyDrawer(
                       isOpen: _studyBuddyDrawerOpen,
-                      drawerWidth:
-                          _studyBuddyRailWidth(constraints.maxWidth),
-                      hasIntervention:
-                          state.studyBuddyIntervention != null,
-                      onToggle: () => setState(() {
-                        _studyBuddyDrawerOpen = !_studyBuddyDrawerOpen;
-                      }),
+                      drawerWidth: _studyBuddyRailWidth(constraints.maxWidth),
+                      hasIntervention: state.studyBuddyIntervention != null,
+                      onToggle: () => _setStudyBuddyDrawerOpen(
+                        !_studyBuddyDrawerOpen,
+                      ),
+                      onOpen: () => _setStudyBuddyDrawerOpen(true),
+                      onClose: () => _setStudyBuddyDrawerOpen(false),
                       panel: studyBuddyPanel,
                     ),
                   ),
@@ -247,6 +247,15 @@ class _MainLayoutState extends State<MainLayout> {
           onSaveLesson: _cubit.saveAdminLesson,
         );
     }
+  }
+
+  void _setStudyBuddyDrawerOpen(bool isOpen) {
+    if (_studyBuddyDrawerOpen == isOpen) {
+      return;
+    }
+    setState(() {
+      _studyBuddyDrawerOpen = isOpen;
+    });
   }
 
   Future<void> _openOnboarding({required bool markSeen}) async {
@@ -333,14 +342,24 @@ class _MainLayoutState extends State<MainLayout> {
               if (showLogo) ...[
                 // FIRST (RED): logo acts as home button in workspace mode.
                 InkWell(
+                  key: const ValueKey('home-logo-button'),
                   onTap: isWorkspace
                       ? () => _cubit.navigateTo(AppSection.home)
                       : null,
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.asset(
-                    'assets/branding/rl_logo_trimmed.png',
-                    height: 38,
-                    fit: BoxFit.contain,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      minWidth: 44,
+                      minHeight: 42,
+                    ),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Image.asset(
+                        'assets/branding/rl_logo_trimmed.png',
+                        height: 38,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 18),
@@ -354,33 +373,28 @@ class _MainLayoutState extends State<MainLayout> {
                       children: [
                         _NavChip(
                           label: 'Home',
-                          selected:
-                              state.currentSection == AppSection.home,
+                          selected: state.currentSection == AppSection.home,
                           onTap: () => _cubit.navigateTo(AppSection.home),
                         ),
                         const SizedBox(width: 8),
                         _NavChip(
                           label: 'Workspace',
-                          selected: state.currentSection ==
-                              AppSection.workspace,
-                          onTap: () =>
-                              _cubit.navigateTo(AppSection.workspace),
+                          selected:
+                              state.currentSection == AppSection.workspace,
+                          onTap: () => _cubit.navigateTo(AppSection.workspace),
                         ),
                         const SizedBox(width: 8),
                         _NavChip(
                           label: 'Quiz',
-                          selected:
-                              state.currentSection == AppSection.quiz,
+                          selected: state.currentSection == AppSection.quiz,
                           onTap: () => _cubit.navigateTo(AppSection.quiz),
                         ),
                         const SizedBox(width: 8),
                         if (state.canAccessAuthoring)
                           _NavChip(
                             label: 'Authoring',
-                            selected:
-                                state.currentSection == AppSection.admin,
-                            onTap: () =>
-                                _cubit.navigateTo(AppSection.admin),
+                            selected: state.currentSection == AppSection.admin,
+                            onTap: () => _cubit.navigateTo(AppSection.admin),
                           ),
                       ],
                     ),
@@ -440,6 +454,8 @@ class _StudyBuddyDrawer extends StatefulWidget {
   final double drawerWidth;
   final bool hasIntervention;
   final VoidCallback onToggle;
+  final VoidCallback onOpen;
+  final VoidCallback onClose;
   final Widget panel;
 
   const _StudyBuddyDrawer({
@@ -447,6 +463,8 @@ class _StudyBuddyDrawer extends StatefulWidget {
     required this.drawerWidth,
     required this.hasIntervention,
     required this.onToggle,
+    required this.onOpen,
+    required this.onClose,
     required this.panel,
   });
 
@@ -457,6 +475,9 @@ class _StudyBuddyDrawer extends StatefulWidget {
 class _StudyBuddyDrawerState extends State<_StudyBuddyDrawer>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulseController;
+  double _dragDistance = 0;
+
+  bool get _shouldPulse => widget.hasIntervention && !widget.isOpen;
 
   @override
   void initState() {
@@ -464,13 +485,64 @@ class _StudyBuddyDrawerState extends State<_StudyBuddyDrawer>
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1100),
-    )..repeat(reverse: true);
+    );
+    _syncPulseAnimation();
+  }
+
+  @override
+  void didUpdateWidget(covariant _StudyBuddyDrawer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.hasIntervention != widget.hasIntervention ||
+        oldWidget.isOpen != widget.isOpen) {
+      _syncPulseAnimation();
+    }
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
     super.dispose();
+  }
+
+  void _syncPulseAnimation() {
+    if (_shouldPulse) {
+      if (!_pulseController.isAnimating) {
+        _pulseController.repeat(reverse: true);
+      }
+      return;
+    }
+    _pulseController.stop();
+    _pulseController.value = 0;
+  }
+
+  void _handleDragStart(DragStartDetails details) {
+    _dragDistance = 0;
+  }
+
+  void _handleDragUpdate(DragUpdateDetails details) {
+    _dragDistance += details.primaryDelta ?? details.delta.dx;
+    if (widget.isOpen && _dragDistance > 32) {
+      _dragDistance = 0;
+      widget.onClose();
+    } else if (!widget.isOpen && _dragDistance < -32) {
+      _dragDistance = 0;
+      widget.onOpen();
+    }
+  }
+
+  void _handleDragEnd(DragEndDetails details) {
+    final velocity =
+        details.primaryVelocity ?? details.velocity.pixelsPerSecond.dx;
+    if (velocity > 280 || _dragDistance > 32) {
+      widget.onClose();
+    } else if (velocity < -280 || _dragDistance < -32) {
+      widget.onOpen();
+    }
+    _dragDistance = 0;
+  }
+
+  void _handleDragCancel() {
+    _dragDistance = 0;
   }
 
   @override
@@ -480,67 +552,85 @@ class _StudyBuddyDrawerState extends State<_StudyBuddyDrawer>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Handle tab — clickable vertical strip on left edge of drawer.
-        GestureDetector(
-          onTap: widget.onToggle,
-          child: Container(
-            width: 22,
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceWhite,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(12),
-                bottomLeft: Radius.circular(12),
-              ),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x12000000),
-                  blurRadius: 6,
-                  offset: Offset(-2, 0),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  widget.isOpen
-                      ? Icons.chevron_right_rounded
-                      : Icons.chevron_left_rounded,
-                  size: 16,
-                  color: const Color(0xFF6B7280),
-                ),
-                // Pulsing intervention dot — visible only when closed and an
-                // intervention is available, so users know there's a cue.
-                if (widget.hasIntervention && !widget.isOpen) ...[
-                  const SizedBox(height: 10),
-                  AnimatedBuilder(
-                    animation: _pulseController,
-                    builder: (context, _) {
-                      final t = _pulseController.value;
-                      return Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color.lerp(
-                            AppTheme.primaryBlue,
-                            const Color(0xFF93C5FD),
-                            t,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.primaryBlue
-                                  .withValues(alpha: 0.35 + 0.35 * t),
-                              blurRadius: 4 + 5 * t,
-                              spreadRadius: 1 + 2 * t,
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+        Semantics(
+          button: true,
+          toggled: widget.isOpen,
+          label: widget.isOpen ? 'Close Study Buddy' : 'Open Study Buddy',
+          child: Tooltip(
+            message: widget.isOpen ? 'Close Study Buddy' : 'Open Study Buddy',
+            child: MouseRegion(
+              cursor: SystemMouseCursors.resizeLeftRight,
+              child: GestureDetector(
+                key: const ValueKey('study-buddy-drawer-handle'),
+                behavior: HitTestBehavior.opaque,
+                onTap: widget.onToggle,
+                onHorizontalDragStart: _handleDragStart,
+                onHorizontalDragUpdate: _handleDragUpdate,
+                onHorizontalDragEnd: _handleDragEnd,
+                onHorizontalDragCancel: _handleDragCancel,
+                child: Container(
+                  width: 22,
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceWhite,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      bottomLeft: Radius.circular(12),
+                    ),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x12000000),
+                        blurRadius: 6,
+                        offset: Offset(-2, 0),
+                      ),
+                    ],
                   ),
-                ],
-              ],
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        widget.isOpen
+                            ? Icons.chevron_right_rounded
+                            : Icons.chevron_left_rounded,
+                        size: 16,
+                        color: const Color(0xFF6B7280),
+                      ),
+                      // Pulsing intervention dot — visible only when closed and
+                      // an intervention is available, so users know there's a cue.
+                      if (_shouldPulse) ...[
+                        const SizedBox(height: 10),
+                        AnimatedBuilder(
+                          animation: _pulseController,
+                          builder: (context, _) {
+                            final t = _pulseController.value;
+                            return Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Color.lerp(
+                                  AppTheme.primaryBlue,
+                                  const Color(0xFF93C5FD),
+                                  t,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppTheme.primaryBlue.withValues(
+                                      alpha: 0.35 + 0.35 * t,
+                                    ),
+                                    blurRadius: 4 + 5 * t,
+                                    spreadRadius: 1 + 2 * t,
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
         ),

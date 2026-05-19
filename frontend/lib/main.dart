@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:mcp_toolkit/mcp_toolkit.dart';
 import 'package:rl_ide/core/backend_api.dart';
 import 'package:rl_ide/core/theme.dart';
 import 'package:rl_ide/core/onboarding_prefs.dart';
@@ -9,6 +10,9 @@ import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  MCPToolkitBinding.instance
+    ..initialize()
+    ..initializeFlutterToolkit();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );

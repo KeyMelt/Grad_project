@@ -423,7 +423,9 @@ void main() {
     expect(find.text('Generated Step Replay'), findsOneWidget);
     expect(find.text('Sample Test Results'), findsOneWidget);
 
-    await tester.tap(find.text('Quiz'));
+    await tester.tap(find.byKey(const ValueKey('home-logo-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Quiz').first);
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Start Pre-test'));

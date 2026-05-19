@@ -19,6 +19,7 @@ dependencies:
   video_player: ^2.9.2
   webview_flutter: ^4.13.0
   multicast_dns: ^0.3.3
+  mcp_toolkit: ^3.0.0
 
 dev_dependencies:
   flutter_test:

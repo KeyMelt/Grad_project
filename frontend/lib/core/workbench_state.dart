@@ -661,7 +661,9 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     _api.clearAuthToken();
     _activeTaskId = null;
     _activeWorkspaceRunId = null;
-    FirebaseAuth.instance.signOut().ignore();
+    try {
+      FirebaseAuth.instance.signOut().ignore();
+    } catch (_) {}
     emit(
       state.copyWith(
         learner: null,

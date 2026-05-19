@@ -278,7 +278,7 @@ verify_workspace_health() {
 launch_frontend() {
   info "Launching Flutter app on device '${FRONTEND_DEVICE}'..."
   cd "${ROOT_DIR}/frontend"
-  exec "${FLUTTER_BIN}" run -d "${FRONTEND_DEVICE}"
+  exec "${FLUTTER_BIN}" run -d "${FRONTEND_DEVICE}" --host-vmservice-port=8181
 }
 
 main() {
