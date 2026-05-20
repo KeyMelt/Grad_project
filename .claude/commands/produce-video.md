@@ -8,21 +8,54 @@ Invoked as:
 
 ---
 
+## Authority model — lesson_id vs. teaching spec
+
+`lesson_id` is only the stable identity / routing / artifact namespace for one
+video. It determines filenames, resume state, registry keys, media paths, and
+the lesson page that will receive the finished MP4. It is **not** a creative
+scope limit.
+
+`backend/concept_videos/specs.py` is a platform compatibility contract. It
+contains app-facing metadata and any code lines the current product must still
+recognise. It may define minimum integration obligations, but it must never be
+used to reject additional theory, examples, derivations, visual explanations,
+or pedagogical depth that the RL Expert judges necessary.
+
+The pipeline's teaching authority is the RL Expert-authored Markdown spec:
+
+```
+manim_service/concept_videos/[lesson_id]_specs.md
+```
+
+All downstream agents treat that file as the concept brief. `specs.py` remains
+available only as compatibility metadata unless the RL Expert explicitly adopts
+part of it into `[lesson_id]_specs.md`.
+
+---
+
 ## Step 0 — Parse arguments
 
 Extract `lesson_id` from the command arguments. If absent, stop immediately:
 
 ```
 Usage: /project:produce-video lesson_id=<id>
-Valid IDs: dp_policy_eval, dp_policy_improvement, dp_value_iteration,
-           mc_first_visit, td_sarsa, td_q_learning
 ```
 
-If the lesson_id is not in the set above, stop and print:
+Validate only that `lesson_id` is a stable slug:
+- lowercase letters, numbers, and underscores only
+- starts with a lowercase letter
+- no spaces
+
+If invalid, stop and print:
 ```
 PRODUCER REJECTION — [lesson_id]
-Reason: unknown lesson_id. Valid IDs listed above.
+Reason: invalid lesson_id slug. Use lowercase letters, numbers, and underscores.
 ```
+
+Do not reject a lesson_id merely because it is outside the original six-video
+lineup. Expanded course lesson_ids are valid production targets once the RL
+Course Architect has placed them in the course plan and the Producer can satisfy
+the final app-registration checklist.
 
 ---
 
@@ -64,35 +97,65 @@ If resuming, mark already-confirmed gates [✓] and skip their steps.
 
 Before spawning any agents, read these files into your context:
 - `manim_service/concept_videos/docs/STYLE_BIBLE.md`
-- `manim_service/concept_videos/docs/rl_knowledge_base.md` (the entry for this lesson_id)
-- `backend/concept_videos/specs.py` (the LessonVideoSpec entry for this lesson_id)
+- `manim_service/concept_videos/docs/rl_knowledge_base.md` (the entry for this lesson_id if present; otherwise the full prerequisite/DAG context)
+- `/Users/ultramarine/Desktop/grad_support_files/grad_project/manim_service/concept_videos/rl_course_plan.md` if it exists
+- `backend/concept_videos/specs.py` (platform compatibility metadata for this lesson_id if present)
 
-You will pass the relevant excerpts into each agent's prompt below.
+You will pass the relevant excerpts into each agent's prompt below. Label the
+`specs.py` excerpt as **platform_contract**, not as the teaching brief. If the
+lesson_id is not yet in `specs.py`, set `platform_contract` to
+`UNREGISTERED_NEW_LESSON` and continue; the RL Expert teaching spec must include
+an app-metadata proposal for later Producer registration.
 
 ---
 
-## Step 3 — RL Expert pre-brief (advisory, no gate)
+## Step 3 — RL Expert teaching spec (advisory, no gate)
 
 Spawn an Agent:
 ```
-description: "RL Expert pre-brief — [lesson_id]"
+description: "RL Expert teaching spec — [lesson_id]"
 subagent_type: claude
 prompt: |
   You are the RL Expert for an RL teaching video production pipeline.
   Read your full skill file at: ~/.claude/skills/rl-expert/SKILL.md
 
-  Task: pre-brief review (advisory — no gate decision required)
+  Task: author the concept teaching spec (advisory — no gate decision required)
   lesson_id: [lesson_id]
-  specs_entry: [paste the full LessonVideoSpec entry from specs.py]
-  rl_knowledge_base_entry: [paste the full lesson entry from rl_knowledge_base.md]
+  platform_contract: [paste the full LessonVideoSpec entry from specs.py, or UNREGISTERED_NEW_LESSON]
+  rl_knowledge_base_entry: [paste the full lesson entry from rl_knowledge_base.md, or "No direct entry yet"]
+  course_plan_context: [paste the matching rl_course_plan.md entry if available]
+  target_path: manim_service/concept_videos/[lesson_id]_specs.md
 
-  Follow the 5-step review protocol in your skill.
-  Flag any prerequisite violations, scope issues, or theory concerns.
-  Output: a brief bullet list of flags (or "No flags") for the Script Writer to carry
-  into the production brief. Do not issue a gate verdict — this is advisory only.
+  Treat lesson_id as an identity/routing key only. Treat platform_contract as
+  minimum app compatibility metadata only. It must not cap the concept scope.
+  If platform_contract is UNREGISTERED_NEW_LESSON, infer the appropriate app
+  metadata proposal from the course plan and your RL expertise.
+
+  Write a complete Markdown teaching spec to target_path. It should state what
+  this concept requires pedagogically and academically, based on your RL
+  expertise, Sutton & Barto grounding, Gymnasium behavior where relevant, and
+  the rl_knowledge_base entry. Include:
+  - concept definition and why it matters
+  - prerequisite concepts and series position
+  - canonical equations and acceptable variants
+  - required worked examples / environments
+  - common misconceptions and boundary conditions
+  - minimum visual obligations
+  - code ideas that should be connected to the lesson, including any required
+    platform_contract code lines if they remain valid
+  - numerical claims that Technical Validator must check
+  - allowed expansions beyond platform_contract
+  - app metadata proposal: title, environment_name, theory_equation,
+    worked_example, code_focus_lines, misconception_to_prevent, takeaway_line,
+    pacing_notes, and theory_verification candidates for specs.py
+  - explicit "Do not oversimplify" notes
+
+  Output: the path and full contents of [lesson_id]_specs.md, plus a brief
+  bullet list of flags (or "No flags") for the Script Writer. Do not issue a
+  gate verdict — this is advisory only.
 ```
 
-Collect the flags. Carry them into Step 4.
+Collect the generated specs.md path and the flags. Carry both into Step 4.
 
 ---
 
@@ -108,11 +171,24 @@ prompt: |
 
   Production brief:
   lesson_id: [lesson_id]
-  specs_entry: [paste the full LessonVideoSpec entry]
-  rl_knowledge_base_entry: [paste the full lesson entry]
+  teaching_spec_md: [paste the full [lesson_id]_specs.md content from Step 3]
+  platform_contract: [paste the full LessonVideoSpec entry from specs.py, or UNREGISTERED_NEW_LESSON]
+  rl_knowledge_base_entry: [paste the full lesson entry, or "No direct entry yet"]
+  course_plan_context: [paste the matching course-plan entry if available]
   rl_expert_flags: [paste the flags from Step 3, or "None"]
   style_bible_path: manim_service/concept_videos/docs/STYLE_BIBLE.md
-  target_duration_seconds: 120
+
+  Treat teaching_spec_md as the creative and pedagogical source of truth.
+  Treat platform_contract as minimum app compatibility metadata only. Do not
+  shrink the plan to the platform_contract; include every academically useful
+  expansion the teaching spec calls for.
+
+  Length policy: quality over brevity. There is NO target duration. Content
+  depth determines length, not the other way around. The video must FULLY
+  cover the concept — theory, derivation, visual demonstration, code
+  walkthrough, iteration/convergence demo where applicable, and connection
+  to prior/next concepts. The only hard cap is 30 minutes; do not write a
+  plan that would exceed it. Underrunning is a defect, not an efficiency.
 
   Follow the 3-phase internal workflow in your skill (Pedagogical Architect →
   Code Agent → Pacing Linter) before writing. Then produce a complete plan.md
@@ -123,6 +199,54 @@ prompt: |
 ```
 
 Save the returned plan.md path for subsequent steps.
+
+---
+
+## Step 4.5 — Visual Director produces choreo.md
+
+The Visual Director sits between the Script Writer and the Technical
+Validator. It owns spatial composition, element lifecycle, motion
+choreography, camera direction, sprite-math binding, cognitive load
+budget, scientific rigor declaration, and pedagogical strategy
+declaration. The Manim Expert will later read `choreo.md` alongside
+`plan.md` and implement both faithfully — choreography is no longer left
+to scene-writer improvisation.
+
+Spawn an Agent:
+```
+description: "Visual Director — choreo.md for [lesson_id]"
+subagent_type: claude
+prompt: |
+  You are the Visual Director for an RL teaching video production pipeline.
+  Read your full skill file at: ~/.claude/skills/visual-director/SKILL.md
+
+	  Input brief:
+	  lesson_id: [lesson_id]
+	  teaching_spec_path: manim_service/concept_videos/[lesson_id]_specs.md
+	  plan_md_path: manim_service/concept_videos/[lesson_id]_plan.md
+  rl_expert_status: PENDING-Gate1 (Script Writer's plan is not yet
+      approved at Gate 1; you proceed in parallel — Gate 1 will review
+      plan.md AND your choreo.md together)
+  choreo_md_target: manim_service/concept_videos/[lesson_id]_choreo.md
+  style_bible_path: manim_service/concept_videos/docs/STYLE_BIBLE.md
+  rl_knowledge_base_path: manim_service/concept_videos/docs/rl_knowledge_base.md
+
+  Produce a complete choreo.md per the output template in your skill.
+  Every required section (Scientific Rigor, Pedagogical Strategy,
+  Cognitive Load Budget, Element Lifecycle Matrix, Motion Choreography,
+  Camera Shot List, Sprite-Math Binding Matrix, trace_vector pairs,
+  Hand-off Notes) MUST be present.
+
+  Cite the Six Principles from your skill by number where decisions
+  are non-obvious. Apply STYLE_BIBLE §§13–28 strictly. Defer to
+  3Blue1Brown reference patterns when no STYLE_BIBLE rule applies.
+
+  Write the file to the target path. Return the full choreo.md content
+  in your response.
+```
+
+Save the returned choreo.md path for subsequent steps. The Manim Expert
+will receive both `plan.md` and `choreo.md` as binding inputs.
 
 ---
 
@@ -138,18 +262,39 @@ prompt: |
 
   Task: plan-review (Gate 1)
   lesson_id: [lesson_id]
+  teaching_spec_md: [paste the full [lesson_id]_specs.md content from Step 3]
   plan_md: [paste the full plan.md content from Step 4]
+  choreo_md: [paste the full choreo.md content from Step 4.5]
   rl_knowledge_base_entry: [paste the full lesson entry]
   attempt: N (of 2 allowed before Producer escalation)
 
-  Follow the 5-step review protocol in your skill.
+  Follow the 5-step review protocol in your skill. Use teaching_spec_md as the
+  scope authority. Do not reject a plan merely because it goes beyond
+  specs.py/platform_contract; reject only if it contradicts verified RL theory,
+  the teaching spec, the project lesson sequence, or required app integration.
+
+  In addition to the plan.md review, verify the choreo.md's Scientific Rigor
+  (§1) and Pedagogical Strategy (§2) sections are sound:
+  - Scientific Rigor: claims correctly scoped, qualifications present
+    where the visualisation depends on a particular env variant
+    (slippery vs deterministic, γ value, equiprobable π vs other).
+  - Pedagogical Strategy: the chosen pattern actually defeats the
+    misconception listed in rl_knowledge_base.md.
+
   Use the APPROVED or REJECTED output template from your skill.
-  If REJECTED, list specific corrections with S&B citations.
+  If REJECTED, list specific corrections with S&B citations. A
+  rejection routes back to the Script Writer (plan content) OR the
+  Visual Director (choreography/rigor) depending on the failure type;
+  state explicitly which agent owns the fix.
 ```
 
 - `APPROVED` → mark Gate 1 [✓], proceed to Step 6.
-- `REJECTED` → re-spawn Step 4 with the rejection notes appended to the brief, then
-  re-spawn this step. On second rejection, place the lesson on PRODUCTION HOLD,
+- `REJECTED` (Script Writer fault) → re-spawn Step 4 with the rejection
+  notes appended to the brief, then re-spawn Step 4.5 (since the new
+  plan may invalidate the prior choreo), then re-spawn this step.
+- `REJECTED` (Visual Director fault) → re-spawn Step 4.5 only with the
+  rejection notes appended, then re-spawn this step.
+- On second rejection of either kind, place the lesson on PRODUCTION HOLD,
   append the hold to SESSION_LOG.md, and stop.
 
 ---
@@ -166,6 +311,7 @@ prompt: |
 
   Task: validate all numerical claims and code snippets in the plan.
   lesson_id: [lesson_id]
+  teaching_spec_md: [paste the full [lesson_id]_specs.md content]
   plan_md: [paste the Gate-1-approved plan.md content]
   python_interpreter: /Users/ultramarine/.venvs/manim/bin/python
   rl_knowledge_base_entry: [paste the full lesson entry]
@@ -193,22 +339,40 @@ prompt: |
   Read your full skill file at: ~/.claude/skills/manim-rl-animation-style-lock/SKILL.md
   Also read: manim_service/concept_videos/docs/STYLE_BIBLE.md
 
-  Task: implement the concept video scene from the approved plan.
+  Task: implement the concept video scene from the approved plan AND choreo.
   lesson_id: [lesson_id]
+  teaching_spec_md: [paste the full [lesson_id]_specs.md content]
   plan_md: [paste the Gate-2-verified plan.md content]
+  choreo_md: [paste the Gate-1-approved choreo.md content]
   output_scene_path: manim_service/concept_videos/[lesson_id]_concept.py
   manim_python: /Users/ultramarine/.venvs/manim/bin/python
   render_quality: -ql (480p15, development quality)
+
+  Both plan.md and choreo.md are BINDING. The plan defines the narrative
+  beats and equations; the choreo defines the visual composition,
+  element lifecycle, motion choreography, camera shots, sprite-math
+  bindings, and trace_vector pairs. Implement every row of every
+  choreo.md table. Improvisation (decisions made because the plan
+  didn't say where something goes) is now a QA REJECT — if a layout
+  detail is missing from choreo.md, escalate to the Visual Director
+  rather than guessing.
 
   Phase 1 — raw implementation:
   Write raw_scene.py following the plan.md phase sequence exactly. Use helpers from
   manim_service/scenes/ (panels, motion, rl_visuals). Apply the geometry-before-algebra
   rule (STYLE_BIBLE §7). Decompose all MathTex as component arrays.
+  Implement choreo.md row-by-row: every Element Lifecycle Matrix entry
+  becomes a FadeIn/FadeOut pair; every Motion Choreography row becomes a
+  self.play(...) tagged with its purpose; every Camera Shot becomes a
+  zoom_to/pan_to_follow/zoom_reset; every Sprite-Math Binding becomes a
+  SpriteActionBinding or cross_highlight_pair; every trace_vector pair
+  becomes a trace_vector(...) call.
 
   Phase 2 — self-lint and polish:
   Review raw_scene.py against the style checklist in your skill. Fix pacing, wait
-  times, layout overlaps, opacity hierarchy. Write the polished version to:
-  manim_service/concept_videos/[lesson_id]_concept.py
+  times, layout overlaps, opacity hierarchy. Verify every choreo.md row
+  is implemented (no row may be silently skipped). Write the polished
+  version to: manim_service/concept_videos/[lesson_id]_concept.py
 
   Phase 3 — render:
   Run: /Users/ultramarine/.venvs/manim/bin/python -m manim -ql \
@@ -357,13 +521,15 @@ prompt: |
   You are the RL Expert for an RL teaching video production pipeline.
   Read your full skill file at: ~/.claude/skills/rl-expert/SKILL.md
 
-  Task: final academic sign-off (Gate 7)
-  lesson_id: [lesson_id]
-  polished_scene_path: manim_service/concept_videos/[lesson_id]_concept.py
+	  Task: final academic sign-off (Gate 7)
+	  lesson_id: [lesson_id]
+	  teaching_spec_md: [paste the full [lesson_id]_specs.md content]
+	  polished_scene_path: manim_service/concept_videos/[lesson_id]_concept.py
   mp4_path: [path to 480p15 render]
   rl_knowledge_base_entry: [paste the full lesson entry]
-  note: The plan.md was approved at Gate 1. This review checks whether the rendered
-        scene faithfully implements the plan or introduced new errors during production.
+	  note: The plan.md was approved at Gate 1 against teaching_spec_md. This review
+	        checks whether the rendered scene faithfully implements the plan and
+	        teaching spec, or introduced new errors during production.
 
   Follow the 5-step review protocol. Focus on misconceptions or oversimplifications
   that may have been introduced by the Manim Expert during scene production.
@@ -382,7 +548,10 @@ Run the library approval checklist directly (no agent spawn needed — this is t
 orchestrator's own gate):
 
 1. Confirm all 7 prior gates are marked [✓].
-2. Confirm `lesson_id` is in `backend/concept_videos/specs.py`.
+2. Confirm `lesson_id` is in `backend/concept_videos/specs.py` for app
+   compatibility. This check does not limit the teaching spec or plan scope.
+   If absent, spawn a backend metadata Agent to add a `LessonVideoSpec` entry
+   using the app metadata proposal in `[lesson_id]_specs.md`; then re-check.
 3. Check `CONCEPT_VIDEO_SCENES` in `manim_service/jobs/worker.py`. If not registered,
    spawn a minimal Agent to add the entry:
    ```
@@ -391,14 +560,16 @@ orchestrator's own gate):
    prompt: |
      Edit manim_service/jobs/worker.py. Find the CONCEPT_VIDEO_SCENES dict and add:
      "[lesson_id]": SceneRef(
-         scene_file="manim_service/concept_videos/[lesson_id]_concept.py",
+         scene_file=ROOT / "manim_service" / "concept_videos" / "[lesson_id]_concept.py",
          scene_class="[ClassName]",
      ),
      Also add "[lesson_id]" to KNOWN_LESSON_IDS if not already present.
      Confirm the edit was made.
    ```
-4. Confirm prerequisite DAG: all prerequisite lesson_ids are approved in SESSION_LOG.
+4. Confirm prerequisite DAG: all prerequisite lesson_ids from the course plan or
+   teaching spec are approved in SESSION_LOG.
 5. Confirm file inventory exists:
+   - `manim_service/concept_videos/[lesson_id]_specs.md`
    - `manim_service/concept_videos/[lesson_id]_concept.py`
    - 480p15 MP4
    - `[lesson_id]_narration_script.md`
@@ -406,6 +577,7 @@ orchestrator's own gate):
    - `[lesson_id]_captions.srt`
    - `[lesson_id]_captions.vtt`
    - `[lesson_id]_plan.md`
+   - `[lesson_id]_choreo.md`
 
 When all checks pass, print:
 ```
@@ -463,8 +635,9 @@ Append to `manim_service/SESSION_LOG.md`:
 
 **Rejections encountered:** [N total — list gate, agent, and resolution, or "None"]
 **Exceptions granted:** [list, or "None"]
+**Teaching spec:** manim_service/concept_videos/[lesson_id]_specs.md
 **Final MP4:** backend/media/concept_videos/[lesson_id]_concept.mp4
-**Series position:** [N of 6]
+**Series position:** [course-plan wave/order, or original-six subset position]
 **Status:** COMPLETE
 ```
 

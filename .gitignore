@@ -58,6 +58,9 @@ frontend/ios/Podfile.lock
 backend/media/concept_videos/*.mp4
 backend/concept_videos/_manim_media/
 backend/concept_videos/scenes/media/
+manim_service/_manim_media/
+manim_service/_audio_cache/
+backend/media/concept_videos/*.audio_report.json
 backend/visualization/animations/
 backend/data/
 backend/logger/logs/
@@ -68,9 +71,19 @@ output/
 # Local-only research and scratch directories
 .codex-skills/
 .codex_artifacts/
+.archive/
 
 # Claude Code / AI tooling system files
-.agents/
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/rl-course-architect/
+!.agents/skills/rl-course-architect/**
+.claude/reports/
+.claude/settings.json
+.claude/worktrees/
+.flutter_mcp/
+frontend/.flutter_mcp/
 .playwright-cli/
 skills-lock.json
 RL_manim/
