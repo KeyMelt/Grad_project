@@ -10,6 +10,7 @@ from .rl_visuals import (
     BackupDiagram,
     PolicyArrowGrid,
     ValueHeatmap,
+    EnvironmentValueHeatmap,
     QValueTable,
     EpisodeTrail,
 )
@@ -62,6 +63,13 @@ from .panels import (
     # Camera helpers
     zoom_to,
     zoom_reset,
+    # Cross-modal helpers (STYLE_BIBLE §15)
+    trace_vector,
+    cross_highlight_pair,
+    # Visual Director infrastructure (STYLE_BIBLE §§23–28)
+    sprite_action_binding,
+    pan_to_follow,
+    LifecycleTracker,
     # EnvironmentPanel protocol + factory
     EnvironmentPanel,
     env_panel,

@@ -8,6 +8,8 @@ Import via:
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 from manim import (
     AnimationGroup,
@@ -17,6 +19,8 @@ from manim import (
     Dot,
     FadeIn,
     FadeOut,
+    Group,
+    ImageMobject,
     Indicate,
     LaggedStart,
     Line,
@@ -609,6 +613,115 @@ class ValueHeatmap(VGroup):
                 run_time=run_time * 0.4,
             )
 
+    def sweep_update(
+        self,
+        scene: Scene,
+        new_values: dict | list,
+        *,
+        order: list[tuple[int, int]] | None = None,
+        per_cell_run_time: float = 0.22,
+        carry_indicator: bool = True,
+        indicator_color: str | None = None,
+    ) -> None:
+        """Cell-by-cell value propagation (STYLE_BIBLE §13 — iteration
+        visualisation must look like a SWEEP, not a flash).
+
+        Unlike ``update_values`` (all cells recolor in one ``play`` call),
+        this method animates each cell's recolor and label-update in
+        sequence — usually goal-first, then spreading outward — so the
+        viewer can SEE the value propagating through the grid one cell at
+        a time. A small "currently-being-updated" indicator dot
+        (``carry_indicator=True``) traces the sweep path.
+
+        Args:
+            scene: the active Scene instance.
+            new_values: dict or list of target values, same shape as the
+                heatmap (see ``update_values``).
+            order: optional explicit traversal order of (row, col) tuples.
+                If ``None``, defaults to Manhattan-distance order from the
+                first ``terminal`` cell (which models the "value
+                propagates backward from the reward source" intuition).
+            per_cell_run_time: how long a single cell's recolor takes.
+                Default 0.22 s; total sweep ≈ N_nontrivial_cells × this.
+            carry_indicator: if True, a small Dot follows the sweep path
+                (the cell currently being updated). Removed at the end.
+            indicator_color: override the indicator Dot color.
+        """
+        new_norm = self._normalize_values(new_values)
+
+        # Decide traversal order
+        if order is None:
+            if self._terminal:
+                anchor = next(iter(self._terminal))
+            else:
+                anchor = (self._rows - 1, self._cols - 1)
+            cells_in_order = sorted(
+                self.cells.keys(),
+                key=lambda rc: abs(rc[0] - anchor[0]) + abs(rc[1] - anchor[1]),
+            )
+            order = [rc for rc in cells_in_order if rc not in self._holes]
+
+        # Optional carry indicator
+        indicator = None
+        if carry_indicator and order:
+            from manim import Dot as _Dot
+            from manim_service.scenes.panels import REWARD_COLOR as _R
+            indicator = _Dot(
+                self._cell_center(*order[0]),
+                radius=0.10,
+                color=indicator_color or _R,
+            )
+            indicator.set_z_index(20)
+            scene.play(FadeIn(indicator, scale=0.6), run_time=0.3)
+
+        # Sweep through each cell
+        old_labels_to_remove: list[Text] = []
+        for r, c in order:
+            old_lbl = self.labels.get((r, c))
+            old_v = self._values.get((r, c), 0.0)
+            new_v = new_norm.get((r, c), 0.0)
+            if abs(new_v - old_v) < 1e-9 and old_lbl is not None:
+                # No visible change for this cell — still move the indicator
+                if indicator is not None:
+                    scene.play(
+                        indicator.animate.move_to(self._cell_center(r, c)),
+                        run_time=per_cell_run_time * 0.6,
+                    )
+                continue
+
+            # Update color + replace label with a smoothly-faded one
+            fill_color, fill_op = self._value_to_color(new_v)
+            new_lbl = Text(
+                f"{new_v:.{self._label_precision}f}",
+                font_size=self._label_font_size,
+                color=WHITE,
+            ).move_to(self._cell_center(r, c))
+
+            cell_anim = self.cells[(r, c)].animate.set_fill(fill_color, opacity=fill_op)
+            anims = [cell_anim]
+            if old_lbl is not None:
+                anims.append(FadeOut(old_lbl))
+            anims.append(FadeIn(new_lbl))
+            if indicator is not None:
+                anims.append(indicator.animate.move_to(self._cell_center(r, c)))
+
+            scene.play(*anims, run_time=per_cell_run_time)
+
+            # Register the new label in the heatmap
+            if old_lbl is not None:
+                old_labels_to_remove.append(old_lbl)
+                if old_lbl in self.submobjects:
+                    self.remove(old_lbl)
+            self.labels[(r, c)] = new_lbl
+            self.add(new_lbl)
+
+        # Update internal state
+        self._values = new_norm
+
+        # Remove indicator at end of sweep
+        if indicator is not None:
+            scene.play(FadeOut(indicator, scale=0.6), run_time=0.3)
+
 
 # ---------------------------------------------------------------------------
 # QValueTable
@@ -942,3 +1055,431 @@ class EpisodeTrail(VGroup):
         if self._current_pos is not None:
             scene.play(FadeOut(self._agent), run_time=run_time)
             self._current_pos = None
+
+
+# ---------------------------------------------------------------------------
+# EnvironmentValueHeatmap — FrozenLake tiles with overlaid values
+# ---------------------------------------------------------------------------
+
+def _gymnasium_toy_text_asset_dir() -> Path:
+    """Locate the bundled toy_text image assets shipped with Gymnasium."""
+    import gymnasium
+    return Path(gymnasium.__file__).parent / "envs" / "toy_text" / "img"
+
+
+class EnvironmentValueHeatmap(Group):
+    """A 4x4 FrozenLake-shaped value display using REAL env tile sprites.
+
+    Closes the 2026-05-20 critique gap "why are you not using the
+    environment assets?" — this is the env-asset-driven replacement for
+    the plain `ValueHeatmap` whenever the lesson is grounded in
+    FrozenLake.
+
+    Per cell:
+      - The background is the actual Gymnasium tile sprite
+        (``ice.png`` / ``hole.png`` / ``goal.png`` / ``stool.png``).
+      - For non-terminal cells, a SEMI-TRANSPARENT yellow rectangle
+        overlays the tile to signal value magnitude — the underlying
+        ice tile remains visible through the tint.
+      - Numeric labels sit INSIDE the cell at the centre, font-size
+        auto-scaled to ~22% of cell width, with a small dark shadow
+        rectangle behind them for readability against the ice background.
+        Labels never escape cell bounds (STYLE_BIBLE §16.2 + §27 + the
+        user's 2026-05-20 "numbers aren't bounded" critique).
+      - Terminal cells (holes, goal) carry no numeric label — they are
+        v ≡ 0 by definition.
+
+    The agent sprite (elf) can be placed at any state via
+    ``place_agent(scene, state_idx, direction)`` and moved via
+    ``move_agent(scene, state_idx, direction)``.
+
+    Attributes:
+        cells:           dict[(r, c) → ImageMobject of the tile]
+        value_overlays:  dict[(r, c) → Rectangle (the value tint)]
+        labels:          dict[(r, c) → Text]
+        agent:           Optional[ImageMobject] — the elf, if placed
+    """
+
+    _STANDARD_HOLES: set[tuple[int, int]] = {(1, 1), (1, 3), (2, 3), (3, 0)}
+    _STANDARD_GOAL: tuple[int, int] = (3, 3)
+    _STANDARD_START: tuple[int, int] = (0, 0)
+
+    def __init__(
+        self,
+        rows: int = 4,
+        cols: int = 4,
+        *,
+        values: list | dict | None = None,
+        holes: set[tuple[int, int]] | None = None,
+        goal: tuple[int, int] | None = None,
+        start: tuple[int, int] | None = None,
+        width: float = 4.8,
+        tint_color: str = VALUE_COLOR,
+        label_precision: int = 2,
+        label_font_color: str = WHITE,
+    ) -> None:
+        super().__init__()
+        self._rows = rows
+        self._cols = cols
+        self._holes = holes if holes is not None else self._STANDARD_HOLES
+        self._goal = goal if goal is not None else self._STANDARD_GOAL
+        self._start = start if start is not None else self._STANDARD_START
+        self._cell_w = (width - 0.08) / cols
+        self._cell_h = self._cell_w
+        self._tint_color = tint_color
+        self._label_precision = label_precision
+        self._label_font_color = label_font_color
+        self._values: dict[tuple[int, int], float] = self._normalize_values(values)
+
+        asset_dir = _gymnasium_toy_text_asset_dir()
+        self._asset_paths = {
+            "ice": asset_dir / "ice.png",
+            "hole": asset_dir / "hole.png",
+            "goal": asset_dir / "goal.png",
+            "stool": asset_dir / "stool.png",
+            "elf_down": asset_dir / "elf_down.png",
+            "elf_up": asset_dir / "elf_up.png",
+            "elf_left": asset_dir / "elf_left.png",
+            "elf_right": asset_dir / "elf_right.png",
+        }
+
+        # Per-cell collections
+        self.cells: dict[tuple[int, int], ImageMobject] = {}
+        self.value_overlays: dict[tuple[int, int], Rectangle] = {}
+        self.label_shadows: dict[tuple[int, int], Rectangle] = {}
+        self.labels: dict[tuple[int, int], Text] = {}
+        self.agent: ImageMobject | None = None
+        self._agent_state: int | None = None
+
+        # Outer border frame
+        self._border = Rectangle(
+            width=cols * self._cell_w + 0.16,
+            height=rows * self._cell_h + 0.16,
+            color=STATE_COLOR,
+            stroke_width=2.4,
+            fill_color=BG_PANEL,
+            fill_opacity=0.85,
+        )
+        self._border.set_z_index(0)
+        self.add(self._border)
+
+        # Build cells row by row
+        for r in range(rows):
+            for c in range(cols):
+                center = self._cell_center(r, c)
+                tile_kind = self._tile_kind_for(r, c)
+                tile = ImageMobject(str(self._asset_paths[tile_kind]))
+                tile.set_height(self._cell_h * 0.96)
+                tile.move_to(center)
+                tile.set_z_index(1)
+                self.cells[(r, c)] = tile
+                self.add(tile)
+
+                # Non-terminal cells get a value overlay + label
+                if (r, c) in self._holes or (r, c) == self._goal:
+                    continue
+                v = self._values.get((r, c), 0.0)
+                tint_alpha = self._tint_alpha_for(v)
+                overlay = Rectangle(
+                    width=self._cell_w * 0.94,
+                    height=self._cell_h * 0.94,
+                    fill_color=self._tint_color,
+                    fill_opacity=tint_alpha,
+                    stroke_width=0,
+                ).move_to(center)
+                overlay.set_z_index(2)
+                self.value_overlays[(r, c)] = overlay
+                self.add(overlay)
+
+                # Label shadow (small rounded dark box behind the number
+                # so it stays readable against the ice texture)
+                label_font_size = max(10, int(self._cell_w * 22))
+                value_text = self._format_value(v)
+                lbl = Text(value_text, font_size=label_font_size, color=label_font_color)
+                # Cap to cell bounds
+                if lbl.get_width() > self._cell_w * 0.86:
+                    lbl.scale((self._cell_w * 0.86) / lbl.get_width())
+                lbl.move_to(center)
+                lbl.set_z_index(4)
+
+                shadow = Rectangle(
+                    width=lbl.get_width() + 0.10,
+                    height=lbl.get_height() + 0.08,
+                    fill_color=BG_PANEL,
+                    fill_opacity=0.75,
+                    stroke_width=0,
+                ).move_to(center)
+                shadow.set_z_index(3)
+                self.label_shadows[(r, c)] = shadow
+                self.labels[(r, c)] = lbl
+                self.add(shadow)
+                self.add(lbl)
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+    def _normalize_values(self, values) -> dict[tuple[int, int], float]:
+        if values is None:
+            return {}
+        if isinstance(values, list):
+            result: dict[tuple[int, int], float] = {}
+            for idx, v in enumerate(values):
+                if v is not None:
+                    result[divmod(idx, self._cols)] = float(v)
+            return result
+        if isinstance(values, dict):
+            return {tuple(k): float(v) for k, v in values.items()}
+        raise TypeError(f"values must be list or dict, got {type(values).__name__}")
+
+    def _cell_center(self, r: int, c: int) -> np.ndarray:
+        # (0, 0) at top-left; place_grid centers on the heatmap origin
+        x = (c - (self._cols - 1) / 2) * self._cell_w
+        y = -((r - (self._rows - 1) / 2)) * self._cell_h
+        return np.array([x, y, 0.0])
+
+    def _tile_kind_for(self, r: int, c: int) -> str:
+        if (r, c) in self._holes:
+            return "hole"
+        if (r, c) == self._goal:
+            return "goal"
+        if (r, c) == self._start:
+            return "stool"
+        return "ice"
+
+    def _tint_alpha_for(self, value: float) -> float:
+        """Convert a value to an overlay alpha — 0 → invisible, 1 → strong."""
+        v_min, v_max = 0.0, 0.45
+        if value <= v_min:
+            return 0.0
+        t = min(1.0, (value - v_min) / (v_max - v_min))
+        return 0.10 + t * 0.55
+
+    def _format_value(self, v: float) -> str:
+        prec = self._label_precision
+        return f"{v:.{prec}f}"
+
+    # ------------------------------------------------------------------
+    # Public API — value updates
+    # ------------------------------------------------------------------
+    def update_values(
+        self,
+        scene: Scene,
+        new_values: dict | list,
+        *,
+        run_time: float = 1.0,
+    ) -> None:
+        """Animate all non-terminal cells to ``new_values`` simultaneously."""
+        self._values = self._normalize_values(new_values)
+        anims: list = []
+        for (r, c), overlay in self.value_overlays.items():
+            v = self._values.get((r, c), 0.0)
+            anims.append(overlay.animate.set_fill(self._tint_color, opacity=self._tint_alpha_for(v)))
+        # Old labels fade
+        for lbl in self.labels.values():
+            anims.append(FadeOut(lbl))
+        for sh in self.label_shadows.values():
+            anims.append(FadeOut(sh))
+        scene.play(*anims, run_time=run_time * 0.55)
+        # Replace labels
+        for k in list(self.labels.keys()):
+            if self.labels[k] in self.submobjects:
+                self.remove(self.labels[k])
+            if self.label_shadows[k] in self.submobjects:
+                self.remove(self.label_shadows[k])
+        self.labels.clear()
+        self.label_shadows.clear()
+        new_label_anims: list = []
+        for (r, c) in self.value_overlays:
+            v = self._values.get((r, c), 0.0)
+            center = self._cell_center(r, c)
+            label_font_size = max(10, int(self._cell_w * 22))
+            lbl = Text(self._format_value(v), font_size=label_font_size, color=self._label_font_color)
+            if lbl.get_width() > self._cell_w * 0.86:
+                lbl.scale((self._cell_w * 0.86) / lbl.get_width())
+            lbl.move_to(center)
+            lbl.set_z_index(4)
+            shadow = Rectangle(
+                width=lbl.get_width() + 0.10,
+                height=lbl.get_height() + 0.08,
+                fill_color=BG_PANEL,
+                fill_opacity=0.75,
+                stroke_width=0,
+            ).move_to(center)
+            shadow.set_z_index(3)
+            self.label_shadows[(r, c)] = shadow
+            self.labels[(r, c)] = lbl
+            self.add(shadow)
+            self.add(lbl)
+            new_label_anims.append(FadeIn(shadow))
+            new_label_anims.append(FadeIn(lbl))
+        if new_label_anims:
+            scene.play(
+                LaggedStart(*new_label_anims, lag_ratio=0.02),
+                run_time=run_time * 0.45,
+            )
+
+    def sweep_update(
+        self,
+        scene: Scene,
+        new_values: dict | list,
+        *,
+        per_cell_run_time: float = 0.22,
+        carry_indicator: bool = True,
+        order: list[tuple[int, int]] | None = None,
+        indicator_color: str | None = None,
+    ) -> None:
+        """Cell-by-cell value propagation, starting from goal and spreading outward."""
+        new_norm = self._normalize_values(new_values)
+        # Default order: Manhattan distance from goal
+        if order is None:
+            anchor = self._goal
+            order = sorted(
+                self.value_overlays.keys(),
+                key=lambda rc: abs(rc[0] - anchor[0]) + abs(rc[1] - anchor[1]),
+            )
+
+        indicator = None
+        if carry_indicator and order:
+            indicator = Dot(
+                self._cell_center(*order[0]),
+                radius=0.10,
+                color=indicator_color or REWARD_COLOR,
+            )
+            indicator.set_z_index(50)
+            scene.play(FadeIn(indicator, scale=0.6), run_time=0.3)
+
+        for (r, c) in order:
+            new_v = new_norm.get((r, c), 0.0)
+            old_v = self._values.get((r, c), 0.0)
+            overlay = self.value_overlays[(r, c)]
+            old_lbl = self.labels.get((r, c))
+            old_shadow = self.label_shadows.get((r, c))
+
+            anims: list = []
+            anims.append(overlay.animate.set_fill(self._tint_color, opacity=self._tint_alpha_for(new_v)))
+            if old_lbl is not None:
+                anims.append(FadeOut(old_lbl))
+            if old_shadow is not None:
+                anims.append(FadeOut(old_shadow))
+            # Build new label
+            label_font_size = max(10, int(self._cell_w * 22))
+            new_lbl = Text(self._format_value(new_v), font_size=label_font_size, color=self._label_font_color)
+            if new_lbl.get_width() > self._cell_w * 0.86:
+                new_lbl.scale((self._cell_w * 0.86) / new_lbl.get_width())
+            new_lbl.move_to(self._cell_center(r, c))
+            new_lbl.set_z_index(4)
+            new_shadow = Rectangle(
+                width=new_lbl.get_width() + 0.10,
+                height=new_lbl.get_height() + 0.08,
+                fill_color=BG_PANEL,
+                fill_opacity=0.75,
+                stroke_width=0,
+            ).move_to(self._cell_center(r, c))
+            new_shadow.set_z_index(3)
+            anims.append(FadeIn(new_shadow))
+            anims.append(FadeIn(new_lbl))
+            if indicator is not None:
+                anims.append(indicator.animate.move_to(self._cell_center(r, c)))
+            scene.play(*anims, run_time=per_cell_run_time)
+
+            # Cleanup old
+            if old_lbl is not None and old_lbl in self.submobjects:
+                self.remove(old_lbl)
+            if old_shadow is not None and old_shadow in self.submobjects:
+                self.remove(old_shadow)
+            self.label_shadows[(r, c)] = new_shadow
+            self.labels[(r, c)] = new_lbl
+            self.add(new_shadow)
+            self.add(new_lbl)
+
+        self._values = new_norm
+        if indicator is not None:
+            scene.play(FadeOut(indicator, scale=0.6), run_time=0.3)
+
+    # ------------------------------------------------------------------
+    # Public API — agent placement
+    # ------------------------------------------------------------------
+    def place_agent(
+        self,
+        scene: Scene,
+        state: int | tuple[int, int],
+        *,
+        direction: str = "down",
+        run_time: float = 0.6,
+    ) -> ImageMobject:
+        """Place the elf sprite at ``state`` (flat index or (r,c)). Use this
+        instead of a Dot for any agent that lives on the FrozenLake grid.
+        """
+        if isinstance(state, int):
+            r, c = divmod(state, self._cols)
+        else:
+            r, c = state
+        sprite_key = f"elf_{direction}"
+        sprite_path = self._asset_paths.get(sprite_key, self._asset_paths["elf_down"])
+        elf = ImageMobject(str(sprite_path))
+        elf.set_height(self._cell_h * 0.72)
+        elf.move_to(self._cell_center(r, c))
+        elf.set_z_index(40)
+        self.agent = elf
+        self._agent_state = r * self._cols + c
+        self.add(elf)
+        scene.play(FadeIn(elf, scale=0.7), run_time=run_time)
+        return elf
+
+    def move_agent(
+        self,
+        scene: Scene,
+        state: int | tuple[int, int],
+        *,
+        direction: str | None = None,
+        run_time: float = 0.7,
+    ) -> None:
+        """Move the agent sprite to a new state. Optionally swap the
+        directional sprite (`up`/`down`/`left`/`right`)."""
+        if self.agent is None:
+            raise ValueError("no agent placed — call place_agent first")
+        if isinstance(state, int):
+            r, c = divmod(state, self._cols)
+        else:
+            r, c = state
+        if direction is not None:
+            new_sprite_key = f"elf_{direction}"
+            new_path = self._asset_paths.get(new_sprite_key)
+            if new_path is not None:
+                # Swap the sprite by replacing the ImageMobject
+                new_elf = ImageMobject(str(new_path))
+                new_elf.set_height(self.agent.get_height())
+                new_elf.move_to(self.agent.get_center())
+                new_elf.set_z_index(40)
+                scene.play(FadeOut(self.agent), FadeIn(new_elf), run_time=run_time * 0.4)
+                self.remove(self.agent)
+                self.agent = new_elf
+                self.add(new_elf)
+        scene.play(
+            self.agent.animate.move_to(self._cell_center(r, c)),
+            run_time=run_time,
+        )
+        self._agent_state = r * self._cols + c
+
+    def remove_agent(self, scene: Scene, *, run_time: float = 0.5) -> None:
+        if self.agent is not None:
+            scene.play(FadeOut(self.agent), run_time=run_time)
+            self.remove(self.agent)
+            self.agent = None
+            self._agent_state = None
+
+    # ------------------------------------------------------------------
+    # Cross-highlight helpers
+    # ------------------------------------------------------------------
+    def cell_bbox(self, state: int | tuple[int, int]) -> Rectangle:
+        """Return a SurroundingRectangle-style highlight box for the cell.
+
+        Use for cross_highlight_pair: pass `heatmap.cell_bbox(s)` as the
+        geometric target.
+        """
+        if isinstance(state, int):
+            r, c = divmod(state, self._cols)
+        else:
+            r, c = state
+        return self.cells[(r, c)]
+

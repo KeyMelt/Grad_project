@@ -5,10 +5,14 @@ Scenes import from manim_service.scenes (the __init__ re-exports everything).
 """
 from __future__ import annotations
 
+import json
+import logging
 from pathlib import Path
 from typing import Callable, Protocol, runtime_checkable
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 from manim import (
     DOWN,
     LEFT,
@@ -88,12 +92,71 @@ class BaseConceptScene(MovingCameraScene):
 
     Sets the dark background, exposes standard layout anchors, and wraps
     common operations (header, caption, assimilation waits).
+
+    **Phase timestamps:** call ``self.mark_phase(name)`` at the start of each
+    phase method. At scene tear-down a ``phase_timestamps.json`` sidecar
+    is written next to the rendered MP4 — the audio pipeline reads this to
+    validate that each narration line lands inside its declared phase.
     """
+
+    # Populated as the scene runs; flushed to disk in tear_down().
+    _phase_marks: list[dict]
 
     def setup(self) -> None:
         super().setup()
         self.camera.background_color = BG_COLOR
         self.camera.frame.save_state()
+        self._phase_marks = []
+
+    def mark_phase(self, name: str) -> None:
+        """Record the current scene time as the start of a named phase.
+
+        Call this at the top of each ``_phaseN_*()`` method. The phase
+        number is inferred from the call order (1, 2, 3, ...).
+        """
+        try:
+            current_time = float(self.renderer.time)
+        except Exception:
+            current_time = 0.0
+        self._phase_marks.append({
+            "phase": len(self._phase_marks) + 1,
+            "name": name,
+            "start_seconds": round(current_time, 3),
+        })
+
+    def tear_down(self) -> None:  # type: ignore[override]
+        """Flush phase timestamps before super tear-down.
+
+        The sidecar is written into the same directory tree as the rendered
+        MP4 — ``self.renderer.file_writer.movie_file_path`` is the canonical
+        output path Manim chose for this scene.
+        """
+        try:
+            self._write_phase_timestamps()
+        except Exception:
+            # Never let the sidecar block a successful render.
+            logger.exception("failed to write phase_timestamps.json")
+        super().tear_down()
+
+    def _write_phase_timestamps(self) -> None:
+        if not getattr(self, "_phase_marks", None):
+            return
+        try:
+            mp4_path = Path(self.renderer.file_writer.movie_file_path)
+        except Exception:
+            return
+        try:
+            total_duration = float(self.renderer.time)
+        except Exception:
+            total_duration = 0.0
+        payload = {
+            "scene": type(self).__name__,
+            "total_duration_seconds": round(total_duration, 3),
+            "phases": list(self._phase_marks),
+        }
+        sidecar = mp4_path.with_name("phase_timestamps.json")
+        sidecar.parent.mkdir(parents=True, exist_ok=True)
+        sidecar.write_text(json.dumps(payload, indent=2))
 
     def show_header(self, title: str, subtitle: str | None = None) -> VGroup:
         """Fade in a title (and optional subtitle) at the top of the frame."""
@@ -112,6 +175,59 @@ class BaseConceptScene(MovingCameraScene):
     def assimilation_wait(self, duration: float = 1.5) -> None:
         """Pause for the viewer to absorb what's on screen."""
         self.wait(duration)
+
+    def ingestion_wait(self, duration: float = 2.5) -> None:
+        """Mandatory post-morph 'ingestion buffer' (STYLE_BIBLE §6).
+
+        Call this immediately AFTER every major structural change — an
+        equation morph, a panel reveal, a scene-wide reposition, the
+        introduction of a new mobject group, or the completion of an
+        iterative sweep. Gives the viewer time to absorb the new state
+        BEFORE the narration or next animation moves on.
+
+        Default 2.5 s — longer than ``assimilation_wait`` because this is
+        the explicit content-density buffer the pacing critique flagged.
+        Do not reduce below 1.5 s for any major morph.
+        """
+        self.wait(max(duration, 1.5))
+
+    def smooth_move_to(
+        self,
+        mob: Mobject,
+        target,
+        *,
+        run_time: float | None = None,
+        min_run_time: float = 1.2,
+    ) -> None:
+        """Eased positional move that enforces a minimum run_time.
+
+        Wraps ``mob.animate.move_to(target)`` with Manim's default ease
+        rate function (smooth — slow start, fast middle, slow end), and
+        guarantees ``run_time >= min_run_time`` so positional transforms
+        never feel like instantaneous snaps (STYLE_BIBLE §5 ban on
+        zero-momentum jumps).
+
+        ``target`` is anything ``.move_to()`` accepts: a Mobject, a point,
+        or an aligned edge. The minimum run_time scales gently with
+        distance — large repositions get more time automatically.
+        """
+        import numpy as _np
+        # Compute distance for scaling
+        try:
+            current = mob.get_center()
+            if hasattr(target, "get_center"):
+                dest = target.get_center()
+            else:
+                dest = _np.asarray(target, dtype=float)
+            dist = float(_np.linalg.norm(dest - current))
+        except Exception:
+            dist = 0.0
+        # Scale run_time with distance, never under min_run_time
+        if run_time is None:
+            run_time = max(min_run_time, 0.9 + 0.18 * dist)
+        else:
+            run_time = max(run_time, min_run_time)
+        self.play(mob.animate.move_to(target), run_time=run_time)
 
     def place_caption(self, text: str, font_size: int = 22) -> Text:
         """Return a caption Text mobject anchored to the bottom edge."""
@@ -238,15 +354,48 @@ def pill(label: str, color: str) -> VGroup:
 # Environment asset helpers
 # ---------------------------------------------------------------------------
 
-def frozenlake_frame(state: int, height: float = 2.8) -> Mobject:
-    """ImageMobject for a FrozenLake state, or fallback colored rect."""
+def frozenlake_frame(
+    state: int,
+    height: float = 2.8,
+    *,
+    soft_frame: bool = True,
+) -> Mobject:
+    """ImageMobject for a FrozenLake state, optionally wrapped in a soft frame.
+
+    STYLE_BIBLE §14 (Asset Border Standards): the Gymnasium-rendered PNGs ship
+    with a stark white background that detaches harshly from the BG_COLOR
+    canvas. When ``soft_frame=True`` (the default), the image is wrapped in
+    a `RoundedRectangle` filled with `BG_PANEL` (slightly larger than the
+    image) with a low-opacity `STATE_COLOR` stroke — the white background
+    becomes invisible against the panel, and the asset transitions into the
+    scene through a soft dark surround instead of a high-contrast white edge.
+
+    Pass ``soft_frame=False`` only when the asset is going to be used inside
+    another container (e.g. `environment_panel()`) that already supplies its
+    own framing.
+    """
     asset_dir = Path(__file__).resolve().parents[2] / "frontend" / "assets" / "lesson_media" / "frozenlake"
     img_path = asset_dir / f"state_{state:02d}.png"
     if img_path.exists():
-        mob = ImageMobject(str(img_path))
-        mob.set_height(height)
-        return mob
-    # Fallback: plain rectangle
+        img = ImageMobject(str(img_path))
+        img.set_height(height)
+        if not soft_frame:
+            return img
+        pad = 0.12
+        bg = RoundedRectangle(
+            width=img.get_width() + 2 * pad,
+            height=img.get_height() + 2 * pad,
+            corner_radius=0.14,
+            fill_color=BG_PANEL,
+            fill_opacity=1.0,
+            stroke_color=STATE_COLOR,
+            stroke_width=1.4,
+        )
+        bg.set_stroke(opacity=0.55)
+        bg.move_to(img.get_center())
+        # Mix-class wrapper (Rectangle is a VMobject, ImageMobject is not) → use Group
+        return Group(bg, img)
+    # Fallback: plain rectangle (already a dark fill, no white border to mask)
     rect = Rectangle(
         width=height,
         height=height,
@@ -568,6 +717,16 @@ class CodeStepper:
         self._active_idx: int | None = None
         self._rect: SurroundingRectangle | None = None
 
+    @property
+    def lines(self) -> list[Text]:
+        """Public read-only access to the line Text mobjects.
+
+        Used by scenes for cross_highlight_pair(scene, code.lines[i], ...)
+        per STYLE_BIBLE §15.2. Returns the same list referenced internally,
+        so callers should not mutate it.
+        """
+        return self._lines_mobs
+
     def step(self, scene: Scene, line_idx: int) -> list:
         anims: list = []
         if self._active_idx is not None and self._rect is not None:
@@ -825,6 +984,243 @@ def zoom_reset(scene: MovingCameraScene, *, run_time: float = 0.9) -> None:
     scene.play(
         scene.camera.frame.animate.set_width(_DEFAULT_FRAME_WIDTH).move_to(ORIGIN),
         run_time=run_time,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Cross-modal helpers — connect geometry ↔ algebra ↔ code (STYLE_BIBLE §15)
+# ---------------------------------------------------------------------------
+
+def trace_vector(
+    scene: Scene,
+    source: Mobject,
+    target: Mobject,
+    *,
+    color: str = YELLOW,
+    stroke_width: float = 2.0,
+    run_time: float = 1.2,
+    fade_after: bool = True,
+) -> Mobject:
+    """Draw a transient dashed connector from a geometric source to an
+    algebraic target (or vice versa), giving the viewer a literal line
+    between "where this term came from" and "where it appears."
+
+    Use at the moment a new equation token is written, with ``source`` set
+    to the tree-branch / cell / arrow / probability label whose meaning
+    the token captures and ``target`` set to the just-written MathTex
+    sub-mobject. The arrow animates in via `Create`, holds briefly, and
+    fades out (if ``fade_after``) so the connection registers without
+    cluttering the canvas.
+
+    STYLE_BIBLE §15: every freshly-written equation token whose meaning
+    is grounded in an on-screen geometric element MUST be paired with a
+    `trace_vector` at the moment of its first appearance.
+    """
+    src_pt = source.get_critical_point(RIGHT) if hasattr(source, "get_critical_point") else source.get_center()
+    tgt_pt = target.get_critical_point(LEFT) if hasattr(target, "get_critical_point") else target.get_center()
+    arrow = Arrow(
+        src_pt,
+        tgt_pt,
+        buff=0.10,
+        stroke_width=stroke_width,
+        color=color,
+        max_tip_length_to_length_ratio=0.10,
+    )
+    arrow.set_opacity(0.85)
+    scene.play(Create(arrow), run_time=run_time * 0.55)
+    scene.wait(run_time * 0.45)
+    if fade_after:
+        scene.play(FadeOut(arrow), run_time=0.6)
+    return arrow
+
+
+# ---------------------------------------------------------------------------
+# Sprite ↔ Math binding (STYLE_BIBLE §26 — algorithmic motion is mathematically grounded)
+# ---------------------------------------------------------------------------
+
+def sprite_action_binding(
+    scene: Scene,
+    sprite: Mobject,
+    *,
+    move_to: Mobject | np.ndarray | None = None,
+    highlight_tokens: list[Mobject] | None = None,
+    dim_tokens: list[Mobject] | None = None,
+    code_line: Mobject | None = None,
+    move_run_time: float = 1.0,
+    highlight_color: str = YELLOW,
+    settle_time: float = 0.6,
+) -> None:
+    """One step of an algorithmic motion: the sprite moves to a new target
+    AND the equation tokens that explain *why* it moved highlight
+    synchronously, AND (optionally) a paired code line activates.
+
+    The viewer is never asked to translate motion → math; the binding
+    does it for them. (STYLE_BIBLE §26.)
+
+    Args:
+        scene: active Scene.
+        sprite: the moving mobject (a Dot, agent rectangle, evaluator, etc.).
+        move_to: target Mobject or world-space point. If None, sprite holds.
+        highlight_tokens: list of equation sub-mobjects to set to
+            OPACITY_PRIMARY in lockstep with the motion.
+        dim_tokens: list of equation sub-mobjects to set to
+            OPACITY_SECONDARY simultaneously (the tokens losing focus).
+        code_line: optional CodeStepper line mobject to indicate.
+        move_run_time: animation duration for the motion + highlights.
+        highlight_color: pulse color for the optional code_line Indicate.
+        settle_time: hold after the motion so the viewer can read the
+            highlighted tokens against the new sprite position.
+    """
+    anims: list = []
+    if move_to is not None:
+        if hasattr(move_to, "get_center"):
+            anims.append(sprite.animate.move_to(move_to.get_center()))
+        else:
+            anims.append(sprite.animate.move_to(move_to))
+    if highlight_tokens:
+        for tok in highlight_tokens:
+            anims.append(tok.animate.set_opacity(OPACITY_PRIMARY))
+    if dim_tokens:
+        for tok in dim_tokens:
+            anims.append(tok.animate.set_opacity(OPACITY_SECONDARY))
+    if anims:
+        scene.play(*anims, run_time=move_run_time)
+    if code_line is not None:
+        scene.play(
+            Indicate(code_line, color=highlight_color, scale_factor=1.06),
+            run_time=settle_time,
+        )
+    else:
+        scene.wait(settle_time)
+
+
+# ---------------------------------------------------------------------------
+# Camera — pan_to_follow (STYLE_BIBLE §25)
+# ---------------------------------------------------------------------------
+
+def pan_to_follow(
+    scene: MovingCameraScene,
+    target: Mobject,
+    *,
+    path_points: list[np.ndarray] | None = None,
+    per_step_run_time: float = 0.8,
+    frame_scale: float | None = None,
+) -> None:
+    """Pan the camera to keep ``target`` (or a sequence of points) centered.
+
+    Two modes:
+      - With ``path_points``: explicit path the camera traces, one step
+        per point (good for following a sprite through a sequence of
+        cells, e.g. an evaluator sweeping a heatmap).
+      - Without ``path_points``: single pan to wherever ``target``
+        currently is (cheap end-of-motion recenter).
+
+    ``frame_scale``, if provided, tightens or widens the camera frame
+    during the pan — e.g. ``0.7`` for a closer follow during a sprite's
+    walk, ``1.0`` to stay at default width.
+    """
+    if path_points is None:
+        anims = [scene.camera.frame.animate.move_to(target.get_center())]
+        if frame_scale is not None:
+            anims.append(scene.camera.frame.animate.set(width=_DEFAULT_FRAME_WIDTH * frame_scale))
+        scene.play(*anims, run_time=per_step_run_time)
+        return
+    for pt in path_points:
+        if hasattr(pt, "get_center"):
+            pt = pt.get_center()
+        anims = [scene.camera.frame.animate.move_to(pt)]
+        if frame_scale is not None:
+            anims.append(scene.camera.frame.animate.set(width=_DEFAULT_FRAME_WIDTH * frame_scale))
+        scene.play(*anims, run_time=per_step_run_time)
+
+
+# ---------------------------------------------------------------------------
+# Element Lifecycle Tracker (STYLE_BIBLE §23)
+# ---------------------------------------------------------------------------
+
+class LifecycleTracker:
+    """Records active mobjects + how long they've been "stale" so the
+    Manim Expert can mass-dismiss elements before they overstay.
+
+    The Visual Director's choreo.md Element Lifecycle Matrix is the
+    authoritative declaration — this class is the runtime helper that
+    makes implementing it less error-prone.
+
+    Usage:
+        tracker = LifecycleTracker(scene=self)
+        tracker.register(grid, name="frozenlake_phase1", phase=1)
+        ...
+        # at end of phase 1:
+        tracker.dismiss_phase_owned(phase=1)
+        # OR explicit:
+        tracker.dismiss(name="frozenlake_phase1")
+    """
+
+    def __init__(self, scene: Scene) -> None:
+        self._scene = scene
+        self._active: dict[str, tuple[Mobject, int]] = {}
+
+    def register(self, mob: Mobject, *, name: str, phase: int) -> None:
+        """Record that ``mob`` is now active under ``name`` for ``phase``."""
+        self._active[name] = (mob, phase)
+
+    def dismiss(self, *, name: str, run_time: float = 0.6) -> None:
+        """FadeOut the named mobject and remove from active set."""
+        if name not in self._active:
+            return
+        mob, _ = self._active.pop(name)
+        self._scene.play(FadeOut(mob), run_time=run_time)
+
+    def dismiss_phase_owned(self, *, phase: int, run_time: float = 0.7) -> None:
+        """FadeOut every mobject registered as owned by ``phase``.
+
+        Use at end-of-phase as a sweep: anything that was used only this
+        phase gets dismissed at once.
+        """
+        to_remove = [(name, mob) for name, (mob, p) in self._active.items() if p == phase]
+        if not to_remove:
+            return
+        anims = [FadeOut(mob) for _, mob in to_remove]
+        self._scene.play(*anims, run_time=run_time)
+        for name, _ in to_remove:
+            self._active.pop(name, None)
+
+    def active_count(self) -> int:
+        """Number of currently-active registered mobjects."""
+        return len(self._active)
+
+    def active_names(self) -> list[str]:
+        return list(self._active.keys())
+
+
+def cross_highlight_pair(
+    scene: Scene,
+    primary: Mobject,
+    secondary: Mobject,
+    *,
+    primary_color: str = YELLOW,
+    secondary_color: str | None = None,
+    pulse_run_time: float = 1.0,
+) -> None:
+    """Simultaneously highlight a code line and the geometric region it
+    operates on, so the viewer connects the two without scanning.
+
+    The ``primary`` (typically a code line / a code-step rectangle) and
+    ``secondary`` (typically a cell, group of cells, or arrow group in the
+    grid/heatmap) receive simultaneous `Indicate` flashes. Use immediately
+    when a `CodeStepper.step()` advances the active line, paired with the
+    bound geometric target declared in plan.md's cross-highlight matrix.
+
+    STYLE_BIBLE §15: every code line whose effect is locally observable on
+    the grid MUST be cross-highlighted with its target region at the
+    moment of activation. Lone code highlights without a paired geometric
+    flash are a focus-integrity failure.
+    """
+    secondary_color = secondary_color or primary_color
+    scene.play(
+        Indicate(primary, color=primary_color, scale_factor=1.06),
+        Indicate(secondary, color=secondary_color, scale_factor=1.10),
+        run_time=pulse_run_time,
     )
 
 
