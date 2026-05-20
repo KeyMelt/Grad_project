@@ -20,3 +20,39 @@ RENDER_QUALITY: str = os.environ.get("RENDER_QUALITY", "l")
 # Queue backend: "memory" for MVP, "redis" for production
 QUEUE_BACKEND: str = os.environ.get("QUEUE_BACKEND", "memory")
 REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+
+# Audio / TTS configuration --------------------------------------------------
+
+# Kokoro-onnx model + voices files (downloaded once to ~/.cache/kokoro/).
+# These are user-level caches, not committed to the repo.
+KOKORO_MODEL_PATH: Path = Path(
+    os.environ.get(
+        "KOKORO_MODEL_PATH",
+        str(Path.home() / ".cache" / "kokoro" / "kokoro-v1.0.onnx"),
+    )
+)
+KOKORO_VOICES_PATH: Path = Path(
+    os.environ.get(
+        "KOKORO_VOICES_PATH",
+        str(Path.home() / ".cache" / "kokoro" / "voices-v1.0.bin"),
+    )
+)
+
+# Default narrator voice for the concept-video series. Single voice across
+# the whole library — measured, professorial American male tone.
+DEFAULT_NARRATOR_VOICE: str = os.environ.get("DEFAULT_NARRATOR_VOICE", "am_michael")
+
+# Default synthesis speed (1.0 = natural; <1.0 slower, >1.0 faster).
+DEFAULT_NARRATOR_SPEED: float = float(os.environ.get("DEFAULT_NARRATOR_SPEED", "1.0"))
+
+# ffmpeg binary used for mixing/muxing audio with rendered MP4.
+FFMPEG_BIN: str = os.environ.get("FFMPEG_BIN", "/opt/homebrew/bin/ffmpeg")
+
+# Scratch directory for per-render synthesised audio segments. Safe to nuke
+# between runs; cache is per-render, not per-line.
+AUDIO_CACHE_DIR: Path = Path(
+    os.environ.get(
+        "AUDIO_CACHE_DIR",
+        str(Path(__file__).resolve().parent / "_audio_cache"),
+    )
+)

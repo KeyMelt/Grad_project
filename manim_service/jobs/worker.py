@@ -45,10 +45,12 @@ class SceneRef:
 
 
 # Lesson → scene registry. New entries are added as scenes are authored.
+# Empty after the 2026-05-20 supersession — all six concept scenes will be
+# (re)authored by the upcoming pipeline run and registered here by Step 13.
 CONCEPT_VIDEO_SCENES: dict[str, SceneRef] = {
-    "dp_value_iteration": SceneRef(
-        scene_file=ROOT / "manim_service" / "concept_videos" / "dp_value_iteration_concept.py",
-        scene_class="ValueIterationConcept",
+    "dp_policy_eval": SceneRef(
+        scene_file=ROOT / "manim_service" / "concept_videos" / "dp_policy_eval_concept.py",
+        scene_class="PolicyEvaluationConcept",
     ),
 }
 
@@ -91,7 +93,88 @@ def _render_concept_video(*, lesson_id: str, force: bool) -> Path:
         return output_path
 
     rendered = _invoke_manim(scene.scene_file, scene.scene_class)
-    return storage.store_rendered_video(rendered, output_path)
+    silent_path = storage.store_rendered_video(rendered, output_path)
+
+    # Mux narration if the Voice & BGM agent has already delivered the script.
+    # This is best-effort: if the narration script is missing, we leave the
+    # silent MP4 in place and the Voice & BGM agent will fill it in later.
+    narrated = _maybe_mux_narration(lesson_id=lesson_id, silent_mp4=silent_path)
+    return narrated or silent_path
+
+
+def _maybe_mux_narration(*, lesson_id: str, silent_mp4: Path) -> Path | None:
+    """Run the audio pipeline if the narration script is ready.
+
+    Returns the path to the narrated MP4 on success, or None if the
+    narration script is missing or the synthesis subprocess fails (in
+    which case the caller falls back to the silent MP4).
+    """
+    narration_script = (
+        ROOT
+        / "manim_service"
+        / "concept_videos"
+        / f"{lesson_id}_narration_script.md"
+    )
+    if not narration_script.is_file():
+        logger.info(
+            "No narration script at %s — leaving silent MP4 in place.",
+            narration_script,
+        )
+        return None
+
+    narrated_output = silent_mp4.with_name(silent_mp4.stem + "_narrated.mp4")
+    cmd = [
+        settings.MANIM_PYTHON,
+        "-m",
+        "manim_service.audio.synthesize",
+        "--narration",
+        str(narration_script),
+        "--silent-mp4",
+        str(silent_mp4),
+        "--output",
+        str(narrated_output),
+        "--lesson-id",
+        lesson_id,
+    ]
+    # If the Manim Expert emitted phase_timestamps.json, pass it in.
+    phase_sidecar = silent_mp4.with_name("phase_timestamps.json")
+    if not phase_sidecar.exists():
+        # Fall back to the location next to the original render
+        rendered_dir = (
+            ROOT
+            / "manim_service"
+            / "_manim_media"
+            / "videos"
+            / silent_mp4.stem.replace(f"_concept", "_concept")  # no-op, future-proofs naming
+        )
+        for candidate in rendered_dir.rglob("phase_timestamps.json"):
+            phase_sidecar = candidate
+            break
+    if phase_sidecar.exists():
+        cmd.extend(["--phase-timestamps", str(phase_sidecar)])
+
+    env = dict(os.environ)
+    env["PYTHONPATH"] = f"{ROOT}{os.pathsep}{env.get('PYTHONPATH', '')}".rstrip(os.pathsep)
+    logger.info("Invoking narration synthesis: %s", " ".join(cmd))
+    try:
+        subprocess.run(cmd, check=True, cwd=str(ROOT), env=env)
+    except subprocess.CalledProcessError as exc:
+        logger.warning(
+            "Narration synthesis failed (exit %d) — keeping silent MP4. "
+            "QA gate D28 will flag this and route back to Voice & BGM.",
+            exc.returncode,
+        )
+        return None
+
+    if not narrated_output.is_file():
+        logger.warning(
+            "Synthesis subprocess succeeded but %s was not created.",
+            narrated_output,
+        )
+        return None
+
+    logger.info("Narrated MP4 ready: %s", narrated_output)
+    return narrated_output
 
 
 def _invoke_manim(scene_file: Path, scene_class: str) -> Path:
