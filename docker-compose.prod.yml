@@ -1,0 +1,125 @@
+name: rl-platform-prod
+
+x-backend-image: &backend-image
+  image: ${RL_IDE_IMAGE:-rl-platform:cloud}
+  build:
+    context: .
+    dockerfile: Dockerfile.cloud
+
+x-common-environment: &common-environment
+  RL_IDE_BACKEND_HOST: 0.0.0.0
+  RL_IDE_INTERNAL_TOKEN: ${RL_IDE_INTERNAL_TOKEN:?Set RL_IDE_INTERNAL_TOKEN to a generated secret}
+  RL_IDE_AUTH_TOKEN_SECRET: ${RL_IDE_AUTH_TOKEN_SECRET:?Set RL_IDE_AUTH_TOKEN_SECRET to a generated secret}
+  RL_IDE_SHELL_TOKEN_SECRET: ${RL_IDE_SHELL_TOKEN_SECRET:?Set RL_IDE_SHELL_TOKEN_SECRET to a generated secret}
+  RL_IDE_FIREBASE_CREDENTIALS_PATH: /run/secrets/firebase-admin-key.json
+  RL_IDE_FIREBASE_APP_NAME: ${RL_IDE_FIREBASE_APP_NAME:-rl-ide-backend}
+  RL_IDE_ALLOWED_ORIGINS: ${RL_IDE_ALLOWED_ORIGINS:?Set RL_IDE_ALLOWED_ORIGINS to the deployed frontend origin}
+  RL_IDE_OPEN_PROVISIONING: "0"
+  RL_IDE_ALLOW_LEGACY_PASSWORD_SIGN_IN: "0"
+  RL_IDE_DB_URL: sqlite:////srv/rl-platform/data/rl_learning_platform.db
+  RL_IDE_VISUALIZATION_OUTPUT_DIR: /srv/rl-platform/animations
+  RL_IDE_CONCEPT_VIDEO_DIR: /srv/rl-platform/concept-videos
+  RL_IDE_MANIM_PYTHON: python3
+  RL_IDE_GEMINI_ENABLED: ${RL_IDE_GEMINI_ENABLED:-0}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  RL_IDE_GEMINI_MODEL: ${RL_IDE_GEMINI_MODEL:-gemini-2.5-flash}
+  RL_IDE_GEMINI_TIMEOUT_SECONDS: ${RL_IDE_GEMINI_TIMEOUT_SECONDS:-5}
+
+x-common-service: &common-service
+  <<: *backend-image
+  restart: unless-stopped
+  init: true
+  security_opt:
+    - no-new-privileges:true
+  volumes:
+    - /srv/rl-platform/data:/srv/rl-platform/data
+    - /srv/rl-platform/animations:/srv/rl-platform/animations
+    - /srv/rl-platform/concept-videos:/srv/rl-platform/concept-videos
+  secrets:
+    - firebase_admin_key
+
+services:
+  gateway:
+    <<: *common-service
+    environment:
+      <<: *common-environment
+      SERVICE_NAME: gateway
+      RL_IDE_GATEWAY_PORT: "8000"
+      RL_IDE_EXECUTION_MODE: remote
+      RL_IDE_EXECUTION_WORKER_URL: http://execution-worker:8100
+      RL_IDE_USER_SERVICE_MODE: remote
+      RL_IDE_USER_SERVICE_URL: http://user-evaluation:8200
+      RL_IDE_BOOTSTRAP_ADMIN_FIREBASE_UID: ${RL_IDE_BOOTSTRAP_ADMIN_FIREBASE_UID:-}
+      RL_IDE_BOOTSTRAP_ADMIN_DISPLAY_NAME: ${RL_IDE_BOOTSTRAP_ADMIN_DISPLAY_NAME:-Platform Admin}
+    ports:
+      - "${RL_IDE_GATEWAY_BIND:-127.0.0.1:8000}:8000"
+    depends_on:
+      execution-worker:
+        condition: service_healthy
+      user-evaluation:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read()",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  execution-worker:
+    <<: *common-service
+    environment:
+      <<: *common-environment
+      SERVICE_NAME: execution-worker
+      RL_IDE_EXECUTION_WORKER_PORT: "8100"
+      RL_IDE_WORKSPACE_BASE_DIR: /srv/rl-platform/data/workspaces
+      RL_IDE_JOB_STORE_PATH: /srv/rl-platform/data/execution_jobs.db
+      RL_IDE_WORKSPACE_STORE_PATH: /srv/rl-platform/data/workspace_state.db
+      RL_IDE_ARTIFACT_STORE_PATH: /srv/rl-platform/data/execution_artifacts.db
+      RL_IDE_WORKSPACE_USE_DOCKER: ${RL_IDE_WORKSPACE_USE_DOCKER:-1}
+      RL_IDE_WORKSPACE_IMAGE: ${RL_IDE_WORKSPACE_IMAGE:-python:3.11-slim}
+    volumes:
+      - /srv/rl-platform/data:/srv/rl-platform/data
+      - /srv/rl-platform/animations:/srv/rl-platform/animations
+      - /srv/rl-platform/concept-videos:/srv/rl-platform/concept-videos
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import os, urllib.request; req = urllib.request.Request('http://127.0.0.1:8100/internal/workspace/health', headers={'X-Internal-Token': os.environ['RL_IDE_INTERNAL_TOKEN']}); urllib.request.urlopen(req, timeout=5).read()",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  user-evaluation:
+    <<: *common-service
+    environment:
+      <<: *common-environment
+      SERVICE_NAME: user-evaluation
+      RL_IDE_USER_EVALUATION_PORT: "8200"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8200/', timeout=5).read()",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+secrets:
+  firebase_admin_key:
+    file: ${RL_IDE_FIREBASE_CREDENTIALS_FILE:?Set RL_IDE_FIREBASE_CREDENTIALS_FILE to the Firebase service-account JSON path}
