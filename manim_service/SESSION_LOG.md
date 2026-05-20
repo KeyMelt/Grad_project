@@ -2,6 +2,186 @@
 
 ---
 
+## Production Critique & Persistent Fixes — dp_policy_eval Rebuild — 2026-05-20
+
+After the first PRODUCER APPROVAL the user reviewed the rendered video and
+issued a 10-point structural critique:
+
+1. Subtitle showed `dp_policy_eval` (developer identifier on screen)
+2. FrozenLake asset had a stark white border against the dark canvas
+3. CodeStepper panel at 03:51 occluded the heatmap (destructive overlay)
+4. Text-on-text crowding during equation expansion
+5. Grid teleported to LEFT at 00:36 (no easing, no momentum)
+6. Equation faded in disconnected from the fork diagram (no visual origin)
+7. Heatmap iteration was a discordant flash, not a propagation sweep
+8. Equation colors did not strictly match grid colors
+9. No "ingestion buffer" pauses after morphs
+10. Code-line highlights had no paired highlight on the grid region acted on
+
+PLUS: the user demanded runnable Python (no pseudocode placeholders).
+
+Every item has been resolved AT THE INFRASTRUCTURE LEVEL — the fix binds
+to every future video automatically, not just dp_policy_eval. Summary:
+
+| Critique | Persistent fix (applies to all 6 videos) |
+|---|---|
+| 1 (subtitle) | STYLE_BIBLE §21 + qa-agent item E36 ban developer subtitles |
+| 2 (asset border) | `frozenlake_frame()` now wraps in `RoundedRectangle(BG_PANEL)` by default (STYLE_BIBLE §14) |
+| 3 (occlusion) | STYLE_BIBLE §16 reserved-hemisphere rule + script-writer plan.md must declare layout matrix per phase + QA E38 |
+| 4 (text crowding) | STYLE_BIBLE §16.2 mandates ≥0.18 unit safety padding |
+| 5 (snap) | `BaseConceptScene.smooth_move_to()` enforces min run_time + ease; STYLE_BIBLE §17 + QA E39 |
+| 6 (disconnected algebra) | New `trace_vector()` helper + STYLE_BIBLE §15.1 + QA E45 require source-token connectors |
+| 7 (flash iteration) | New `ValueHeatmap.sweep_update()` (cell-by-cell wave + carry indicator) + STYLE_BIBLE §19 + QA E42 |
+| 8 (color drift) | STYLE_BIBLE §13 Semantic Color Binding Matrix is now binding for every video + QA E41 |
+| 9 (no ingestion) | `BaseConceptScene.ingestion_wait()` + STYLE_BIBLE §18 + QA E40 |
+| 10 (code↔grid sync) | New `cross_highlight_pair()` helper + STYLE_BIBLE §15.2 + QA E43; script-writer plan.md must include a cross-highlight matrix |
+| BONUS (real Python) | `specs.py.code_focus_lines` for **all six lessons** rewritten with real identifiers (`V[next_state]`, `env.unwrapped.P`, real indentation); STYLE_BIBLE §20 + QA E44 ban pseudocode |
+
+Files changed during the persistent fix pass:
+- `backend/concept_videos/specs.py` — all 6 code_focus_lines tuples rewritten with runnable Python
+- `manim_service/scenes/panels.py` — new helpers: `frozenlake_frame(soft_frame=True)` default, `BaseConceptScene.ingestion_wait()`, `BaseConceptScene.smooth_move_to()`, `trace_vector()`, `cross_highlight_pair()`, `CodeStepper.lines` public property
+- `manim_service/scenes/rl_visuals.py` — new `ValueHeatmap.sweep_update()` method
+- `manim_service/scenes/__init__.py` — re-exports new helpers
+- `manim_service/concept_videos/docs/STYLE_BIBLE.md` — new sections §13–§21 (Semantic Color Binding, Asset Borders, Cross-Modal Highlights, Reserved Hemispheres, Motion & Easing, Ingestion Buffers, Sweep Iteration, Code Fidelity, Subtitle Hygiene), §22 keeps the convergence gates
+- `~/.codex/skills/script-writer/SKILL.md` — Phase 4 (Layout & cross-modal review) added; plan.md template now requires reserved-hemisphere matrix + cross-highlight matrix
+- `~/.codex/skills/manim-rl-animation-style-lock/SKILL.md` — Section A extended with 9 mandatory usage rules covering the new helpers + the bans on legacy patterns
+- `~/.codex/skills/qa-agent/SKILL.md` — 10 new checklist items E36–E45 with output-table entries
+- `manim_service/concept_videos/dp_policy_eval_concept.py` — rewritten with all 10 fixes applied
+
+dp_policy_eval was re-rendered with the fixes:
+- Duration: 6:46 (405.8 s) — up from 6:34, the extra time absorbs the new
+  trace_vectors, sweep cells, and ingestion buffers
+- 216 animations (up from 126)
+- Re-narrated and re-muxed cleanly: video=405.8 s, narration=405.8 s,
+  Δ=0.0 s. No phase-overflow truncations.
+- Captions regenerated to match the new audio timings.
+
+Group E QA results (10 new checks):
+- E36 subtitle hygiene: PASS — "Computing v_π under a fixed policy"
+- E37 asset borders: PASS — soft frame wrapper applied
+- E38 no occlusion: PASS — heatmap migrated to LEFT-CENTER before code panel
+- E39 positional easing: PASS (1 spurious WARN on a caption-swap timing)
+- E40 ingestion buffers: PASS — 6 ingestion_wait() calls
+- E41 semantic colors: PASS — binding matrix consistent across all 3 forms
+- E42 sweep iteration: PASS — `sweep_update()` replaces `update_values()`
+- E43 cross-highlight: PASS — 4 cross_highlight_pair calls covering all 4 code steps
+- E44 code fidelity: PASS (1 spurious FAIL on the regex matching "future" in a comment; actual code uses V[next_state])
+- E45 trace_vector: PASS — 4 trace_vectors in Phase 3
+
+---
+
+## Production Run — dp_policy_eval — 2026-05-20
+
+**Status:** COMPLETE — first video in the rebuilt library
+
+**Gates opened:**
+- Gate 1 (RL Expert plan sign-off): 2026-05-20 — equation forms match S&B eq. 4.5 p.75; no prerequisite violations (foundational lesson); misconceptions and boundaries from rl_knowledge_base.md addressed visually in Phases 6+7
+- Gate 2 (Technical Validator PASS): 2026-05-20 — env.unwrapped.P validated; V_k snapshots {V_0, V_1[14]=0.25, V_2, V_5, V_10, V_71} verified at γ=0.99; specs.py code lines compute v_π(s) correctly
+- Manim Expert render: 2026-05-20 — PolicyEvaluationConcept rendered at 480p15, 126 animations, 6:34 with embedded narration. phase_timestamps.json sidecar emitted with all 8 phases.
+- Gate 3 (Voice & BGM): 2026-05-20 — narration_script.md (30 lines) and audio_brief.md delivered. Kokoro v1.0 am_michael synthesis successful. No BGM (series default).
+- Gate 4 (Transcript Writer): 2026-05-20 — captions.srt + captions.vtt (30 entries each) timed to actual audio_report.json timestamps. 0 audio-only accessibility gaps.
+- Gate 5 (QA APPROVED with notes): 2026-05-20 — 33/35 checklist items PASS, 2 non-blocking WARN (phase-boundary overflow on 11 lines due to optimistic narration script timestamps; ffmpeg held last frame 6.6s due to narration overrun). Not a structural failure — content density floor met (≥2 morphs, ValueHeatmap with 6 V_k snapshots, verbatim code, iteration shown, misconception + boundary addressed visually).
+- Gate 6 (Series Continuity CONSISTENT): 2026-05-20 — first video in the library; no prior conventions to violate. Establishes baseline for all subsequent videos (am_michael voice, no BGM, 6+ min runtime, ValueHeatmap-style iteration demos for value-function lessons).
+- Gate 7 (RL Expert final): 2026-05-20 — rendered scene faithfully implements approved plan; no new misconceptions introduced; V_k values still match Technical Validator's verified set; closing connection to dp_policy_improvement correctly previewed.
+- Gate 8 (Producer approval): 2026-05-20 — all 7 deliverables on disk; CONCEPT_VIDEO_SCENES registered; SESSION_LOG entry written.
+
+**Rejections encountered:** None (first-pass APPROVED with notes)
+**Exceptions granted:** None
+
+**Artifacts on disk:**
+- Plan: `manim_service/concept_videos/dp_policy_eval_plan.md`
+- Scene: `manim_service/concept_videos/dp_policy_eval_concept.py` (PolicyEvaluationConcept, 8 phases, 126 animations)
+- Narration script: `manim_service/concept_videos/dp_policy_eval_narration_script.md` (30 lines)
+- Audio brief: `manim_service/concept_videos/dp_policy_eval_audio_brief.md` (no BGM)
+- Captions SRT: `manim_service/concept_videos/dp_policy_eval_captions.srt` (30 entries)
+- Captions VTT: `manim_service/concept_videos/dp_policy_eval_captions.vtt` (30 entries)
+- Silent dev render (480p15): `manim_service/_manim_media/videos/dp_policy_eval_concept/480p15/PolicyEvaluationConcept.mp4`
+- **Narrated MP4 (480p15 + am_michael narration):** `backend/media/concept_videos/dp_policy_eval_concept_narrated.mp4` (8.3 MB, 6:34)
+- Audio report: `backend/media/concept_videos/dp_policy_eval_concept_narrated.audio_report.json`
+
+**Series position:** 1 of 6 (DAG-foundation; no prerequisites)
+
+### PRODUCER APPROVAL — dp_policy_eval
+
+Lessons learned that will be applied to remaining 5 videos:
+- Narration script timestamps written before synthesis are unreliable — actual TTS pace differs significantly. Future: write script with rough timing, synth once, then adjust video pacing to match (not the script).
+- Scene `self.wait(N)` values need to be sized to ~3× longer than my initial intuition. For a single MathTex hold while narration explains the equation, 10–15s is the realistic minimum, not 2s.
+- The pipeline (plan → tech-validate → render → narrate → mux → QA) all works end-to-end. Total wall-clock for this video: ~25 min including two render passes.
+
+---
+
+## Library Reset — 2026-05-20
+
+The dp_value_iteration video produced on 2026-05-19 was rejected as
+pedagogically insufficient: 67 s runtime, single equation morph, no
+iteration visualisation, fast-forwarded to converged V*, code panel
+abbreviated below specs.py fidelity. The 8-gate pipeline approved it
+because the gates were style-only — they did not check content density,
+duration coverage, iteration demonstration, or helper utilisation.
+
+In response, the following changes have been applied to the pipeline
+BEFORE this library reset:
+1. Removed the 120-s `target_duration_seconds` cap. The new rule is
+   quality-over-brevity with a 30-min hard ceiling, no floor target,
+   and a 7-item content density requirement (STYLE_BIBLE §6).
+2. QA checklist extended with group C (content density: items 21–27)
+   and group D (audio: items 28–35).
+3. Voice & BGM agent now actually synthesises narration via Kokoro
+   v1.0 (`am_michael`) and muxes it into the MP4 (no BGM).
+4. BaseConceptScene now emits `phase_timestamps.json` next to each
+   render for narration alignment.
+5. The Manim style-lock skill now mandates `self.mark_phase(...)` calls
+   at the top of every phase method.
+
+The 2026-05-19 dp_value_iteration artifacts were moved to
+`.archive/superseded_dp_value_iteration_2026-05-20/` and the
+`CONCEPT_VIDEO_SCENES` registry was cleared. The library is now empty.
+A fresh DAG-ordered production run begins for all six lessons:
+
+1. dp_policy_eval         (Foundational — DP intro)
+2. dp_policy_improvement  (Refinement)
+3. mc_first_visit         (Foundational — MC intro)
+4. dp_value_iteration     (Refinement)
+5. td_sarsa               (Foundational — TD intro)
+6. td_q_learning          (Method contrast vs SARSA)
+
+---
+
+## Production Run — dp_value_iteration — 2026-05-19 (SUPERSEDED 2026-05-20)
+
+**Gates opened:**
+- Gate 1 (RL Expert plan sign-off): 2026-05-19 (prior session)
+- Gate 2 (Technical Validator PASS): 2026-05-19 (prior session)
+- Manim Expert render: 2026-05-19 (prior session — 60 animations, 480p15)
+- Gate 3 (Voice & BGM delivery): 2026-05-19 20:00
+- Gate 4 (Transcript delivery): 2026-05-19 20:00
+- Gate 5 (QA APPROVED): 2026-05-19 20:08 (attempt 2 — 2 fixes applied)
+- Gate 6 (Series Continuity CONSISTENT): 2026-05-19 20:08
+- Gate 7 (RL Expert final sign-off): 2026-05-19 20:10
+- Gate 8 (Producer approval): 2026-05-19 20:14
+
+**Rejections encountered:**
+- Gate 5 (QA Agent) attempt 1: BLOCK-1 (A4 — set_opacity(0.0) not a STYLE_BIBLE constant; fixed: FadeOut), BLOCK-2 (A9 — LaggedStart missing for 12 arrows in Phase 5 Step 1; fixed: LaggedStart lag_ratio=0.08). Resolved and approved on attempt 2.
+
+**Exceptions granted:**
+- Prerequisite DAG: dp_value_iteration has prerequisites (dp_policy_eval, dp_policy_improvement) not yet in library. Producer exception granted for pipeline-test run; scene made self-contained with inline concept context.
+
+**Artifacts:**
+- Scene: `manim_service/concept_videos/dp_value_iteration_concept.py` (ValueIterationConcept, 511 lines, 7 phases)
+- Narration script: `manim_service/concept_videos/dp_value_iteration_narration_script.md`
+- Audio brief: `manim_service/concept_videos/dp_value_iteration_audio_brief.md`
+- Captions SRT: `manim_service/concept_videos/dp_value_iteration_captions.srt` (41 entries)
+- Captions VTT: `manim_service/concept_videos/dp_value_iteration_captions.vtt` (41 entries)
+- Dev render (480p15): `media/videos/dp_value_iteration_concept/480p15/ValueIterationConcept.mp4`
+- **Final MP4 (720p30): `backend/media/concept_videos/dp_value_iteration_concept.mp4`**
+
+**Series position:** 3 of 6
+**Status:** COMPLETE
+
+### PRODUCER APPROVAL — dp_value_iteration
+
+---
+
 ## Session 1 — 2026-05-18
 
 **Completed:**
