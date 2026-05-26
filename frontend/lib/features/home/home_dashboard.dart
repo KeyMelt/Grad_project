@@ -52,37 +52,6 @@ class _HomeDashboardState extends State<HomeDashboard> {
   static const double _sectionSpacing = AppConstants.defaultPadding;
   static const double _lessonCardMinWidth = 380;
 
-  late final TextEditingController _nameController;
-  late final TextEditingController _passwordController;
-
-  @override
-  void initState() {
-    super.initState();
-    _nameController = TextEditingController();
-    _passwordController = TextEditingController();
-  }
-
-  @override
-  void didUpdateWidget(covariant HomeDashboard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.learner != null &&
-        widget.learner?.displayName != oldWidget.learner?.displayName) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) {
-          return;
-        }
-        _nameController.text = widget.learner!.displayName;
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final lessons = widget.sections
@@ -214,9 +183,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isReady
-                      ? 'Connected to RL Backend'
-                      : 'Disconnected from Backend',
+                  isReady ? 'Platform ready' : 'Connection unavailable',
                   style: TextStyle(
                     color: isReady ? AppTheme.successGreen : Colors.red,
                     fontWeight: FontWeight.w700,
@@ -224,7 +191,9 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   ),
                 ),
                 Text(
-                  isReady ? manager.baseUrl : (manager.lastError ?? 'Offline'),
+                  isReady
+                      ? 'Lessons and progress are available'
+                      : (manager.lastError ?? 'Offline'),
                   style: TextStyle(
                     color: isReady ? AppTheme.textSecondary : Colors.redAccent,
                     fontSize: 11,
@@ -235,195 +204,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
               ],
             ),
           ),
-          OutlinedButton.icon(
-            onPressed: _showServerSettings,
-            icon: const Icon(Icons.settings_ethernet_rounded, size: 16),
-            label: const Text('Update IP'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-          ),
         ],
-      ),
-    );
-  }
-
-  void _showServerSettings() {
-    final manager = BackendConnectionManager();
-    final controller = TextEditingController(text: manager.baseUrl);
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Server Connection Settings'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Enter the backend URL or IP address of your machine for the iPad to connect.',
-              style: TextStyle(fontSize: 13, height: 1.4),
-            ),
-            const SizedBox(height: 18),
-            TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                labelText: 'Backend URL / IP',
-                hintText: 'http://192.168.1.5:8000',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.link_rounded),
-              ),
-              autofocus: true,
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Example: http://192.168.x.x:8000',
-              style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              manager.updateUrl(controller.text);
-              Navigator.pop(context);
-            },
-            child: const Text('Save & Connect'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAuthDialog() {
-    var mode = _AuthMode.signIn;
-    _passwordController.clear();
-
-    showDialog<void>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => AlertDialog(
-          title: const Text('Account Access'),
-          content: SizedBox(
-            width: 380,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: _AuthModeButton(
-                        label: 'Sign In',
-                        selected: mode == _AuthMode.signIn,
-                        onTap: () {
-                          setModalState(() => mode = _AuthMode.signIn);
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _AuthModeButton(
-                        label: 'Sign Up',
-                        selected: mode == _AuthMode.signUp,
-                        onTap: () {
-                          setModalState(() => mode = _AuthMode.signUp);
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                TextField(
-                  controller: _nameController,
-                  keyboardType: TextInputType.emailAddress,
-                  autofillHints: const [AutofillHints.email],
-                  decoration: const InputDecoration(
-                    labelText: 'Email address',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  autofillHints: mode == _AuthMode.signUp
-                      ? const [AutofillHints.newPassword]
-                      : const [AutofillHints.password],
-                  decoration: InputDecoration(
-                    labelText: mode == _AuthMode.signUp
-                        ? 'Create password'
-                        : 'Password',
-                    border: const OutlineInputBorder(),
-                  ),
-                  onSubmitted: (_) {
-                    Navigator.of(context).pop();
-                    if (mode == _AuthMode.signUp) {
-                      widget.onSignUp(
-                        _nameController.text,
-                        _passwordController.text,
-                      );
-                    } else {
-                      widget.onSignIn(
-                        _nameController.text,
-                        _passwordController.text,
-                      );
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  mode == _AuthMode.signUp
-                      ? 'Create a Firebase-backed learner account with email and password.'
-                      : 'Sign in with your Firebase account, or use Google below.',
-                  style: const TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 12,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton.icon(
-              onPressed: () {
-                Navigator.of(context).pop();
-                widget.onSignInWithGoogle();
-              },
-              icon: const Icon(Icons.g_mobiledata_rounded),
-              label: const Text('Google'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                if (mode == _AuthMode.signUp) {
-                  widget.onSignUp(
-                    _nameController.text,
-                    _passwordController.text,
-                  );
-                } else {
-                  widget.onSignIn(
-                    _nameController.text,
-                    _passwordController.text,
-                  );
-                }
-              },
-              child:
-                  Text(mode == _AuthMode.signUp ? 'Create Account' : 'Sign In'),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -504,137 +285,81 @@ class _HomeDashboardState extends State<HomeDashboard> {
               ],
             ),
           ),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: learner == null
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text(
-                            'Authentication',
-                            style: TextStyle(
-                              color: AppTheme.textPrimary,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Open a dedicated sign-in or sign-up window for Firebase email/password or Google.',
-                            style: TextStyle(
-                              color: AppTheme.textSecondary,
-                              height: 1.45,
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed:
-                                  widget.isSigningIn ? null : _showAuthDialog,
-                              icon: widget.isSigningIn
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : const Icon(Icons.login_rounded),
-                              label: Text(
-                                widget.isSigningIn
-                                    ? 'Authorizing...'
-                                    : 'Open Sign In / Sign Up',
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: widget.isSigningIn
-                                  ? null
-                                  : widget.onSignInWithGoogle,
-                              icon: const Icon(Icons.g_mobiledata_rounded),
-                              label: const Text('Continue with Google'),
-                            ),
-                          ),
-                        ],
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text(
-                            'Current Learner',
-                            style: TextStyle(
-                              color: AppTheme.textSecondary,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            learner.displayName,
-                            style: const TextStyle(
-                              color: AppTheme.textPrimary,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: widget.onOpenQuiz,
-                              icon: const Icon(Icons.quiz_outlined),
-                              label: const Text('Open Quizzes'),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: widget.onOpenFlashcards,
-                              icon: const Icon(Icons.style_outlined),
-                              label: const Text('Study Flashcards'),
-                            ),
-                          ),
-                          if (widget.canAccessAuthoring) ...[
-                            const SizedBox(height: 10),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: widget.onOpenAuthoring,
-                                icon: const Icon(
-                                    Icons.admin_panel_settings_outlined),
-                                label: const Text('Open Authoring & Progress'),
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: widget.onSignOut,
-                              icon: const Icon(Icons.logout_rounded),
-                              label: const Text('Sign Out'),
-                            ),
-                          ),
-                        ],
+          if (learner != null)
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Current Learner',
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
+                      const SizedBox(height: 8),
+                      Text(
+                        learner.displayName,
+                        style: const TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: widget.onOpenQuiz,
+                          icon: const Icon(Icons.quiz_outlined),
+                          label: const Text('Open Quizzes'),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: widget.onOpenFlashcards,
+                          icon: const Icon(Icons.style_outlined),
+                          label: const Text('Study Flashcards'),
+                        ),
+                      ),
+                      if (widget.canAccessAuthoring) ...[
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: widget.onOpenAuthoring,
+                            icon:
+                                const Icon(Icons.admin_panel_settings_outlined),
+                            label: const Text('Open Authoring & Progress'),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: widget.onSignOut,
+                          icon: const Icon(Icons.logout_rounded),
+                          label: const Text('Sign Out'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -982,46 +707,6 @@ String _formatConceptLabel(String conceptId) {
       .where((part) => part.isNotEmpty)
       .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
       .join(' ');
-}
-
-enum _AuthMode { signIn, signUp }
-
-class _AuthModeButton extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _AuthModeButton({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFFE8F0FE) : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: selected ? AppTheme.primaryBlue : AppTheme.borderLight,
-          ),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? AppTheme.primaryBlue : AppTheme.textPrimary,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _LessonSummaryCard extends StatelessWidget {

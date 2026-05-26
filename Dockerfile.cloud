@@ -32,26 +32,23 @@ RUN set -eux; \
     rm -rf /tmp/docker /tmp/docker.tgz; \
     docker --version
 
-RUN useradd --create-home --uid 10001 appuser
-
 WORKDIR /app
 
 COPY backend/requirements.txt /tmp/requirements.txt
 RUN pip install --upgrade pip && pip install -r /tmp/requirements.txt
 
 COPY backend /app/backend
+COPY manim_service /app/manim_service
 COPY docker/entrypoint.cloud.sh /app/docker/entrypoint.cloud.sh
 
 RUN mkdir -p /app/backend/data \
     /app/backend/visualization/animations \
     /app/backend/media/concept_videos && \
-    chmod +x /app/docker/entrypoint.cloud.sh && \
-    chown -R appuser:appuser /app
+    chmod +x /app/docker/entrypoint.cloud.sh
 
 EXPOSE 8000
 EXPOSE 8100
 EXPOSE 8200
-
-USER appuser
+EXPOSE 8300
 
 ENTRYPOINT ["/app/docker/entrypoint.cloud.sh"]

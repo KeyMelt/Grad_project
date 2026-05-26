@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from backend.auth.dependencies import (
     assert_owner_or_admin,
@@ -12,6 +14,31 @@ from backend.auth.dependencies import (
 )
 from backend.auth.roles import PlatformRole, Principal
 from backend.settings import GatewaySettings
+
+try:
+    import httpx as _httpx
+    _HTTPX_AVAILABLE = True
+except ImportError:
+    _HTTPX_AVAILABLE = False
+    import requests as _requests
+
+
+def _manim_service_netloc() -> str:
+    """Return the expected netloc (host:port) for the manim service."""
+    raw = os.environ.get("RL_IDE_MANIM_SERVICE_URL", "http://localhost:8200").rstrip("/")
+    parsed = urlparse(raw)
+    return parsed.netloc or parsed.path  # fallback for edge cases
+
+
+def _proxy_manim_video(url: str) -> Response:
+    """Fetch an MP4 from the manim service and stream it back."""
+    if _HTTPX_AVAILABLE:
+        resp = _httpx.get(url, timeout=30, follow_redirects=True)
+        resp.raise_for_status()
+        return Response(content=resp.content, media_type="video/mp4")
+    resp = _requests.get(url, timeout=30, allow_redirects=True)
+    resp.raise_for_status()
+    return Response(content=resp.content, media_type="video/mp4")
 
 
 def _animation_output_root() -> Path:
@@ -123,6 +150,19 @@ def build_visualization_router(services: Any) -> APIRouter:
         principal: Principal | None = Depends(optional_principal),
     ):
         _resolve_principal(principal=principal)
+
+        # Case 2: path is a URL — proxy to the manim service.
+        if path.startswith("http://") or path.startswith("https://"):
+            parsed = urlparse(path)
+            allowed_netloc = _manim_service_netloc()
+            if parsed.netloc != allowed_netloc:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Video URL host is not the configured manim service.",
+                )
+            return _proxy_manim_video(path)
+
+        # Case 1: local filesystem path — existing behaviour.
         video_path = _resolve_visualization_path(path, suffix=".mp4", label="Video")
         return FileResponse(video_path, media_type="video/mp4")
 

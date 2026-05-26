@@ -37,6 +37,7 @@ class WorkspaceTabs extends StatefulWidget {
   final void Function(String viewId, Duration duration)?
       onWorkspaceFocusSession;
   final VoidCallback? onRun;
+  final bool showExerciseBriefInCodePane;
 
   const WorkspaceTabs({
     super.key,
@@ -68,6 +69,7 @@ class WorkspaceTabs extends StatefulWidget {
     this.onConceptVideoSession,
     this.onWorkspaceFocusSession,
     this.onRun,
+    this.showExerciseBriefInCodePane = true,
   });
 
   @override
@@ -188,6 +190,7 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
                   onReset: widget.onReset,
                   onReconnectWorkspace: widget.onReconnectWorkspace,
                   onRun: widget.onRun,
+                  showExerciseBrief: widget.showExerciseBriefInCodePane,
                 ),
                 TraceReplayPanel(
                   runStatusLabel: runStatusLabel,
@@ -251,6 +254,7 @@ class _CodeExercisePane extends StatelessWidget {
   final VoidCallback onReset;
   final VoidCallback onReconnectWorkspace;
   final VoidCallback? onRun;
+  final bool showExerciseBrief;
 
   const _CodeExercisePane({
     required this.lesson,
@@ -272,13 +276,14 @@ class _CodeExercisePane extends StatelessWidget {
     required this.onReset,
     required this.onReconnectWorkspace,
     this.onRun,
+    required this.showExerciseBrief,
   });
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 760) {
+        if (showExerciseBrief && constraints.maxWidth < 760) {
           final briefHeight =
               (constraints.maxHeight * 0.34).clamp(240.0, 360.0);
           return Column(

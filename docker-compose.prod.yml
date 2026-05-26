@@ -7,11 +7,14 @@ x-backend-image: &backend-image
     dockerfile: Dockerfile.cloud
 
 x-common-environment: &common-environment
+  # Frontend-only vars (not passed to backend services):
+  #   RL_IDE_FRONTEND_IMAGE — Docker image for the nginx/Flutter frontend (default: rl-platform-frontend:latest)
+  #   RL_IDE_HTTP_BIND      — Host:port binding for the public HTTP port (default: 0.0.0.0:80)
   RL_IDE_BACKEND_HOST: 0.0.0.0
   RL_IDE_INTERNAL_TOKEN: ${RL_IDE_INTERNAL_TOKEN:?Set RL_IDE_INTERNAL_TOKEN to a generated secret}
   RL_IDE_AUTH_TOKEN_SECRET: ${RL_IDE_AUTH_TOKEN_SECRET:?Set RL_IDE_AUTH_TOKEN_SECRET to a generated secret}
   RL_IDE_SHELL_TOKEN_SECRET: ${RL_IDE_SHELL_TOKEN_SECRET:?Set RL_IDE_SHELL_TOKEN_SECRET to a generated secret}
-  RL_IDE_FIREBASE_CREDENTIALS_PATH: /run/secrets/firebase-admin-key.json
+  RL_IDE_FIREBASE_CREDENTIALS_PATH: /run/secrets/firebase_admin_key
   RL_IDE_FIREBASE_APP_NAME: ${RL_IDE_FIREBASE_APP_NAME:-rl-ide-backend}
   RL_IDE_ALLOWED_ORIGINS: ${RL_IDE_ALLOWED_ORIGINS:?Set RL_IDE_ALLOWED_ORIGINS to the deployed frontend origin}
   RL_IDE_OPEN_PROVISIONING: "0"
@@ -20,6 +23,7 @@ x-common-environment: &common-environment
   RL_IDE_VISUALIZATION_OUTPUT_DIR: /srv/rl-platform/animations
   RL_IDE_CONCEPT_VIDEO_DIR: /srv/rl-platform/concept-videos
   RL_IDE_MANIM_PYTHON: python3
+  RL_IDE_MANIM_SERVICE_URL: ${RL_IDE_MANIM_SERVICE_URL:-http://manim-service:8300}
   RL_IDE_GEMINI_ENABLED: ${RL_IDE_GEMINI_ENABLED:-0}
   GEMINI_API_KEY: ${GEMINI_API_KEY:-}
   RL_IDE_GEMINI_MODEL: ${RL_IDE_GEMINI_MODEL:-gemini-2.5-flash}
@@ -57,6 +61,8 @@ services:
       execution-worker:
         condition: service_healthy
       user-evaluation:
+        condition: service_healthy
+      manim-service:
         condition: service_healthy
     healthcheck:
       test:
@@ -119,6 +125,57 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+
+  manim-service:
+    <<: *backend-image
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      SERVICE_NAME: manim-service
+      RL_IDE_BACKEND_HOST: 0.0.0.0
+      RL_IDE_MANIM_SERVICE_PORT: "8300"
+      MANIM_PYTHON: python3
+      SHARED_MEDIA_DIR: /srv/rl-platform/animations
+      RENDER_QUALITY: ${RL_IDE_MANIM_RENDER_QUALITY:-l}
+      QUEUE_BACKEND: memory
+      FFMPEG_BIN: ffmpeg
+    volumes:
+      - /srv/rl-platform/animations:/srv/rl-platform/animations
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8300/health', timeout=5).read()",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    image: ${RL_IDE_FRONTEND_IMAGE:-rl-platform-frontend:latest}
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${RL_IDE_HTTP_BIND:-0.0.0.0:80}:80"
+    depends_on:
+      gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 secrets:
   firebase_admin_key:

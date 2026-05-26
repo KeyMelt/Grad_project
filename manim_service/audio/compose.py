@@ -44,7 +44,16 @@ _LINE_RE = re.compile(
 )
 
 # Matches phase headers like:  "## Phase 1 — FrozenLake grid, state 6"
-_PHASE_RE = re.compile(r"^##\s+Phase\s+(\d+)")
+# or "## Phase S1-P1 — Grid entry". Excludes section headers like
+# "## Phase timing reference" (no digit / S-tag after "Phase"). Phase numbers
+# are assigned by encounter order so both header styles map onto the 1..N
+# sequence emitted in phase_timestamps.json.
+_PHASE_RE = re.compile(r"^##\s+Phase\s+(?:\d|S\d)")
+
+# Inline sync markers like "[EQ_ON_SCREEN]" are metadata for the Manim Expert /
+# QA Agent — they are never spoken. Strip any [ALL_CAPS] bracket tag from the
+# narration body before synthesis.
+_FLAG_RE = re.compile(r"\[[A-Z][A-Z0-9_]*\]\s*")
 
 
 @dataclass(frozen=True)
@@ -69,9 +78,10 @@ def parse_narration_script(path: Path) -> list[NarrationLine]:
 
     with path.open("r", encoding="utf-8") as f:
         for raw in f:
-            phase_match = _PHASE_RE.match(raw)
-            if phase_match:
-                current_phase = int(phase_match.group(1))
+            if _PHASE_RE.match(raw):
+                # Assign phase numbers by encounter order so both "Phase 1"
+                # and "Phase S1-P1" header styles map onto the 1..N sequence.
+                current_phase += 1
                 continue
 
             line_match = _LINE_RE.match(raw)
@@ -84,6 +94,9 @@ def parse_narration_script(path: Path) -> list[NarrationLine]:
             # respect them, and the captions writer has its own copy. We
             # keep the words; we just remove the markers.
             body = body.replace("*", "")
+            # Strip inline sync markers (e.g. [EQ_ON_SCREEN]) so they are
+            # never spoken — they exist only for the Manim Expert / QA Agent.
+            body = _FLAG_RE.sub("", body).strip()
             lines.append(NarrationLine(
                 start_seconds=float(start),
                 text=body,

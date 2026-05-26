@@ -49,7 +49,7 @@ QuizPhase _parseQuizPhase(String? value) {
       return QuizPhase.posttest;
     default:
       throw const BackendApiException(
-        'Backend returned an unknown quiz phase.',
+        'Unknown quiz phase.',
       );
   }
 }
@@ -70,7 +70,7 @@ ExecutionTaskStatus _parseTaskStatus(String? value) {
       return ExecutionTaskStatus.failed;
     default:
       throw const BackendApiException(
-        'Backend returned an unknown task status.',
+        'Unknown task status.',
       );
   }
 }

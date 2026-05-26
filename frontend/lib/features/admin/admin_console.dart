@@ -613,7 +613,7 @@ class _AdminConsoleState extends State<AdminConsole> {
                 const SizedBox(width: 14),
                 Expanded(
                   child: SwitchListTile(
-                    title: const Text('Backend executable'),
+                    title: const Text('Runnable exercise'),
                     subtitle: const Text('Disable for content-only drafts'),
                     value: _backendEnabled,
                     onChanged: (value) =>
@@ -642,8 +642,7 @@ class _AdminConsoleState extends State<AdminConsole> {
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(
-                    child: _field('Backend video path', _videoPathController)),
+                Expanded(child: _field('Video path', _videoPathController)),
                 const SizedBox(width: 14),
                 SizedBox(
                   width: 160,

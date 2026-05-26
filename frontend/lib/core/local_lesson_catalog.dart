@@ -443,7 +443,7 @@ def q_learning_update(Q, state, action, reward, next_state, alpha=LEARNING_RATE,
             'The function returns the updated Q-table and passes the sample lesson test.',
           ],
           codeTip:
-              'The run configuration now lives in code constants. The backend reads LEARNING_RATE, DISCOUNT_FACTOR, EXPLORATION_RATE, and EPISODE_COUNT from your submission.',
+              'The run configuration now lives in code constants. The lesson runner reads LEARNING_RATE, DISCOUNT_FACTOR, EXPLORATION_RATE, and EPISODE_COUNT from your submission.',
         ),
       ),
     ],

@@ -40,6 +40,7 @@ class StudyFlashcard {
 @immutable
 class LessonConceptVideo {
   final String streamPath;
+  final String captionPath;
   final String durationLabel;
   final String summary;
   final List<String> highlights;
@@ -54,6 +55,7 @@ class LessonConceptVideo {
     required this.durationLabel,
     required this.summary,
     required this.highlights,
+    this.captionPath = '',
     this.theoryEquation = '',
     this.workedExample = '',
     this.misconceptionToPrevent = '',
@@ -65,6 +67,7 @@ class LessonConceptVideo {
     final theoryVerification = json['theory_verification'];
     return LessonConceptVideo(
       streamPath: json['stream_path'] as String? ?? '',
+      captionPath: json['caption_path'] as String? ?? '',
       durationLabel: json['duration_label'] as String? ?? '',
       summary: json['summary'] as String? ?? '',
       highlights: (json['highlights'] as List<dynamic>? ?? const [])
@@ -85,6 +88,7 @@ class LessonConceptVideo {
 
   LessonConceptVideo copyWith({
     String? streamPath,
+    String? captionPath,
     String? durationLabel,
     String? summary,
     List<String>? highlights,
@@ -96,6 +100,7 @@ class LessonConceptVideo {
   }) {
     return LessonConceptVideo(
       streamPath: streamPath ?? this.streamPath,
+      captionPath: captionPath ?? this.captionPath,
       durationLabel: durationLabel ?? this.durationLabel,
       summary: summary ?? this.summary,
       highlights: highlights ?? this.highlights,

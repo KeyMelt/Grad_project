@@ -49,9 +49,7 @@ class HttpBackendApi extends BackendApi {
       );
     }
 
-    throw const BackendApiException(
-      'Backend returned an invalid lesson catalog.',
-    );
+    throw const BackendApiException('Lesson catalog could not be loaded.');
   }
 
   @override
@@ -360,7 +358,7 @@ class HttpBackendApi extends BackendApi {
     final rawUrl = responseJson['editor_shell_url'] as String?;
     if (rawUrl == null || rawUrl.trim().isEmpty) {
       throw const BackendApiException(
-        'Backend did not provide a workspace shell URL.',
+        'Workspace shell could not be opened.',
       );
     }
     return Uri.parse(baseUrl).resolve(rawUrl).toString();
@@ -438,7 +436,7 @@ class HttpBackendApi extends BackendApi {
       return decoded;
     }
 
-    throw const BackendApiException('Backend returned an unexpected response.');
+    throw const BackendApiException('Unexpected platform response.');
   }
 }
 
@@ -501,7 +499,7 @@ String _extractApiErrorMessage(Map<String, dynamic> responseJson) {
     }
   }
 
-  return 'Backend request failed.';
+  return 'Request failed.';
 }
 
 List<ExecutionTestCaseResult> _extractTestResults(

@@ -12,9 +12,6 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    String? submittedName;
-    String? submittedPassword;
-
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -27,10 +24,7 @@ void main() {
             isSigningIn: false,
             canAccessAuthoring: false,
             message: 'Welcome message',
-            onSignIn: (displayName, password) {
-              submittedName = displayName;
-              submittedPassword = password;
-            },
+            onSignIn: (_, __) {},
             onSignUp: (_, __) {},
             onSignInWithGoogle: () {},
             onOpenLesson: (_) {},
@@ -43,14 +37,6 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Open Sign In / Sign Up'));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.byType(TextField).first, 'maya@example.com');
-    await tester.enterText(find.byType(TextField).last, 'Password123!');
-    await tester.tap(find.text('Sign In').last);
-    await tester.pumpAndSettle();
-
     await tester.scrollUntilVisible(
       find.text('Lesson Summaries'),
       300,
@@ -58,8 +44,11 @@ void main() {
     );
     expect(find.text('Lesson Summaries'), findsOneWidget);
     expect(find.text('Policy Evaluation'), findsOneWidget);
-    expect(submittedName, 'maya@example.com');
-    expect(submittedPassword, 'Password123!');
+    expect(find.text('Update IP'), findsNothing);
+    expect(find.text('Server Connection Settings'), findsNothing);
+    expect(find.text('Authentication'), findsNothing);
+    expect(find.text('Open Sign In / Sign Up'), findsNothing);
+    expect(find.textContaining('backend', findRichText: true), findsNothing);
     expect(find.text('Progress Overview'), findsNothing);
   });
 

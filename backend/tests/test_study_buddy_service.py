@@ -19,7 +19,6 @@ from backend.services.pedagogical_llm_service import (
     PedagogicalChatReply,
     PedagogicalIntervention,
 )
-from backend.services.student_progress_service import StudentProgressService
 from backend.services.study_buddy_service import StudyBuddyService
 from backend.services.telemetry_service import TelemetryService
 from backend.services.user_evaluation_service import UserEvaluationService
@@ -49,6 +48,75 @@ class _FakeAuthService:
 
 def _auth_headers(token: str = "student-token") -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
+
+
+class _FakeProgressService:
+    def __init__(self) -> None:
+        self._dashboards: dict[str, dict[str, Any]] = {}
+        self._question_history: dict[str, list[str]] = {}
+
+    def sign_in(
+        self,
+        display_name: str,
+        password: str,
+        firebase_id_token: str | None = None,
+    ) -> dict[str, Any]:
+        del password, firebase_id_token
+        student_id = "student-1"
+        dashboard = {
+            "student": {
+                "id": student_id,
+                "display_name": display_name,
+            },
+            "progress": {
+                "completed_lesson_ids": [],
+                "successful_runs": 0,
+                "latest_lesson_id": None,
+                "pretest_score": None,
+                "posttest_score": None,
+                "n_gain": None,
+                "quiz_attempts": {"pretest": 0, "posttest": 0},
+            },
+        }
+        self._dashboards[student_id] = dashboard
+        self._question_history[student_id] = []
+        return dashboard
+
+    def get_dashboard(self, student_id: str) -> dict[str, Any] | None:
+        return self._dashboards.get(student_id)
+
+    def record_quiz_result(
+        self,
+        student_id: str,
+        phase: str,
+        percentage: float,
+        question_ids: list[str],
+    ) -> dict[str, Any] | None:
+        dashboard = self._dashboards.get(student_id)
+        if dashboard is None:
+            return None
+        progress = dashboard["progress"]
+        progress["quiz_attempts"][phase] += 1
+        progress[f"{phase}_score"] = percentage
+        if phase == "posttest":
+            pretest_score = progress.get("pretest_score")
+            progress["n_gain"] = (
+                None
+                if pretest_score is None
+                else (
+                    round((percentage - pretest_score) / (100 - pretest_score), 3)
+                    if pretest_score < 100
+                    else 1.0
+                )
+            )
+        self._question_history.setdefault(student_id, []).extend(question_ids)
+        return dashboard
+
+    def get_question_history(self, student_id: str) -> list[str]:
+        return list(self._question_history.get(student_id, []))
+
+    def close(self) -> None:
+        return None
 
 
 def _event(
@@ -345,7 +413,7 @@ def test_quiz_submit_route_records_mastery_evidence():
         database=database,
         llm_service=_FakeLLMService(),
     )
-    progress = StudentProgressService(database=database)
+    progress = _FakeProgressService()
     user_evaluation = UserEvaluationService(progress_service=progress)
     dashboard = user_evaluation.sign_in("Maya", "Password123!")
     auth = _FakeAuthService(student_id=dashboard["student"]["id"])

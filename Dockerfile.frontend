@@ -1,0 +1,25 @@
+# Stage 1: Build Flutter web app
+FROM ghcr.io/cirruslabs/flutter:stable AS builder
+
+WORKDIR /build
+
+# Copy frontend source
+COPY frontend/ .
+
+# Get dependencies
+RUN flutter pub get
+
+# Build Flutter web (BACKEND_BASE_URL left empty so runtime origin-fallback kicks in)
+RUN flutter build web --release \
+    --dart-define=BACKEND_BASE_URL=""
+
+# Stage 2: Serve with Nginx
+FROM nginx:1.27-alpine
+
+# Copy built web assets
+COPY --from=builder /build/build/web /usr/share/nginx/html
+
+# Copy Nginx config
+COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80

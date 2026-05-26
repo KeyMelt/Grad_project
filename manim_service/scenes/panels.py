@@ -191,6 +191,30 @@ class BaseConceptScene(MovingCameraScene):
         """
         self.wait(max(duration, 1.5))
 
+    def hold_until(self, target_seconds: float, *, min_hold: float = 0.0) -> float:
+        """Hold the current frame until scene time reaches ``target_seconds``.
+
+        Used to pin each phase's END to a narration-driven timestamp so the
+        silent video duration matches the synthesised narration (STYLE_BIBLE
+        §12 QA-D: final video duration matches narration ±0.5 s). The phase's
+        animations play at their natural speed at the top of the phase; this
+        call pads the remainder with a static hold on the phase's primary
+        content (3Blue1Brown-style "let it breathe while the narrator
+        explains").
+
+        Returns the actual wait performed (0.0 if already past target).
+        """
+        try:
+            now = float(self.renderer.time)
+        except Exception:
+            now = 0.0
+        remaining = target_seconds - now
+        wait_for = max(remaining, min_hold)
+        if wait_for > 0:
+            self.wait(wait_for)
+            return wait_for
+        return 0.0
+
     def smooth_move_to(
         self,
         mob: Mobject,

@@ -21,6 +21,11 @@ from typing import Any
 
 import requests
 
+try:
+    import numpy as np
+except ImportError:
+    np = None
+
 from backend.settings import VisualizationSettings
 
 logger = logging.getLogger(__name__)
@@ -112,11 +117,21 @@ class VisualizationController:
         return ""
 
     @staticmethod
+    def _to_json_safe(value: Any) -> Any:
+        if np is not None:
+            if isinstance(value, np.integer):
+                return int(value)
+            if isinstance(value, np.floating):
+                return float(value)
+        if isinstance(value, dict):
+            return {k: VisualizationController._to_json_safe(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [VisualizationController._to_json_safe(item) for item in value]
+        return value
+
+    @staticmethod
     def _normalize_step(step: dict[str, Any]) -> dict[str, Any]:
         return {
-            "state": int(step["state"]),
-            "action": int(step["action"]),
-            "reward": float(step.get("reward", 0.0)),
-            "next_state": int(step["next_state"]),
-            "done": bool(step.get("done", False)),
+            k: VisualizationController._to_json_safe(v)
+            for k, v in step.items()
         }

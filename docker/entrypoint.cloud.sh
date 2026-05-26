@@ -6,11 +6,13 @@ host="${RL_IDE_BACKEND_HOST:-0.0.0.0}"
 gateway_port="${PORT:-${RL_IDE_GATEWAY_PORT:-8000}}"
 worker_port="${RL_IDE_EXECUTION_WORKER_PORT:-8100}"
 user_port="${RL_IDE_USER_EVALUATION_PORT:-8200}"
+manim_port="${RL_IDE_MANIM_SERVICE_PORT:-8300}"
 
 export RL_IDE_BACKEND_HOST="${host}"
 export RL_IDE_GATEWAY_PORT="${gateway_port}"
 export RL_IDE_EXECUTION_WORKER_PORT="${worker_port}"
 export RL_IDE_USER_EVALUATION_PORT="${user_port}"
+export RL_IDE_MANIM_SERVICE_PORT="${manim_port}"
 
 export RL_IDE_EXECUTION_MODE="${RL_IDE_EXECUTION_MODE:-remote}"
 export RL_IDE_USER_SERVICE_MODE="${RL_IDE_USER_SERVICE_MODE:-remote}"
@@ -38,6 +40,12 @@ run_user_service() {
     --factory \
     --host "${host}" \
     --port "${user_port}"
+}
+
+run_manim_service() {
+  exec uvicorn manim_service.api.main:app \
+    --host "${host}" \
+    --port "${manim_port}"
 }
 
 run_all_in_one() {
@@ -76,8 +84,11 @@ case "${service_name}" in
   user-evaluation)
     run_user_service
     ;;
+  manim-service)
+    run_manim_service
+    ;;
   *)
-    echo "Unsupported SERVICE_NAME '${service_name}'. Use one of: all-in-one, gateway, execution-worker, user-evaluation."
+    echo "Unsupported SERVICE_NAME '${service_name}'. Use one of: all-in-one, gateway, execution-worker, user-evaluation, manim-service."
     exit 1
     ;;
 esac

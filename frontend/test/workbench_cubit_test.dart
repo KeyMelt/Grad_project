@@ -342,7 +342,7 @@ void main() {
     await cubit.loadBackendLessonCatalog();
 
     expect(cubit.state.sections.first.lessons.first.id, 'dp_policy_eval');
-    expect(cubit.state.homeMessage, contains('Using local fallback lessons'));
+    expect(cubit.state.homeMessage, contains('Lesson sync is unavailable'));
 
     await cubit.close();
   });

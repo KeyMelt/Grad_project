@@ -4,9 +4,9 @@ Concept videos are rendered by invoking the Manim CLI as a subprocess in the
 dedicated Manim venv (`settings.MANIM_PYTHON`), then the resulting MP4 is
 copied into the shared media directory under its canonical name.
 
-Trace rendering is not yet implemented — the trace pipeline is the subject of
-a separate plan. Trace jobs fail cleanly with a descriptive error so the API
-contract is honoured today even though the renderer is not.
+Trace jobs are handled by ``manim_service.jobs.trace_renderer.render_trace``,
+which provides content-hash caching and invokes the TraceReplayScene Manim
+scene.
 """
 from __future__ import annotations
 
@@ -48,6 +48,10 @@ class SceneRef:
 # Empty after the 2026-05-20 supersession — all six concept scenes will be
 # (re)authored by the upcoming pipeline run and registered here by Step 13.
 CONCEPT_VIDEO_SCENES: dict[str, SceneRef] = {
+    "mdp_foundations": SceneRef(
+        scene_file=ROOT / "manim_service" / "concept_videos" / "mdp_foundations_concept.py",
+        scene_class="MdpFoundationsScene",
+    ),
     "dp_policy_eval": SceneRef(
         scene_file=ROOT / "manim_service" / "concept_videos" / "dp_policy_eval_concept.py",
         scene_class="PolicyEvaluationConcept",
@@ -72,10 +76,8 @@ def process_job(job: Job) -> str:
         force = bool(job.payload.get("force", False))
         return str(_render_concept_video(lesson_id=lesson_id, force=force))
     if job.kind == JobKind.TRACE:
-        raise RenderError(
-            "Trace rendering is not yet implemented in manim_service. "
-            "The trace pipeline is deferred to a separate plan."
-        )
+        from manim_service.jobs.trace_renderer import render_trace
+        return str(render_trace(job))
     raise RenderError(f"Unknown job kind: {job.kind!r}")
 
 

@@ -27,6 +27,207 @@ class LessonVideoSpec:
 
 
 LESSON_VIDEO_SPECS: dict[str, LessonVideoSpec] = {
+    "rl_intro": LessonVideoSpec(
+        lesson_id="rl_intro",
+        title="What Is Reinforcement Learning?",
+        environment_name="FrozenLake",
+        theory_equation="none",
+        worked_example=(
+            "Show an elf navigating FrozenLake-v1 across three attempts — two failures "
+            "(holes 7 and 12) and one success (path 0→4→8→9→10→14→15, reward +1). "
+            "Contrast this with supervised and unsupervised learning via a three-panel "
+            "diagram, then build the abstract agent–environment loop."
+        ),
+        code_focus_lines=(),
+        misconception_to_prevent=(
+            "RL is not supervised learning with delayed feedback. "
+            "There is no supervisor and no labeled dataset — only a reward signal "
+            "the agent discovers through interaction."
+        ),
+        takeaway_line=(
+            "Reinforcement learning is the science of learning to act by trial and error "
+            "— no labels, just rewards."
+        ),
+        pacing_notes=(
+            "Hold 3.5 s on the first grid reveal before elf moves.",
+            "Hold 3.5 s after each elf failure before the next attempt.",
+            "Hold 4.5 s on the complete loop diagram before the cycle animation.",
+            "Final takeaway hold is 8.0 s — maintain full duration.",
+        ),
+        target_duration_label="03:38",
+        theory_verification=(
+            TheoryVerification(
+                claim=(
+                    "Reinforcement learning is distinct from supervised and unsupervised "
+                    "learning because it uses a reward signal rather than labeled examples "
+                    "or unlabeled data."
+                ),
+                source_url="https://incompleteideas.net/book/the-book-2nd.html",
+                validation_note=(
+                    "Sutton and Barto Chapter 1, Section 1.1 (pp. 1–3) defines RL as a "
+                    "third machine-learning paradigm and explicitly contrasts it with "
+                    "supervised and unsupervised learning."
+                ),
+            ),
+            TheoryVerification(
+                claim=(
+                    "FrozenLake-v1 hole states are {5, 7, 11, 12}; goal is state 15; "
+                    "reward 1.0 fires on arrival at state 15."
+                ),
+                source_url="https://gymnasium.farama.org/v0.26.3/environments/toy_text/frozen_lake/",
+                validation_note=(
+                    "Confirmed by Technical Validator via live Gymnasium env.unwrapped.P "
+                    "inspection. Reward fires from arrival transitions (e.g. P[14][action] "
+                    "→ state 15), not from P[15] self-loop (which returns reward 0)."
+                ),
+                is_inference=True,
+            ),
+        ),
+    ),
+    "mdp_foundations": LessonVideoSpec(
+        lesson_id="mdp_foundations",
+        title="MDP Foundations: From States to the Bellman Equation",
+        environment_name="FrozenLake",
+        theory_equation=r"v_{\pi}(s)=\sum_a \pi(a|s)\sum_{s',r}p(s',r|s,a)\left[r+\gamma v_{\pi}(s')\right]",
+        worked_example=(
+            "Use FrozenLake-v1 4×4 (is_slippery=True) throughout. Build one accreting "
+            "grid across six segments: (a) state indices 0–15 + Markov property; "
+            "(b) return G_t with one gamma animation showing G=0.9801 for rewards [0,0,1] "
+            "at γ=0.99, plus the recursion G_t = R_{t+1} + γ G_{t+1}; (c) state 6, "
+            "action RIGHT — three slippery outcomes {7,2,10} each 1/3, Σp=1; "
+            "(d) uniform-random policy arrows vs. probability bars (each 0.25); "
+            "(e) value heatmap with terminal={5,7,11,12,15}=0 under non-optimal policy; "
+            "(f) one backup diagram deriving the Bellman expectation equation term-by-term "
+            "from G_t = R_{t+1} + γG_{t+1}."
+        ),
+        code_focus_lines=(
+            "env = gym.make('FrozenLake-v1', is_slippery=True)",
+            "for prob, next_state, reward, done in env.unwrapped.P[6][2]:",
+            "    print(prob, next_state, reward, done)",
+            "policy = np.ones((env.observation_space.n, env.action_space.n)) / env.action_space.n",
+        ),
+        misconception_to_prevent=(
+            "The transition function p(s',r|s,a) is the environment's response, not "
+            "the agent's action choice (that is the policy π(a|s)); and v_π is "
+            "defined for ANY policy, including the uniform-random policy, not only the "
+            "optimal one."
+        ),
+        takeaway_line=(
+            "A finite MDP is (states, actions, p); a policy plus a discount turns rewards "
+            "into returns; value functions measure those returns under any policy; and the "
+            "Bellman expectation equation expresses each state's value recursively from its "
+            "successors — the exact equality the next video turns into an algorithm."
+        ),
+        pacing_notes=(
+            "Segment (a): build the grid once with state indices; state the Markov property; "
+            "do not enumerate transitions. ~4:10.",
+            "Segment (b): animate gamma exactly once; surface G_t = R_{t+1} + gamma*G_{t+1} "
+            "for reuse in (f). ~4:40.",
+            "Segment (c): reuse/corrected transition_prob scene beat; hold on the three 1/3 "
+            "bars and the sum-to-one. State-6 RIGHT successors are {7,2,10}, NOT {7,2,5}. ~4:30.",
+            "Segment (d): one deterministic-vs-stochastic policy contrast; foreshadow the "
+            "uniform-random policy used by dp_policy_eval. ~3:30.",
+            "Segment (e): heatmap reading + q-bars; show terminal cells at 0; use a "
+            "non-optimal policy. ~4:10.",
+            "Recap card: π/p/r/γ/v_π summary before Bellman. ~1:20.",
+            "Segment (f): derive the Bellman equation from G_t's recursion via one backup "
+            "diagram; preview policy evaluation without showing its loop. ~4:40.",
+            "Closing: preview dp_policy_eval by name; do not show the iteration loop. ~1:20.",
+        ),
+        target_duration_label="28:20",
+        theory_verification=(
+            TheoryVerification(
+                claim=(
+                    "A finite MDP is defined by states, actions, and the four-argument "
+                    "dynamics p(s',r|s,a); the return is G_t = Σ_{k≥0} γ^k R_{t+k+1}; "
+                    "and the Bellman expectation equation v_π(s) = Σ_a π(a|s) "
+                    "Σ_{s',r} p(s',r|s,a)[r + γv_π(s')] characterises the value function."
+                ),
+                source_url="https://incompleteideas.net/book/the-book-2nd.html",
+                validation_note=(
+                    "Sutton and Barto Chapter 3: p(s',r|s,a) eq. 3.2 (p. 48); return G_t "
+                    "eq. 3.8 and recursion eq. 3.9 (pp. 54–55); v_π eq. 3.12 (p. 58); "
+                    "Bellman expectation eq. 3.14 (p. 59)."
+                ),
+            ),
+            TheoryVerification(
+                claim=(
+                    "FrozenLake-v1 is_slippery=True: state 6, action RIGHT yields exactly "
+                    "three transitions — to states {7, 2, 10} each with probability 1/3, "
+                    "reward 0.0, done=True only for state 7 (hole). Sum of probabilities = 1."
+                ),
+                source_url="https://gymnasium.farama.org/v0.26.3/environments/toy_text/frozen_lake/",
+                validation_note=(
+                    "Confirmed by Gate 2 Technical Validator via live Gymnasium: "
+                    "env.unwrapped.P[6][2] = [(0.333,10,0.0,False),(0.333,7,0.0,True),"
+                    "(0.333,2,0.0,False)]. Corrected from erroneous {7,2,5} in prior "
+                    "reference scene transition_prob_concept.py."
+                ),
+                is_inference=False,
+            ),
+        ),
+    ),
+    "transition_prob": LessonVideoSpec(
+        lesson_id="transition_prob",
+        title="Transition Probability",
+        environment_name="FrozenLake",
+        theory_equation=r"p(s', r \mid s, a) \geq 0, \quad \sum_{s'}\sum_{r} p(s', r \mid s, a) = 1",
+        worked_example=(
+            "Focus on FrozenLake state 6 with action RIGHT. "
+            "Show the three slippery outcomes (lands RIGHT, UP, DOWN) with their "
+            "probabilities from env.unwrapped.P, then assemble the full "
+            "probability distribution and verify it sums to 1."
+        ),
+        code_focus_lines=(
+            "env = gym.make('FrozenLake-v1', is_slippery=True)",
+            "for prob, next_state, reward, done in env.unwrapped.P[state][action]:",
+            "    print(prob, next_state, reward, done)",
+        ),
+        misconception_to_prevent=(
+            "Transition probability is not the probability of choosing an action; "
+            "it is the probability that the environment places the agent in next "
+            "state s' with reward r given that action a was taken in state s."
+        ),
+        takeaway_line=(
+            "p(s',r|s,a) is the environment's complete specification: for every "
+            "state and action it gives the full distribution over successor states "
+            "and rewards."
+        ),
+        pacing_notes=(
+            "Pause after each slippery outcome cell lights up before revealing the next.",
+            "Hold on the ActionBarChart once all three bars appear — let probabilities read.",
+            "Let the summation constraint Σ=1 settle before the code panel enters.",
+            "End with the takeaway caption visible for the full final hold.",
+        ),
+        target_duration_label="06:00",
+        theory_verification=(
+            TheoryVerification(
+                claim=(
+                    "The four-argument dynamics function p(s',r|s,a) is the "
+                    "complete specification of a finite MDP environment."
+                ),
+                source_url="https://incompleteideas.net/book/the-book-2nd.html",
+                validation_note=(
+                    "Sutton and Barto Chapter 3, Section 3.1 defines p(s',r|s,a) "
+                    "as the probability of transition to s' with reward r from (s,a)."
+                ),
+            ),
+            TheoryVerification(
+                claim=(
+                    "FrozenLake-v1 with is_slippery=True produces three-way "
+                    "stochastic outcomes for each action, exposing the dynamics "
+                    "clearly via env.unwrapped.P."
+                ),
+                source_url="https://gymnasium.farama.org/v0.26.3/environments/toy_text/frozen_lake/",
+                validation_note=(
+                    "Gymnasium documents the slippery tile mechanics: each intended "
+                    "direction has 1/3 probability; the two perpendicular directions "
+                    "each also have 1/3 probability."
+                ),
+                is_inference=True,
+            ),
+        ),
+    ),
     "dp_policy_eval": LessonVideoSpec(
         lesson_id="dp_policy_eval",
         title="Policy Evaluation",

@@ -360,13 +360,15 @@ void main() {
     );
 
     expect(find.text('RL Learning Platform'), findsNothing);
-    expect(find.text('Authentication'), findsOneWidget);
+    expect(find.text('Authentication'), findsNothing);
+    expect(find.text('Sign in'), findsOneWidget);
+    expect(find.text('Sign up'), findsOneWidget);
 
-    await tester.tap(find.text('Open Sign In / Sign Up'));
+    await tester.tap(find.text('Sign in'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).at(0), 'maya@example.com');
     await tester.enterText(find.byType(TextField).at(1), 'Password123!');
-    await tester.tap(find.text('Sign In').last);
+    await tester.tap(find.text('Sign in').last);
     await tester.pumpAndSettle();
 
     expect(
@@ -376,7 +378,8 @@ void main() {
 
     await tester.tap(find.text('Sign Out'));
     await tester.pumpAndSettle();
-    expect(find.text('Authentication'), findsOneWidget);
+    expect(find.text('Authentication'), findsNothing);
+    expect(find.text('Sign in'), findsOneWidget);
     expect(find.textContaining('Signed out.'), findsOneWidget);
 
     await cubit.close();
@@ -398,11 +401,11 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Open Sign In / Sign Up'));
+    await tester.tap(find.text('Sign in'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).at(0), 'maya@example.com');
     await tester.enterText(find.byType(TextField).at(1), 'Password123!');
-    await tester.tap(find.text('Sign In').last);
+    await tester.tap(find.text('Sign in').last);
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Workspace'));

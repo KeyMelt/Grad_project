@@ -209,6 +209,7 @@ def _with_backend_video_path(concept_video: dict, lesson_id: str) -> dict:
     updated = dict(concept_video)
     filename = _concept_video_filename(updated, lesson_id)
     updated["stream_path"] = f"{CONCEPT_VIDEO_ROUTE_PREFIX}/{filename}"
+    updated["caption_path"] = f"{CONCEPT_VIDEO_ROUTE_PREFIX}/{lesson_id}_captions.vtt"
     return updated
 
 

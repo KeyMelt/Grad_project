@@ -19,6 +19,15 @@ enum AppSection { home, workspace, flashcards, quiz, admin }
 
 const Object _sentinel = Object();
 
+bool _canUseGoogleSignInOnCurrentOrigin() {
+  final uri = Uri.base;
+  if (uri.scheme == 'https') {
+    return true;
+  }
+  final host = uri.host.toLowerCase();
+  return host == 'localhost' || host == '127.0.0.1';
+}
+
 @immutable
 class RLWorkbenchState {
   final List<LessonSection> sections;
@@ -426,7 +435,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
                   ? state.adminSelectedLessonId
                   : selectedLesson.id,
           homeMessage: state.learner == null
-              ? 'Using backend lesson catalog. Sign in to save quiz results and lesson progress.'
+              ? 'Lessons are ready. Sign in to save quiz results and lesson progress.'
               : state.homeMessage,
         ),
       );
@@ -457,7 +466,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     emit(
       state.copyWith(
         homeMessage:
-            'Using local fallback lessons. Start the backend to refresh lesson content.',
+            'Lesson sync is unavailable. Local practice content is ready.',
       ),
     );
   }
@@ -538,7 +547,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     } catch (_) {
       emit(state.copyWith(
         isSigningIn: false,
-        homeMessage: 'Backend unavailable. Start FastAPI and try again.',
+        homeMessage: 'Connection unavailable. Try again shortly.',
       ));
     }
   }
@@ -602,12 +611,21 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     } catch (_) {
       emit(state.copyWith(
         isSigningIn: false,
-        homeMessage: 'Backend unavailable. Start FastAPI and try again.',
+        homeMessage: 'Connection unavailable. Try again shortly.',
       ));
     }
   }
 
   Future<void> signInWithGoogle() async {
+    if (kIsWeb && !_canUseGoogleSignInOnCurrentOrigin()) {
+      emit(state.copyWith(
+        isSigningIn: false,
+        homeMessage:
+            'Google sign-in will be available after secure publishing.',
+      ));
+      return;
+    }
+
     emit(state.copyWith(
       isSigningIn: true,
       homeMessage: 'Opening Google sign-in...',
@@ -1004,7 +1022,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       emit(
         state.copyWith(
           isQuizLoading: false,
-          quizStatusMessage: 'Could not start quiz. Check backend.',
+          quizStatusMessage: 'Could not start quiz. Try again shortly.',
         ),
       );
     }
@@ -1066,7 +1084,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       emit(
         state.copyWith(
           isQuizLoading: false,
-          quizStatusMessage: 'Could not submit quiz. Check backend.',
+          quizStatusMessage: 'Could not submit quiz. Try again shortly.',
         ),
       );
     }
@@ -1303,8 +1321,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       emit(
         state.copyWith(
           activeRunId: null,
-          statusMessage:
-              'Workspace runtime unavailable at ${BackendConnectionManager().baseUrl}.',
+          statusMessage: 'Workspace runtime unavailable. Try again shortly.',
           editorConnectionStatus: WorkspaceConnectionStatus.failed,
           consoleConnectionStatus: WorkspaceConnectionStatus.failed,
         ),
@@ -1381,7 +1398,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
           editorConnectionStatus: WorkspaceConnectionStatus.failed,
           consoleConnectionStatus: WorkspaceConnectionStatus.failed,
           statusMessage:
-              'Workspace connection could not be refreshed. Check the backend services.',
+              'Workspace connection could not be refreshed. Try again shortly.',
         ),
       );
     }
@@ -1510,8 +1527,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
           failureKind: null,
           unresolvedBlanks: const [],
           studentFeedback: null,
-          statusMessage:
-              'Backend unavailable at ${BackendConnectionManager().baseUrl}.',
+          statusMessage: 'Connection unavailable. Try again shortly.',
         ),
       );
     }
@@ -1827,7 +1843,7 @@ def lesson_function(*args, **kwargs):
       emit(
         state.copyWith(
           isAdminExporting: false,
-          adminMessage: 'Could not export metrics. Check backend.',
+          adminMessage: 'Could not export metrics. Try again shortly.',
         ),
       );
     }
@@ -1872,7 +1888,8 @@ def lesson_function(*args, **kwargs):
       emit(
         state.copyWith(
           isAdminExporting: false,
-          adminMessage: 'Could not export learning analytics. Check backend.',
+          adminMessage:
+              'Could not export learning analytics. Try again shortly.',
         ),
       );
     }
@@ -2131,7 +2148,7 @@ def lesson_function(*args, **kwargs):
           final result = snapshot.result;
           if (result == null) {
             throw const BackendApiException(
-              'Backend completed a task without returning a result.',
+              'Task completed without returning a result.',
             );
           }
 

@@ -12,6 +12,7 @@ import '../features/lessons/lesson_browser.dart';
 import '../features/onboarding/onboarding_tutorial.dart';
 import '../features/quiz/quiz_section.dart';
 import '../features/study_buddy/study_buddy_panel.dart';
+import '../features/workspace/exercise_brief_panel.dart';
 import '../features/workspace/workspace_tabs.dart';
 
 class MainLayout extends StatefulWidget {
@@ -91,6 +92,7 @@ class _MainLayoutState extends State<MainLayout> {
       case AppSection.workspace:
         return LayoutBuilder(
           builder: (context, constraints) {
+            final isWide = constraints.maxWidth >= 980;
             final workspace = WorkspaceTabs(
               lesson: state.selectedLesson,
               code: state.code,
@@ -120,6 +122,7 @@ class _MainLayoutState extends State<MainLayout> {
               stepTrace: state.stepTrace,
               onConceptVideoSession: _cubit.recordConceptVideoSession,
               onWorkspaceFocusSession: _cubit.recordWorkspaceFocusSession,
+              showExerciseBriefInCodePane: !isWide,
             );
 
             final studyBuddyPanel = StudyBuddyPanel(
@@ -137,21 +140,16 @@ class _MainLayoutState extends State<MainLayout> {
               onSendChatMessage: _cubit.sendStudyBuddyChat,
             );
 
-            // Wide layout: 50/50 exercise brief + workspace, Study Buddy drawer overlay.
-            // Narrow: workspace fills full width (exercise brief lives inside code pane).
-            final isWide = constraints.maxWidth >= 980;
             final mainContent = isWide
                 ? Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // FORTH (GREEN): exercise brief, full height, 50% width.
                       Expanded(
-                        child: StudyBuddyExerciseBrief(
+                        child: ExerciseBriefPanel(
                           lesson: state.selectedLesson,
                         ),
                       ),
                       const SizedBox(width: 12),
-                      // SIXTH (PINK): code editor, 50% width.
                       Expanded(child: workspace),
                     ],
                   )
@@ -407,7 +405,22 @@ class _MainLayoutState extends State<MainLayout> {
         },
       ),
       actions: [
-        if (state.learner != null)
+        if (state.learner == null) ...[
+          TextButton(
+            onPressed: state.isSigningIn
+                ? null
+                : () => _showAuthDialog(initialMode: _AuthMode.signIn),
+            child: const Text('Sign in'),
+          ),
+          const SizedBox(width: 6),
+          FilledButton(
+            onPressed: state.isSigningIn
+                ? null
+                : () => _showAuthDialog(initialMode: _AuthMode.signUp),
+            child: const Text('Sign up'),
+          ),
+          const SizedBox(width: 10),
+        ] else ...[
           Container(
             margin: const EdgeInsets.symmetric(vertical: 10),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -435,6 +448,13 @@ class _MainLayoutState extends State<MainLayout> {
               ],
             ),
           ),
+          const SizedBox(width: 6),
+          IconButton(
+            tooltip: 'Sign out',
+            onPressed: _cubit.signOut,
+            icon: const Icon(Icons.logout_rounded),
+          ),
+        ],
         const SizedBox(width: 6),
         IconButton(
           tooltip: 'Show onboarding tutorial',
@@ -445,9 +465,199 @@ class _MainLayoutState extends State<MainLayout> {
       ],
     );
   }
+
+  Future<void> _showAuthDialog({required _AuthMode initialMode}) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => _AuthDialog(
+        initialMode: initialMode,
+        googleAvailable: _canUseGoogleSignIn(),
+        onSignIn: _cubit.signIn,
+        onSignUp: _cubit.signUp,
+        onGoogle: _cubit.signInWithGoogle,
+      ),
+    );
+  }
+
+  bool _canUseGoogleSignIn() {
+    final uri = Uri.base;
+    if (uri.scheme == 'https') {
+      return true;
+    }
+    final host = uri.host.toLowerCase();
+    return host == 'localhost' || host == '127.0.0.1';
+  }
 }
 
 // ── Study Buddy drawer ────────────────────────────────────────────────────────
+
+enum _AuthMode { signIn, signUp }
+
+class _AuthDialog extends StatefulWidget {
+  final _AuthMode initialMode;
+  final bool googleAvailable;
+  final void Function(String email, String password) onSignIn;
+  final void Function(String email, String password) onSignUp;
+  final VoidCallback onGoogle;
+
+  const _AuthDialog({
+    required this.initialMode,
+    required this.googleAvailable,
+    required this.onSignIn,
+    required this.onSignUp,
+    required this.onGoogle,
+  });
+
+  @override
+  State<_AuthDialog> createState() => _AuthDialogState();
+}
+
+class _AuthDialogState extends State<_AuthDialog> {
+  late _AuthMode _mode;
+  late final TextEditingController _emailController;
+  late final TextEditingController _passwordController;
+
+  @override
+  void initState() {
+    super.initState();
+    _mode = widget.initialMode;
+    _emailController = TextEditingController();
+    _passwordController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(_mode == _AuthMode.signUp ? 'Create account' : 'Sign in'),
+      content: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _AuthModeButton(
+                    label: 'Sign in',
+                    selected: _mode == _AuthMode.signIn,
+                    onTap: () {
+                      setState(() => _mode = _AuthMode.signIn);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _AuthModeButton(
+                    label: 'Sign up',
+                    selected: _mode == _AuthMode.signUp,
+                    onTap: () {
+                      setState(() => _mode = _AuthMode.signUp);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            TextField(
+              controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
+              autofillHints: const [AutofillHints.email],
+              decoration: const InputDecoration(
+                labelText: 'Email address',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _passwordController,
+              obscureText: true,
+              autofillHints: _mode == _AuthMode.signUp
+                  ? const [AutofillHints.newPassword]
+                  : const [AutofillHints.password],
+              decoration: InputDecoration(
+                labelText:
+                    _mode == _AuthMode.signUp ? 'Create password' : 'Password',
+                border: const OutlineInputBorder(),
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        if (widget.googleAvailable)
+          TextButton.icon(
+            onPressed: () {
+              Navigator.of(context).pop();
+              widget.onGoogle();
+            },
+            icon: const Icon(Icons.g_mobiledata_rounded),
+            label: const Text('Google'),
+          ),
+        FilledButton(
+          onPressed: _submit,
+          child: Text(_mode == _AuthMode.signUp ? 'Create account' : 'Sign in'),
+        ),
+      ],
+    );
+  }
+
+  void _submit() {
+    Navigator.of(context).pop();
+    if (_mode == _AuthMode.signUp) {
+      widget.onSignUp(_emailController.text, _passwordController.text);
+    } else {
+      widget.onSignIn(_emailController.text, _passwordController.text);
+    }
+  }
+}
+
+class _AuthModeButton extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _AuthModeButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? AppTheme.primaryBlue : const Color(0xFFE8F0FE),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : AppTheme.primaryBlue,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _StudyBuddyDrawer extends StatefulWidget {
   final bool isOpen;

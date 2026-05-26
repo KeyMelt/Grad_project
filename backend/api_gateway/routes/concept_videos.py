@@ -12,24 +12,35 @@ def _concept_video_root() -> Path:
     return GatewaySettings.from_env().concept_video_dir.resolve()
 
 
-def _resolve_concept_video(filename: str) -> Path:
+_ALLOWED_EXTENSIONS: dict[str, str] = {
+    ".mp4": "video/mp4",
+    ".vtt": "text/vtt",
+}
+
+
+def _resolve_concept_video(filename: str) -> tuple[Path, str]:
     if "/" in filename or "\\" in filename:
         raise HTTPException(status_code=400, detail="Invalid concept video filename.")
-    if Path(filename).suffix.lower() != ".mp4":
-        raise HTTPException(status_code=400, detail="Only MP4 concept videos can be served.")
+    suffix = Path(filename).suffix.lower()
+    media_type = _ALLOWED_EXTENSIONS.get(suffix)
+    if media_type is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Only MP4 video and VTT caption files can be served.",
+        )
 
-    video_path = (_concept_video_root() / filename).resolve()
+    file_path = (_concept_video_root() / filename).resolve()
     try:
-        video_path.relative_to(_concept_video_root())
+        file_path.relative_to(_concept_video_root())
     except ValueError as error:
         raise HTTPException(
             status_code=403,
             detail="Concept video path is outside the configured media directory.",
         ) from error
 
-    if not video_path.exists() or not video_path.is_file():
+    if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="Concept video file not found.")
-    return video_path
+    return file_path, media_type
 
 
 def build_concept_videos_router() -> APIRouter:
@@ -37,10 +48,10 @@ def build_concept_videos_router() -> APIRouter:
 
     @router.get("/media/concept-videos/{filename}")
     def concept_video(filename: str):
-        return FileResponse(
-            _resolve_concept_video(filename),
-            media_type="video/mp4",
-            headers={"Cache-Control": "public, max-age=3600"},
-        )
+        file_path, media_type = _resolve_concept_video(filename)
+        headers = {"Cache-Control": "public, max-age=3600"}
+        if media_type == "text/vtt":
+            headers["Access-Control-Allow-Origin"] = "*"
+        return FileResponse(file_path, media_type=media_type, headers=headers)
 
     return router

@@ -21,6 +21,13 @@ backend/visualization/animations
 backend/concept_videos/_manim_media
 backend/media/concept_videos
 
+manim_service/_manim_media
+manim_service/_audio_cache
+manim_service/concept_videos/archive
+manim_service/**/*.mp4
+manim_service/**/*.wav
+manim_service/**/*.json
+
 frontend/.dart_tool
 frontend/build
 frontend/.flutter-plugins

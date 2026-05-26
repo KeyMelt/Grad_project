@@ -17,6 +17,7 @@ from backend.api_gateway.routes import (
     build_admin_router,
     build_auth_router,
     build_concept_videos_router,
+    build_evaluation_router,
     build_execution_router,
     build_lessons_router,
     build_quiz_router,
@@ -26,7 +27,11 @@ from backend.api_gateway.routes import (
     build_workspace_router,
 )
 from backend.persistence import Database
+from backend.services.alei_export_service import ALEIExportService
 from backend.services.auth_service import AuthService
+from backend.services.evaluation_session_service import EvaluationSessionService
+from backend.services.prediction_probe_service import PredictionProbeService
+from backend.services.study_session_survey_service import StudySessionSurveyService
 from backend.services.execution_service import ExecutionService as LocalExecutionService
 from backend.services.firebase_progress_service import FirebaseProgressService
 from backend.services.learning_analytics_export_service import LearningAnalyticsExportService
@@ -68,6 +73,10 @@ class ServiceContainer:
     study_buddy: Any | None = None
     audit: SecurityAuditService | None = None
     shell_tokens: ShellTokenService | None = None
+    evaluation_session: EvaluationSessionService | None = None
+    prediction_probe: PredictionProbeService | None = None
+    study_session_survey: StudySessionSurveyService | None = None
+    alei_export: ALEIExportService | None = None
 
 
 def _build_services() -> ServiceContainer:
@@ -105,6 +114,10 @@ def _build_services() -> ServiceContainer:
         display_name=settings.bootstrap_admin_display_name,
     )
     shell_tokens = ShellTokenService(settings.shell_token_secret)
+    evaluation_session_svc = EvaluationSessionService(database=database)
+    prediction_probe_svc = PredictionProbeService(database=database)
+    study_session_survey_svc = StudySessionSurveyService(database=database)
+    alei_export_svc = ALEIExportService(database=database)
     execution, workspace = _build_execution_services(
         settings,
         local_progress_service,
@@ -125,6 +138,10 @@ def _build_services() -> ServiceContainer:
         study_buddy=study_buddy,
         audit=audit,
         shell_tokens=shell_tokens,
+        evaluation_session=evaluation_session_svc,
+        prediction_probe=prediction_probe_svc,
+        study_session_survey=study_session_survey_svc,
+        alei_export=alei_export_svc,
     )
 
 
@@ -259,4 +276,5 @@ def create_app(services: ServiceContainer | None = None) -> FastAPI:
     if svc.study_buddy is not None:
         app.include_router(build_study_buddy_router(svc))
     app.include_router(build_admin_router(svc))
+    app.include_router(build_evaluation_router(svc))
     return app

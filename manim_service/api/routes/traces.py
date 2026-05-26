@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from manim_service.jobs.queue import JobKind, JobStatus, get_queue
 from manim_service.jobs.worker import KNOWN_LESSON_IDS
@@ -25,6 +25,18 @@ class TraceStep(BaseModel):
     reward: float
     next_state: int
     done: bool = False
+    frame_path: str | None = None
+    transition_probability: float | None = None
+    agent_caption: str | None = None
+    code_title: str | None = None
+    code_lines: list[str] | None = None
+    math_title: str | None = None
+    math_equation: str | None = None
+    math_lines: list[str] | None = None
+    updated_values: dict[str, Any] | None = None
+    equation_update: dict[str, Any] | None = None
+
+    model_config = ConfigDict(extra="allow")
 
 
 class EpisodeTrace(BaseModel):

@@ -152,7 +152,6 @@ class CodeEditorTab extends StatelessWidget {
       ),
     );
   }
-
 }
 
 class _RunStatusFooter extends StatelessWidget {
@@ -577,7 +576,7 @@ class _EvaluationSummaryPanel extends StatelessWidget {
       return const _EvaluationVerdict(
         title: 'Current submission satisfies the lesson checks',
         subtitle:
-            'The backend sample checks passed for this lesson. This is the strongest signal the platform currently has that the implementation is behaving as required.',
+            'The lesson checks passed. This is the strongest signal the platform currently has that the implementation is behaving as required.',
         color: Color(0xFF10B981),
         icon: Icons.verified_rounded,
       );
@@ -595,7 +594,7 @@ class _EvaluationSummaryPanel extends StatelessWidget {
       return const _EvaluationVerdict(
         title: 'Submission could not be validated',
         subtitle:
-            'The backend could not complete the lesson evaluation because the code raised an error or did not satisfy the lesson contract.',
+            'The lesson evaluation could not be completed because the code raised an error or did not satisfy the lesson contract.',
         color: Color(0xFFEF4444),
         icon: Icons.error_outline_rounded,
       );

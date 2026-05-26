@@ -38,7 +38,7 @@ class _StubHttp:
 
 @pytest.fixture
 def log_data() -> list:
-    return [[{"state": 0, "action": 1, "reward": 0, "next_state": 1}]]
+    return [[{"state": 0, "action": 1, "reward": 0, "next_state": 1, "done": False}]]
 
 
 def test_returns_video_url_when_job_completes(monkeypatch, log_data):
@@ -96,3 +96,54 @@ def test_returns_empty_string_on_empty_log_data():
     controller = VisualizationController(base_url="http://manim:8200")
     assert controller.generate_animation([], "td_q_learning") == ""
     assert controller.generate_animation([[]], "td_q_learning") == ""
+
+
+class TestNormalizeStepRichFields:
+    """_normalize_step must preserve all rich fields and convert numpy types."""
+
+    def test_preserves_all_rich_fields(self):
+        step = {
+            "state": 3,
+            "action": 1,
+            "reward": 0.5,
+            "next_state": 4,
+            "done": False,
+            "agent_caption": "Agent moves right",
+            "code_lines": ["q[s,a] += alpha * td_error"],
+            "math_equation": r"Q(s,a) \leftarrow Q(s,a) + \alpha \delta",
+            "math_lines": ["td_error = 0.1"],
+            "updated_values": {"Q(3,1)": 0.42},
+            "equation_update": {"reward": 0.5, "gamma": 0.99, "lhs": "Q(3,1)"},
+        }
+        result = VisualizationController._normalize_step(step)
+        assert result["agent_caption"] == "Agent moves right"
+        assert result["code_lines"] == ["q[s,a] += alpha * td_error"]
+        assert result["math_equation"] == r"Q(s,a) \leftarrow Q(s,a) + \alpha \delta"
+        assert result["updated_values"] == {"Q(3,1)": 0.42}
+        assert result["equation_update"]["reward"] == 0.5
+
+    def test_converts_numpy_int(self):
+        try:
+            import numpy as np
+        except ImportError:
+            pytest.skip("numpy not installed")
+        step = {"state": np.int64(5), "action": np.int32(2), "reward": np.float32(1.0),
+                "next_state": np.int64(6), "done": False,
+                "equation_update": {"reward": np.float64(1.0), "gamma": np.float32(0.9)}}
+        result = VisualizationController._normalize_step(step)
+        assert type(result["state"]) is int
+        assert type(result["action"]) is int
+        assert type(result["reward"]) is float
+        assert type(result["equation_update"]["reward"]) is float
+        assert type(result["equation_update"]["gamma"]) is float
+
+    def test_numpy_in_list_field(self):
+        try:
+            import numpy as np
+        except ImportError:
+            pytest.skip("numpy not installed")
+        step = {"state": 0, "action": 0, "reward": 0.0, "next_state": 1,
+                "math_lines": [np.str_("hello"), "world"]}
+        result = VisualizationController._normalize_step(step)
+        # list must survive; non-numpy elements pass through unchanged
+        assert result["math_lines"][1] == "world"

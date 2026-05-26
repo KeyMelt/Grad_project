@@ -1,0 +1,230 @@
+name: CI/CD Build Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  backend:
+    name: Backend checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+
+      - name: Pytest
+        run: python -m pytest -c backend/pytest.ini backend/tests manim_service/tests
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-xml
+          path: coverage.xml
+          if-no-files-found: ignore
+
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install frontend dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build web
+        run: |
+          flutter build web --release \
+            --dart-define=BACKEND_BASE_URL=""
+
+      - name: Upload web build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-web-build
+          path: frontend/build/web
+          if-no-files-found: error
+
+  docker:
+    name: Build and publish Docker images
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs:
+      - backend
+      - frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image names
+        run: |
+          repo="${GITHUB_REPOSITORY,,}"
+          echo "BACKEND_IMAGE=ghcr.io/${repo}-backend" >> "$GITHUB_ENV"
+          echo "FRONTEND_IMAGE=ghcr.io/${repo}-frontend" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build backend cloud image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.cloud
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+            ${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=gha,scope=backend-cloud
+          cache-to: type=gha,mode=max,scope=backend-cloud
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.frontend
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+            ${{ env.FRONTEND_IMAGE }}:latest
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+      - name: Validate production Compose file
+        env:
+          RL_IDE_ALLOWED_ORIGINS: http://localhost
+          RL_IDE_AUTH_TOKEN_SECRET: ci-auth-token-secret
+          RL_IDE_FIREBASE_CREDENTIALS_FILE: /tmp/firebase-admin-key.json
+          RL_IDE_INTERNAL_TOKEN: ci-internal-token
+          RL_IDE_SHELL_TOKEN_SECRET: ci-shell-token-secret
+        run: docker compose -f docker-compose.prod.yml config
+
+  deploy:
+    name: Deploy to DigitalOcean
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs:
+      - docker
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+    env:
+      DO_HOST: ${{ secrets.DO_HOST }}
+      DO_PORT: ${{ secrets.DO_PORT || '22' }}
+      DO_USER: ${{ secrets.DO_USER }}
+      DO_SSH_KEY: ${{ secrets.DO_SSH_KEY }}
+      DO_DEPLOY_PATH: ${{ secrets.DO_DEPLOY_PATH }}
+      DO_ENV_FILE: ${{ secrets.DO_ENV_FILE }}
+      GHCR_PULL_USER: ${{ secrets.GHCR_PULL_USER || github.actor }}
+      GHCR_PULL_TOKEN: ${{ secrets.GHCR_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image names
+        run: |
+          repo="${GITHUB_REPOSITORY,,}"
+          echo "BACKEND_IMAGE=ghcr.io/${repo}-backend" >> "$GITHUB_ENV"
+          echo "FRONTEND_IMAGE=ghcr.io/${repo}-frontend" >> "$GITHUB_ENV"
+
+      - name: Check deployment secrets
+        run: |
+          missing=0
+          for name in DO_HOST DO_USER DO_SSH_KEY DO_DEPLOY_PATH GHCR_PULL_TOKEN; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing required GitHub secret: ${name}"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Configure SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DO_SSH_KEY" > ~/.ssh/digitalocean_deploy
+          chmod 600 ~/.ssh/digitalocean_deploy
+          ssh-keyscan -p "$DO_PORT" -H "$DO_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload Compose file
+        run: |
+          ssh -i ~/.ssh/digitalocean_deploy -p "$DO_PORT" "$DO_USER@$DO_HOST" \
+            "mkdir -p '$DO_DEPLOY_PATH'"
+          scp -i ~/.ssh/digitalocean_deploy -P "$DO_PORT" \
+            docker-compose.prod.yml \
+            "$DO_USER@$DO_HOST:$DO_DEPLOY_PATH/docker-compose.prod.yml"
+
+      - name: Log Droplet into GHCR
+        run: |
+          printf '%s' "$GHCR_PULL_TOKEN" | ssh -i ~/.ssh/digitalocean_deploy -p "$DO_PORT" "$DO_USER@$DO_HOST" \
+            "docker login ghcr.io -u '$GHCR_PULL_USER' --password-stdin"
+
+      - name: Deploy Compose stack
+        run: |
+          remote_env_file="${DO_ENV_FILE:-/srv/rl-platform/.env}"
+          ssh -i ~/.ssh/digitalocean_deploy -p "$DO_PORT" "$DO_USER@$DO_HOST" \
+            "cd '$DO_DEPLOY_PATH' && \
+             RL_IDE_IMAGE='$BACKEND_IMAGE:${GITHUB_SHA}' \
+             RL_IDE_FRONTEND_IMAGE='$FRONTEND_IMAGE:${GITHUB_SHA}' \
+             docker compose -f docker-compose.prod.yml --env-file '$remote_env_file' pull && \
+             RL_IDE_IMAGE='$BACKEND_IMAGE:${GITHUB_SHA}' \
+             RL_IDE_FRONTEND_IMAGE='$FRONTEND_IMAGE:${GITHUB_SHA}' \
+             docker compose -f docker-compose.prod.yml --env-file '$remote_env_file' up -d --no-build --remove-orphans && \
+             docker image prune -f"
+
+      - name: Remote smoke test
+        run: |
+          remote_env_file="${DO_ENV_FILE:-/srv/rl-platform/.env}"
+          ssh -i ~/.ssh/digitalocean_deploy -p "$DO_PORT" "$DO_USER@$DO_HOST" \
+            "curl -fsS http://127.0.0.1/health >/dev/null && docker compose -f '$DO_DEPLOY_PATH/docker-compose.prod.yml' --env-file '$remote_env_file' ps"

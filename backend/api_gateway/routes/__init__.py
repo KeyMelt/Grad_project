@@ -1,5 +1,6 @@
 from backend.api_gateway.routes.admin import build_admin_router
 from backend.api_gateway.routes.auth import build_auth_router
+from backend.api_gateway.routes.evaluation import build_evaluation_router
 from backend.api_gateway.routes.concept_videos import build_concept_videos_router
 from backend.api_gateway.routes.execution import build_execution_router
 from backend.api_gateway.routes.lessons import build_lessons_router
@@ -12,6 +13,7 @@ from backend.api_gateway.routes.workspace import build_workspace_router
 __all__ = [
     "build_admin_router",
     "build_auth_router",
+    "build_evaluation_router",
     "build_concept_videos_router",
     "build_execution_router",
     "build_lessons_router",
