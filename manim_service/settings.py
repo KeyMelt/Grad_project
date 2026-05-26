@@ -2,16 +2,17 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 # Path to the manim venv python binary
-MANIM_PYTHON: str = os.environ.get(
-    "MANIM_PYTHON", "/Users/ultramarine/.venvs/manim/bin/python"
-)
+MANIM_PYTHON: str = os.environ.get("MANIM_PYTHON", sys.executable)
 
 # Shared media output directory (backend reads from same path)
 SHARED_MEDIA_DIR: Path = Path(
-    os.environ.get("SHARED_MEDIA_DIR", "/Users/ultramarine/Desktop/grad_project/backend/media")
+    os.environ.get("SHARED_MEDIA_DIR", str(PROJECT_ROOT / "backend" / "media"))
 )
 
 # Render quality: "l" (480p15 dev), "m" (720p30 final)
@@ -46,7 +47,7 @@ DEFAULT_NARRATOR_VOICE: str = os.environ.get("DEFAULT_NARRATOR_VOICE", "am_micha
 DEFAULT_NARRATOR_SPEED: float = float(os.environ.get("DEFAULT_NARRATOR_SPEED", "1.0"))
 
 # ffmpeg binary used for mixing/muxing audio with rendered MP4.
-FFMPEG_BIN: str = os.environ.get("FFMPEG_BIN", "/opt/homebrew/bin/ffmpeg")
+FFMPEG_BIN: str = os.environ.get("FFMPEG_BIN", "ffmpeg")
 
 # Scratch directory for per-render synthesised audio segments. Safe to nuke
 # between runs; cache is per-render, not per-line.
