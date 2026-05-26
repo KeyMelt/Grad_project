@@ -52,7 +52,25 @@ jobs:
           python -m pip install -r backend/requirements.txt
 
       - name: Pytest
-        run: python -m pytest -c backend/pytest.ini backend/tests manim_service/tests
+        run: |
+          set +e
+          python -m pytest -c backend/pytest.ini backend/tests manim_service/tests 2>&1 | tee pytest-output.log
+          status="${PIPESTATUS[0]}"
+          if [ "$status" -ne 0 ]; then
+            {
+              echo "### Backend pytest failure"
+              echo '```text'
+              tail -n 160 pytest-output.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            summary="$(tail -n 120 pytest-output.log)"
+            summary="${summary//'%'/'%25'}"
+            summary="${summary//$'\r'/'%0D'}"
+            summary="${summary//$'\n'/'%0A'}"
+            echo "::error file=backend/pytest.ini,line=1::$summary"
+          fi
+          exit "$status"
 
       - name: Upload coverage report
         if: always()
