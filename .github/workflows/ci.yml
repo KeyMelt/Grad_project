@@ -34,6 +34,18 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
+      - name: Install backend system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            pkg-config \
+            libcairo2-dev \
+            libpango1.0-dev \
+            ffmpeg \
+            libsdl2-2.0-0 \
+            libsdl2-ttf-2.0-0
+
       - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
