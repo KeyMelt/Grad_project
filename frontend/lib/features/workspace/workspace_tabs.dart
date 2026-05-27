@@ -159,7 +159,7 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
     final stepTrace = widget.stepTrace;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      padding: const EdgeInsets.fromLTRB(6, 4, 6, 6),
       child: Column(
         children: [
           Expanded(
@@ -283,9 +283,9 @@ class _CodeExercisePane extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (showExerciseBrief && constraints.maxWidth < 760) {
+        if (showExerciseBrief) {
           final briefHeight =
-              (constraints.maxHeight * 0.34).clamp(240.0, 360.0);
+              (constraints.maxHeight * 0.30).clamp(220.0, 320.0);
           return Column(
             children: [
               SizedBox(

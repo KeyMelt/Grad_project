@@ -76,13 +76,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
               child: CustomScrollView(
                 slivers: [
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                    sliver: SliverToBoxAdapter(
-                      child: _buildConnectionBadge(),
-                    ),
-                  ),
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                     sliver: SliverToBoxAdapter(
                       child: _buildHeroCard(totalLessons),
                     ),
@@ -148,63 +142,6 @@ class _HomeDashboardState extends State<HomeDashboard> {
             ),
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildConnectionBadge() {
-    final manager = BackendConnectionManager();
-    final isReady = manager.status == WorkspaceConnectionStatus.ready;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: isReady
-            ? AppTheme.successGreen.withValues(alpha: 0.08)
-            : Colors.red.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isReady
-              ? AppTheme.successGreen.withValues(alpha: 0.2)
-              : Colors.red.withValues(alpha: 0.2),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            isReady ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
-            color: isReady ? AppTheme.successGreen : Colors.red,
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isReady ? 'Platform ready' : 'Connection unavailable',
-                  style: TextStyle(
-                    color: isReady ? AppTheme.successGreen : Colors.red,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                ),
-                Text(
-                  isReady
-                      ? 'Lessons and progress are available'
-                      : (manager.lastError ?? 'Offline'),
-                  style: TextStyle(
-                    color: isReady ? AppTheme.textSecondary : Colors.redAccent,
-                    fontSize: 11,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -12,7 +12,6 @@ import '../features/lessons/lesson_browser.dart';
 import '../features/onboarding/onboarding_tutorial.dart';
 import '../features/quiz/quiz_section.dart';
 import '../features/study_buddy/study_buddy_panel.dart';
-import '../features/workspace/exercise_brief_panel.dart';
 import '../features/workspace/workspace_tabs.dart';
 
 class MainLayout extends StatefulWidget {
@@ -92,7 +91,6 @@ class _MainLayoutState extends State<MainLayout> {
       case AppSection.workspace:
         return LayoutBuilder(
           builder: (context, constraints) {
-            final isWide = constraints.maxWidth >= 980;
             final workspace = WorkspaceTabs(
               lesson: state.selectedLesson,
               code: state.code,
@@ -122,7 +120,7 @@ class _MainLayoutState extends State<MainLayout> {
               stepTrace: state.stepTrace,
               onConceptVideoSession: _cubit.recordConceptVideoSession,
               onWorkspaceFocusSession: _cubit.recordWorkspaceFocusSession,
-              showExerciseBriefInCodePane: !isWide,
+              showExerciseBriefInCodePane: true,
             );
 
             final studyBuddyPanel = StudyBuddyPanel(
@@ -140,28 +138,12 @@ class _MainLayoutState extends State<MainLayout> {
               onSendChatMessage: _cubit.sendStudyBuddyChat,
             );
 
-            final mainContent = isWide
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: ExerciseBriefPanel(
-                          lesson: state.selectedLesson,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(child: workspace),
-                    ],
-                  )
-                : workspace;
-
             return Padding(
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Positioned.fill(child: mainContent),
-                  // FIFTH (PURPLE): Study Buddy sliding drawer from the right.
+                  Positioned.fill(child: workspace),
                   Positioned(
                     top: 0,
                     bottom: 0,
@@ -294,14 +276,14 @@ class _MainLayoutState extends State<MainLayout> {
           currentLessonIndex < orderedLessons.length - 1;
 
       bottomBar = PreferredSize(
-        preferredSize: const Size.fromHeight(52),
+        preferredSize: const Size.fromHeight(42),
         child: Container(
           decoration: const BoxDecoration(
             border: Border(
               bottom: BorderSide(color: Color(0xFFE5E7EB)),
             ),
           ),
-          padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+          padding: const EdgeInsets.fromLTRB(10, 0, 10, 5),
           child: Center(
             child: CourseOutlineLauncher(
               selectedLesson: state.selectedLesson,
@@ -328,9 +310,10 @@ class _MainLayoutState extends State<MainLayout> {
     }
 
     return AppBar(
+      primary: false,
       backgroundColor: AppTheme.surfaceWhite,
       elevation: 0,
-      toolbarHeight: 58,
+      toolbarHeight: 56,
       bottom: bottomBar,
       title: LayoutBuilder(
         builder: (context, constraints) {
@@ -347,20 +330,20 @@ class _MainLayoutState extends State<MainLayout> {
                   borderRadius: BorderRadius.circular(8),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(
-                      minWidth: 44,
-                      minHeight: 42,
+                      minWidth: 34,
+                      minHeight: 34,
                     ),
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: Image.asset(
                         'assets/branding/rl_logo_trimmed.png',
-                        height: 38,
+                        height: 30,
                         fit: BoxFit.contain,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 18),
+                const SizedBox(width: 12),
               ],
               // FIRST (RED): hide nav chips when inside workspace.
               if (!isWorkspace)
@@ -407,22 +390,30 @@ class _MainLayoutState extends State<MainLayout> {
       actions: [
         if (state.learner == null) ...[
           TextButton(
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+            ),
             onPressed: state.isSigningIn
                 ? null
                 : () => _showAuthDialog(initialMode: _AuthMode.signIn),
             child: const Text('Sign in'),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 4),
           FilledButton(
+            style: FilledButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+            ),
             onPressed: state.isSigningIn
                 ? null
                 : () => _showAuthDialog(initialMode: _AuthMode.signUp),
             child: const Text('Sign up'),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 6),
         ] else ...[
           Container(
-            margin: const EdgeInsets.symmetric(vertical: 10),
+            margin: const EdgeInsets.symmetric(vertical: 7),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               color: const Color(0xFFE8F0FE),
@@ -457,6 +448,7 @@ class _MainLayoutState extends State<MainLayout> {
         ],
         const SizedBox(width: 6),
         IconButton(
+          visualDensity: VisualDensity.compact,
           tooltip: 'Show onboarding tutorial',
           onPressed: () => _openOnboarding(markSeen: false),
           icon: const Icon(Icons.lightbulb_outline_rounded),
@@ -471,21 +463,12 @@ class _MainLayoutState extends State<MainLayout> {
       context: context,
       builder: (context) => _AuthDialog(
         initialMode: initialMode,
-        googleAvailable: _canUseGoogleSignIn(),
+        googleAvailable: true,
         onSignIn: _cubit.signIn,
         onSignUp: _cubit.signUp,
         onGoogle: _cubit.signInWithGoogle,
       ),
     );
-  }
-
-  bool _canUseGoogleSignIn() {
-    final uri = Uri.base;
-    if (uri.scheme == 'https') {
-      return true;
-    }
-    final host = uri.host.toLowerCase();
-    return host == 'localhost' || host == '127.0.0.1';
   }
 }
 
@@ -779,19 +762,25 @@ class _StudyBuddyDrawerState extends State<_StudyBuddyDrawer>
                 onHorizontalDragEnd: _handleDragEnd,
                 onHorizontalDragCancel: _handleDragCancel,
                 child: Container(
-                  width: 22,
+                  width: widget.isOpen ? 24 : 34,
                   decoration: BoxDecoration(
-                    color: AppTheme.surfaceWhite,
+                    color: widget.isOpen
+                        ? AppTheme.primaryBlue.withValues(alpha: 0.1)
+                        : AppTheme.primaryBlue,
                     borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(12),
-                      bottomLeft: Radius.circular(12),
+                      topLeft: Radius.circular(14),
+                      bottomLeft: Radius.circular(14),
                     ),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    border: Border.all(
+                      color: widget.isOpen
+                          ? const Color(0xFFBFDBFE)
+                          : AppTheme.primaryBlue,
+                    ),
                     boxShadow: const [
                       BoxShadow(
-                        color: Color(0x12000000),
-                        blurRadius: 6,
-                        offset: Offset(-2, 0),
+                        color: Color(0x24000000),
+                        blurRadius: 10,
+                        offset: Offset(-3, 0),
                       ),
                     ],
                   ),
@@ -802,9 +791,27 @@ class _StudyBuddyDrawerState extends State<_StudyBuddyDrawer>
                         widget.isOpen
                             ? Icons.chevron_right_rounded
                             : Icons.chevron_left_rounded,
-                        size: 16,
-                        color: const Color(0xFF6B7280),
+                        size: widget.isOpen ? 18 : 24,
+                        color:
+                            widget.isOpen ? AppTheme.primaryBlue : Colors.white,
                       ),
+                      if (!widget.isOpen) ...[
+                        const SizedBox(height: 8),
+                        RotatedBox(
+                          quarterTurns: 3,
+                          child: Text(
+                            'Buddy',
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0,
+                                ),
+                          ),
+                        ),
+                      ],
                       // Pulsing intervention dot — visible only when closed and
                       // an intervention is available, so users know there's a cue.
                       if (_shouldPulse) ...[
@@ -901,5 +908,5 @@ class _NavChip extends StatelessWidget {
 }
 
 double _studyBuddyRailWidth(double maxWidth) {
-  return (maxWidth * 0.26).clamp(300.0, AppConstants.rightPanelWidth);
+  return (maxWidth * 0.28).clamp(320.0, AppConstants.rightPanelWidth);
 }

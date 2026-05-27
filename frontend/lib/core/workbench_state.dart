@@ -513,24 +513,9 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     ));
 
     try {
-      String? firebaseIdToken;
-      if (kIsWeb) {
-        final credential =
-            await FirebaseAuth.instance.signInWithEmailAndPassword(
-          email: normalizedEmail,
-          password: password,
-        );
-        firebaseIdToken = await credential.user?.getIdToken(true);
-      }
-
-      final dashboard = await _api.signIn(
-        displayName: normalizedEmail,
+      await _signInWithOptionalFirebase(
+        normalizedEmail: normalizedEmail,
         password: password,
-        firebaseIdToken: firebaseIdToken,
-      );
-      _applyAuthenticatedSession(
-        dashboard,
-        successMessage: 'Signed in as ${dashboard.student.displayName}.',
       );
     } on BackendApiException catch (error) {
       emit(state.copyWith(
@@ -635,6 +620,11 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       String? firebaseIdToken;
       var displayName = 'Google User';
       if (kIsWeb) {
+        if (!_canUseGoogleSignInOnCurrentOrigin()) {
+          throw FirebaseAuthException(
+            code: 'google-requires-secure-origin',
+          );
+        }
         final provider = GoogleAuthProvider()
           ..setCustomParameters({'prompt': 'select_account'});
         final credential =
@@ -738,11 +728,50 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         return 'Use a stronger password.';
       case 'popup-closed-by-user':
         return 'Google sign-in was cancelled.';
+      case 'google-requires-secure-origin':
+        return 'Google sign-in requires HTTPS publishing.';
       case 'too-many-requests':
         return 'Too many attempts. Try again later.';
       default:
         return 'Sign-in failed. Check your credentials and try again.';
     }
+  }
+
+  Future<void> _signInWithOptionalFirebase({
+    required String normalizedEmail,
+    required String password,
+  }) async {
+    String? firebaseIdToken;
+    if (kIsWeb) {
+      try {
+        final credential =
+            await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: normalizedEmail,
+          password: password,
+        );
+        firebaseIdToken = await credential.user?.getIdToken(true);
+      } on FirebaseAuthException catch (error) {
+        if (!_shouldFallBackToBackendSignIn(error)) {
+          rethrow;
+        }
+      }
+    }
+
+    final dashboard = await _api.signIn(
+      displayName: normalizedEmail,
+      password: password,
+      firebaseIdToken: firebaseIdToken,
+    );
+    _applyAuthenticatedSession(
+      dashboard,
+      successMessage: 'Signed in as ${dashboard.student.displayName}.',
+    );
+  }
+
+  bool _shouldFallBackToBackendSignIn(FirebaseAuthException error) {
+    return error.code == 'user-not-found' ||
+        error.code == 'wrong-password' ||
+        error.code == 'invalid-credential';
   }
 
   Future<void> refreshDashboard({bool quiet = false}) async {

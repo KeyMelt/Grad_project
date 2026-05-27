@@ -30,7 +30,7 @@ class CourseOutlineLauncher extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: AppTheme.surfaceWhite,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: const Color(0xFFCBD5E1)),
           boxShadow: const [
             BoxShadow(
@@ -53,11 +53,11 @@ class CourseOutlineLauncher extends StatelessWidget {
                 onTap: onOpenOutline,
                 child: Padding(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                   child: Row(
                     children: [
-                      const Icon(Icons.menu_rounded, size: 22),
-                      const SizedBox(width: 12),
+                      const Icon(Icons.menu_rounded, size: 20),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -299,11 +299,12 @@ class _OutlineArrowButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: SizedBox(
-        width: 72,
-        height: 68,
+        width: 48,
+        height: 42,
         child: IconButton(
+          visualDensity: VisualDensity.compact,
           onPressed: onPressed,
-          icon: Icon(icon, size: 28),
+          icon: Icon(icon, size: 24),
           color: AppTheme.textPrimary,
           disabledColor: const Color(0xFFCBD5E1),
         ),
