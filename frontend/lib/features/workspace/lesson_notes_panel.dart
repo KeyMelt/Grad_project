@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:flutter_markdown_latex/flutter_markdown_latex.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:flutter_markdown_plus_latex/flutter_markdown_plus_latex.dart';
 import 'package:markdown/markdown.dart' as md;
 
 import '../../core/lesson_models.dart';
@@ -131,9 +131,9 @@ class _LessonNotesMarkdown extends StatelessWidget {
                 textStyle: styleSheet.p,
               ),
             },
-            sizedImageBuilder: (config) => _NotesImage(
-              uri: config.uri,
-              alt: config.alt ?? config.title ?? '',
+            imageBuilder: (uri, title, alt) => _NotesImage(
+              uri: uri,
+              alt: alt ?? title ?? '',
             ),
           ),
         ],
