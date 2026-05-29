@@ -1,0 +1,1053 @@
+1
+00:00:00,000 --> 00:00:02,475
+An agent. A goal. A frozen lake.
+
+2
+00:00:04,000 --> 00:00:08,181
+The ice stretches between them — and the
+ice does not cooperate.
+
+3
+00:00:10,000 --> 00:00:15,035
+The agent cannot see ahead. It has no
+teacher, no map, no instructions.
+
+4
+00:00:16,000 --> 00:00:19,152
+The only thing it will ever receive is a
+number —
+
+5
+00:00:19,202 --> 00:00:22,208
+once, at the very end, if it reaches the
+goal.
+
+6
+00:00:23,000 --> 00:00:25,284
+That single number is its only guide.
+
+7
+00:00:25,334 --> 00:00:28,803
+And the question is: can anything be
+learned from that?
+
+8
+00:00:32,000 --> 00:00:35,776
+The agent sets out. Two steps — and it
+falls through the ice.
+
+9
+00:00:37,000 --> 00:00:41,800
+No message arrives. No hint. Nothing
+points back toward a better path.
+
+10
+00:00:43,000 --> 00:00:44,301
+Only a zero.
+
+11
+00:00:45,000 --> 00:00:50,184
+That zero is not feedback in any rich
+sense — it is the absence of feedback.
+
+12
+00:00:52,000 --> 00:00:54,734
+The agent chose, the environment
+responded,
+
+13
+00:00:54,784 --> 00:00:59,445
+and the only signal is a number that says
+nothing about what went wrong.
+
+14
+00:01:01,000 --> 00:01:05,395
+There is no teacher watching, no
+supervisor pointing to the mistake.
+
+15
+00:01:06,000 --> 00:01:07,777
+The agent must learn anyway.
+
+16
+00:01:07,827 --> 00:01:11,547
+That is the defining challenge of
+reinforcement learning.
+
+17
+00:01:15,000 --> 00:01:18,840
+The agent tries again — a different path,
+more careful steps.
+
+18
+00:01:20,000 --> 00:01:21,748
+But the ice has its own say.
+
+19
+00:01:21,798 --> 00:01:26,485
+At each step, the agent chooses a
+direction — and arrives somewhere else.
+
+20
+00:01:27,000 --> 00:01:28,960
+The environment is stochastic.
+
+21
+00:01:29,010 --> 00:01:34,637
+The agent's choice does not determine the
+outcome; it only shifts the probabilities.
+
+22
+00:01:36,000 --> 00:01:38,837
+A fall into the same hole. Another zero.
+
+23
+00:01:40,000 --> 00:01:44,288
+Notice the gap between what the agent
+intended and where it ended up.
+
+24
+00:01:46,000 --> 00:01:50,834
+That gap — between intention and outcome —
+is not a failure of the agent.
+
+25
+00:01:50,884 --> 00:01:52,891
+It is a property of the world.
+
+26
+00:01:54,000 --> 00:01:58,693
+The world does not bend to the agent's
+will. The agent must account for that.
+
+27
+00:02:02,000 --> 00:02:03,429
+One more attempt.
+
+28
+00:02:04,000 --> 00:02:08,640
+Five steps across the ice — the agent
+slips, recovers, slips again —
+
+29
+00:02:08,690 --> 00:02:11,104
+and finally reaches the far corner.
+
+30
+00:02:12,000 --> 00:02:14,197
+And now something different happens.
+
+31
+00:02:16,000 --> 00:02:17,451
+A reward of one.
+
+32
+00:02:19,000 --> 00:02:23,312
+That is all. One number. No explanation of
+which steps were good.
+
+33
+00:02:23,362 --> 00:02:25,912
+No partial credit for the near-misses.
+
+34
+00:02:27,000 --> 00:02:30,187
+Every zero along the way told the agent
+nothing.
+
+35
+00:02:30,237 --> 00:02:33,677
+Only the final step, at the goal, carries
+a signal.
+
+36
+00:02:34,000 --> 00:02:36,132
+This is called a sparse reward —
+
+37
+00:02:36,182 --> 00:02:40,272
+and it is the norm in many real problems,
+not the exception.
+
+38
+00:02:42,000 --> 00:02:47,315
+A reward at the very end of a sequence
+cannot be credited to any single action —
+
+39
+00:02:47,365 --> 00:02:52,731
+the agent must figure out which actions
+across all five steps actually mattered.
+
+40
+00:02:54,000 --> 00:02:57,264
+How does an agent even begin to reason
+about that?
+
+41
+00:02:58,000 --> 00:03:03,602
+The answer requires a precise language for
+describing what the environment does and
+
+42
+00:03:03,652 --> 00:03:06,171
+what the agent is trying to maximize.
+
+43
+00:03:08,000 --> 00:03:11,128
+That language is the Markov Decision
+Process.
+
+44
+00:03:11,178 --> 00:03:14,357
+And it starts with a deceptively simple
+idea.
+
+45
+00:03:17,000 --> 00:03:20,008
+Every cell the agent can occupy is a
+state.
+
+46
+00:03:21,000 --> 00:03:23,293
+The frozen lake has sixteen of them —
+
+47
+00:03:23,343 --> 00:03:27,080
+numbered zero at the top-left, fifteen at
+the bottom-right.
+
+48
+00:03:29,000 --> 00:03:32,618
+A state is a complete description of where
+the agent is.
+
+49
+00:03:32,668 --> 00:03:35,485
+Nothing else matters for what happens
+next.
+
+50
+00:03:36,000 --> 00:03:40,515
+Not the path that brought the agent here.
+Not the number of steps taken.
+
+51
+00:03:40,565 --> 00:03:42,784
+Not the history of failed attempts.
+
+52
+00:03:44,000 --> 00:03:48,188
+Only the current state, combined with the
+action the agent takes,
+
+53
+00:03:48,238 --> 00:03:50,976
+determines what the environment does next.
+
+54
+00:03:52,000 --> 00:03:53,897
+This is the Markov property —
+
+55
+00:03:53,947 --> 00:03:57,909
+and it is both a simplification and an
+enabling assumption.
+
+56
+00:04:00,000 --> 00:04:04,779
+The simplification: we discard history,
+and the problem becomes tractable.
+
+57
+00:04:06,000 --> 00:04:10,892
+The enabling assumption: the state must
+actually capture everything relevant.
+
+58
+00:04:10,942 --> 00:04:13,637
+For FrozenLake, the cell number does that.
+
+59
+00:04:16,000 --> 00:04:19,691
+Take state six — one of the safe cells in
+the second row.
+
+60
+00:04:21,000 --> 00:04:25,232
+Suppose the agent arrived here after two
+steps. Or four steps.
+
+61
+00:04:25,282 --> 00:04:27,699
+Or by a completely different route.
+
+62
+00:04:29,000 --> 00:04:30,323
+It does not matter.
+
+63
+00:04:31,000 --> 00:04:34,265
+The ice has no memory of how the agent got
+here.
+
+64
+00:04:34,315 --> 00:04:40,136
+The environment's response depends only on
+where the agent is now and what it chooses
+
+65
+00:04:40,186 --> 00:04:40,877
+to do now.
+
+66
+00:04:43,000 --> 00:04:45,453
+The agent chooses RIGHT from state six.
+
+67
+00:04:46,000 --> 00:04:50,907
+But the ice is slippery — "choosing right"
+is not the same as "arriving right."
+
+68
+00:04:52,000 --> 00:04:57,471
+What actually happens next is governed by
+a probability distribution over possible
+
+69
+00:04:57,521 --> 00:04:58,464
+landing cells.
+
+70
+00:05:00,000 --> 00:05:03,206
+The agent chose. The environment will
+respond.
+
+71
+00:05:03,256 --> 00:05:05,755
+But the response is not the action —
+
+72
+00:05:05,805 --> 00:05:09,344
+it is something the environment controls
+entirely.
+
+73
+00:05:11,000 --> 00:05:13,136
+So the natural question becomes:
+
+74
+00:05:13,186 --> 00:05:18,787
+what is the precise mathematical object
+that describes the environment's response?
+
+75
+00:05:21,000 --> 00:05:25,693
+This is the dynamics function — p of
+s-prime, r, given s and a.
+
+76
+00:05:27,000 --> 00:05:28,460
+It is a probability —
+
+77
+00:05:28,510 --> 00:05:33,567
+the chance that the agent lands in state
+s-prime and receives reward r,
+
+78
+00:05:33,617 --> 00:05:37,069
+given that it was in state s and chose
+action a.
+
+79
+00:05:38,000 --> 00:05:42,800
+Four arguments. Four roles. And they
+divide the world cleanly in two.
+
+80
+00:05:44,000 --> 00:05:49,355
+The agent controls a — the action. The
+environment controls everything else.
+
+81
+00:05:51,000 --> 00:05:55,346
+State s is where the agent is. The action
+a is what it does.
+
+82
+00:05:55,396 --> 00:05:59,939
+State s-prime is where it lands. Reward r
+is what it receives.
+
+83
+00:06:05,000 --> 00:06:06,911
+From state six, choosing RIGHT,
+
+84
+00:06:06,961 --> 00:06:10,440
+the ice spreads the agent's landing across
+three cells.
+
+85
+00:06:12,000 --> 00:06:16,139
+Upward one row. Rightward one column.
+Downward one row.
+
+86
+00:06:17,000 --> 00:06:20,883
+Each destination carries the same
+probability — one third.
+
+87
+00:06:23,000 --> 00:06:27,699
+The agent cannot steer between them. The
+choice of RIGHT has been made.
+
+88
+00:06:27,749 --> 00:06:29,421
+The ice decides the rest.
+
+89
+00:06:30,000 --> 00:06:35,362
+That one-third for each outcome is the
+value of p for this state, this action,
+
+90
+00:06:35,412 --> 00:06:37,424
+and each possible next state.
+
+91
+00:06:39,000 --> 00:06:42,962
+The s-prime in the equation is not a fixed
+destination —
+
+92
+00:06:43,012 --> 00:06:47,811
+it is a variable that ranges over every
+cell the agent might reach.
+
+93
+00:06:49,000 --> 00:06:51,532
+One of those destinations is a hole.
+
+94
+00:06:51,582 --> 00:06:54,616
+Landing there ends the episode
+immediately.
+
+95
+00:06:54,666 --> 00:06:59,901
+The reward is still zero — the hole
+carries no penalty, only termination.
+
+96
+00:07:01,000 --> 00:07:06,853
+The agent intended right. The ice gave it
+three equally weighted possibilities.
+
+97
+00:07:06,903 --> 00:07:09,020
+The equation p of s-prime, r,
+
+98
+00:07:09,070 --> 00:07:13,129
+given s and a is the formal name for that
+uncertainty —
+
+99
+00:07:13,179 --> 00:07:16,616
+every time, for every state, for every
+action.
+
+100
+00:07:18,000 --> 00:07:20,568
+This is what the agent is navigating.
+
+101
+00:07:20,618 --> 00:07:24,933
+Not a fixed world — a distribution over
+worlds at every step.
+
+102
+00:07:28,000 --> 00:07:33,483
+The three outcomes from state six, action
+RIGHT — made visible as a distribution.
+
+103
+00:07:34,000 --> 00:07:39,030
+Each bar represents how likely the agent
+ends up in that particular cell.
+
+104
+00:07:39,080 --> 00:07:44,368
+One third for state two. One third for
+state seven. One third for state ten.
+
+105
+00:07:46,000 --> 00:07:50,373
+Equal heights. Equal probabilities. The
+ice plays no favorites.
+
+106
+00:07:51,000 --> 00:07:52,732
+The bars must sum to one —
+
+107
+00:07:52,782 --> 00:07:56,983
+that is the normalization constraint on
+the dynamics function.
+
+108
+00:07:57,033 --> 00:07:59,981
+All probability mass must be accounted
+for.
+
+109
+00:08:02,000 --> 00:08:05,555
+State seven is a hole — reaching it ends
+the episode.
+
+110
+00:08:05,605 --> 00:08:09,773
+The probability of landing there is the
+same as anywhere else.
+
+111
+00:08:09,823 --> 00:08:12,816
+The world does not warn you before you
+fall.
+
+112
+00:08:14,000 --> 00:08:18,642
+Intention and outcome are two separate
+events. The choice has been made.
+
+113
+00:08:18,692 --> 00:08:21,168
+The distribution is what happens next.
+
+114
+00:08:24,000 --> 00:08:29,158
+The same distribution — the same p of
+s-prime, r, given s and a —
+
+115
+00:08:29,208 --> 00:08:34,496
+lives inside the Gymnasium environment as
+a Python data structure.
+
+116
+00:08:35,000 --> 00:08:40,145
+env dot unwrapped dot P at six at two
+addresses the environment's dynamics model
+
+117
+00:08:40,195 --> 00:08:43,832
+directly: state six, action indexed two,
+which is RIGHT.
+
+118
+00:08:46,000 --> 00:08:49,512
+The outer loop ranges over every possible
+outcome.
+
+119
+00:08:49,562 --> 00:08:52,005
+Each iteration exposes four values:
+
+120
+00:08:52,055 --> 00:08:56,279
+the probability of that outcome, the next
+state, the reward,
+
+121
+00:08:56,329 --> 00:08:58,395
+and whether the episode ends.
+
+122
+00:08:59,000 --> 00:09:04,215
+Those four values are exactly the four
+arguments of the dynamics function —
+
+123
+00:09:04,265 --> 00:09:08,899
+just arranged as a Python tuple rather
+than mathematical notation.
+
+124
+00:09:10,000 --> 00:09:11,692
+For the first iteration:
+
+125
+00:09:11,742 --> 00:09:17,040
+next state is ten, probability one third,
+reward zero, episode continues.
+
+126
+00:09:18,000 --> 00:09:21,580
+For the second: next state is seven — that
+is the hole.
+
+127
+00:09:21,630 --> 00:09:25,787
+Probability one third, reward zero, and
+the episode terminates.
+
+128
+00:09:27,000 --> 00:09:27,939
+For the third:
+
+129
+00:09:27,989 --> 00:09:33,144
+next state is two, probability one third,
+reward zero, episode continues.
+
+130
+00:09:35,000 --> 00:09:36,895
+Three tuples. Three outcomes.
+
+131
+00:09:36,945 --> 00:09:41,037
+The probabilities sum to one — the full
+distribution is here.
+
+132
+00:09:42,000 --> 00:09:45,564
+The code is not an approximation of the
+mathematics.
+
+133
+00:09:45,614 --> 00:09:49,247
+It is the same object, stored in a
+computer's memory,
+
+134
+00:09:49,297 --> 00:09:51,451
+accessible one key lookup away.
+
+135
+00:09:54,000 --> 00:09:56,291
+The dynamics function is complete —
+
+136
+00:09:56,341 --> 00:10:00,955
+summing over all next states and all
+possible rewards must yield one.
+
+137
+00:10:03,000 --> 00:10:05,869
+That is the normalization constraint:
+
+138
+00:10:05,919 --> 00:10:12,337
+the sum over all s-prime and all r of p of
+s-prime, r, given s and a, equals one —
+
+139
+00:10:12,387 --> 00:10:15,779
+for every state and every available
+action.
+
+140
+00:10:17,000 --> 00:10:20,652
+Sometimes the reward structure is not what
+we care about —
+
+141
+00:10:20,702 --> 00:10:24,851
+we want to know only where the agent
+lands, not what it receives.
+
+142
+00:10:26,000 --> 00:10:30,930
+Summing the four-argument form over all
+possible rewards gives the
+
+143
+00:10:30,980 --> 00:10:35,280
+state-transition probability: p of s-prime
+given s and a.
+
+144
+00:10:36,000 --> 00:10:40,555
+That derived form tells you the
+probability of landing in s-prime.
+
+145
+00:10:40,605 --> 00:10:43,904
+The four-argument form is the canonical
+object —
+
+146
+00:10:43,954 --> 00:10:49,675
+it contains strictly more information, and
+every derived quantity follows from it.
+
+147
+00:10:53,000 --> 00:10:56,221
+There is a second question we have not yet
+answered.
+
+148
+00:10:57,000 --> 00:11:01,648
+The dynamics function tells us where the
+agent lands and what it receives —
+
+149
+00:11:01,698 --> 00:11:02,888
+one step at a time.
+
+150
+00:11:04,000 --> 00:11:07,179
+But what is the agent actually trying to
+maximize?
+
+151
+00:11:09,000 --> 00:11:13,928
+Not the next reward. The return — the
+weighted sum of all future rewards.
+
+152
+00:11:15,000 --> 00:11:20,604
+G sub t equals R sub t-plus-one, plus
+gamma times R sub t-plus-two,
+
+153
+00:11:20,654 --> 00:11:25,330
+plus gamma-squared times R sub
+t-plus-three, and so on —
+
+154
+00:11:25,380 --> 00:11:27,018
+which compresses to:
+
+155
+00:11:27,068 --> 00:11:32,588
+the sum over k from zero to infinity of
+gamma to the k times R sub
+
+156
+00:11:32,638 --> 00:11:34,157
+t-plus-k-plus-one.
+
+157
+00:11:35,000 --> 00:11:39,229
+Every reward in the agent's future
+contributes to G sub t.
+
+158
+00:11:39,279 --> 00:11:43,655
+Rewards further away are weighted by
+higher powers of gamma.
+
+159
+00:11:43,705 --> 00:11:46,435
+Nothing is ignored — only discounted.
+
+160
+00:11:52,000 --> 00:11:54,987
+Walk through the successful path, step by
+step.
+
+161
+00:11:56,000 --> 00:12:00,562
+The agent starts at state zero. The first
+step brings no reward.
+
+162
+00:12:00,612 --> 00:12:05,728
+The second step brings no reward. The
+third, fourth, fifth — all zeros.
+
+163
+00:12:07,000 --> 00:12:08,643
+Five steps of nothing.
+
+164
+00:12:10,000 --> 00:12:13,510
+The accumulator stays at zero through
+every one of them —
+
+165
+00:12:13,560 --> 00:12:15,995
+because there is nothing to accumulate.
+
+166
+00:12:17,000 --> 00:12:21,971
+Then, at the sixth step, the agent reaches
+the goal. A reward of one arrives.
+
+167
+00:12:23,000 --> 00:12:27,568
+But that reward did not arrive at step
+one. It arrived at step six.
+
+168
+00:12:27,618 --> 00:12:30,168
+And the return discounts by distance.
+
+169
+00:12:32,000 --> 00:12:34,643
+With gamma equal to 0.99,
+
+170
+00:12:34,693 --> 00:12:41,967
+a reward six steps away is worth 0.99 to
+the fifth power times one —
+
+171
+00:12:42,017 --> 00:12:45,141
+which is approximately 0.951.
+
+172
+00:12:46,000 --> 00:12:50,467
+The reward is not lost. It reaches the
+agent's objective in full —
+
+173
+00:12:50,517 --> 00:12:54,213
+just reduced by the distance it traveled
+through time.
+
+174
+00:12:56,000 --> 00:13:01,999
+A patient agent with gamma close to one
+treats a reward ten steps away almost as
+
+175
+00:13:02,049 --> 00:13:04,469
+seriously as a reward right now.
+
+176
+00:13:05,000 --> 00:13:10,254
+That patience is exactly what the agent
+needs to value the distant goal on this
+
+177
+00:13:10,304 --> 00:13:14,131
+frozen lake — where no reward arrives
+until the very end.
+
+178
+00:13:17,000 --> 00:13:19,731
+How much does the distance actually cost?
+
+179
+00:13:21,000 --> 00:13:24,914
+With gamma equal to 0.5 — the agent is
+impatient.
+
+180
+00:13:24,964 --> 00:13:29,525
+A reward five steps away is worth 0.5 to
+the fifth power,
+
+181
+00:13:29,575 --> 00:13:33,053
+which is roughly three cents on the
+dollar.
+
+182
+00:13:35,000 --> 00:13:40,773
+With gamma equal to 0.99, the same reward
+is worth ninety-five cents.
+
+183
+00:13:40,823 --> 00:13:44,536
+The agent is nearly as patient as it can
+be.
+
+184
+00:13:45,000 --> 00:13:46,963
+With gamma equal to 1.0 —
+
+185
+00:13:47,013 --> 00:13:52,168
+every future reward counts at full value,
+no discounting at all.
+
+186
+00:13:54,000 --> 00:13:56,373
+FrozenLake always terminates.
+
+187
+00:13:56,423 --> 00:14:00,719
+Every episode ends, either in a hole or at
+the goal.
+
+188
+00:14:00,769 --> 00:14:03,810
+So gamma equal to 1.0 is valid here —
+
+189
+00:14:03,860 --> 00:14:09,125
+the sum G sub t is always finite because
+the episode is finite.
+
+190
+00:14:10,000 --> 00:14:14,524
+But for tasks that run forever — tasks
+with no natural endpoint —
+
+191
+00:14:14,574 --> 00:14:18,887
+gamma strictly less than one is required.
+Without discounting,
+
+192
+00:14:18,937 --> 00:14:23,440
+the infinite sum of rewards may not
+converge to a finite number.
+
+193
+00:14:25,000 --> 00:14:28,876
+In this series, gamma is set to 0.99 by
+convention —
+
+194
+00:14:28,926 --> 00:14:31,443
+not because FrozenLake demands it,
+
+195
+00:14:31,493 --> 00:14:37,483
+but to prepare for algorithms that must
+handle continuing tasks where gamma less
+
+196
+00:14:37,533 --> 00:14:39,421
+than one is not optional.
+
+197
+00:14:40,000 --> 00:14:44,373
+The discount factor is the agent's
+relationship with its own future.
+
+198
+00:14:48,000 --> 00:14:53,717
+Look at the sum form of G sub t. Factor
+out gamma from every term after the first.
+
+199
+00:14:55,000 --> 00:15:01,621
+What remains is: R sub t-plus-one, plus
+gamma times the quantity R sub t-plus-two,
+
+200
+00:15:01,671 --> 00:15:05,119
+plus gamma times R sub t-plus-three, plus
+—
+
+201
+00:15:05,169 --> 00:15:09,400
+which is exactly the definition of G sub
+t-plus-one.
+
+202
+00:15:10,000 --> 00:15:13,733
+The entire infinite tail collapses into a
+single term.
+
+203
+00:15:15,000 --> 00:15:20,717
+G sub t equals R sub t-plus-one, plus
+gamma times G sub t-plus-one.
+
+204
+00:15:22,000 --> 00:15:23,927
+This is the return recursion.
+
+205
+00:15:23,977 --> 00:15:29,108
+The return at any step equals the
+immediate reward plus a discounted version
+
+206
+00:15:29,158 --> 00:15:31,749
+of the return from the very next step.
+
+207
+00:15:33,000 --> 00:15:36,388
+The recursion does not change what G sub t
+means —
+
+208
+00:15:36,438 --> 00:15:39,551
+it just expresses that meaning more
+compactly,
+
+209
+00:15:39,601 --> 00:15:42,557
+by folding the future into a single
+symbol.
+
+210
+00:15:44,000 --> 00:15:47,045
+We will see this identity again in the
+next video —
+
+211
+00:15:47,095 --> 00:15:51,040
+in a form that will let us reason about
+what each state is worth.
+
+212
+00:15:54,000 --> 00:15:57,307
+Two objects define a Markov Decision
+Process.
+
+213
+00:15:58,000 --> 00:16:01,956
+The dynamics function p of s-prime, r,
+given s and a —
+
+214
+00:16:02,006 --> 00:16:04,256
+the environment's response law,
+
+215
+00:16:04,306 --> 00:16:10,265
+specifying for any state and action the
+distribution over where you land and what
+
+216
+00:16:10,315 --> 00:16:11,205
+you receive.
+
+217
+00:16:13,000 --> 00:16:15,993
+The return G sub t — the agent's
+objective,
+
+218
+00:16:16,043 --> 00:16:21,704
+the discounted sum of everything that will
+ever happen from this moment forward.
+
+219
+00:16:23,000 --> 00:16:28,547
+The agent acts in a world governed by p.
+It tries to maximize G sub t.
+
+220
+00:16:29,000 --> 00:16:31,152
+Everything else in this series —
+
+221
+00:16:31,202 --> 00:16:34,660
+every algorithm, every theorem, every
+update rule —
+
+222
+00:16:34,710 --> 00:16:37,256
+is built on top of these two objects.
+
+223
+00:16:39,000 --> 00:16:42,697
+Next: we give the agent a strategy for
+choosing actions —
+
+224
+00:16:42,747 --> 00:16:46,232
+and ask what each state is worth under
+that strategy.

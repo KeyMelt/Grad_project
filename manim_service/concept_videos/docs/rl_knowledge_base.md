@@ -25,6 +25,67 @@ All chapter, section, and page references below are to the printed pages of the
 
 ---
 
+## Transition Probability (transition_prob)
+
+**S&B Reference:** Chapter 3, Section 3.1 ("The Agent–Environment Interface"), pages 48–53.
+
+**Key equation:** The four-argument dynamics function (S&B eq. 3.2):
+
+$$p(s', r \mid s, a) \;\doteq\; \Pr\!\left\{S_{t+1}=s',\, R_{t+1}=r \;\middle|\; S_t=s,\, A_t=a\right\}.$$
+
+Normalization constraint: $\sum_{s'}\sum_{r} p(s', r \mid s, a) = 1$ for all $s \in \mathcal{S}$, $a \in \mathcal{A}(s)$.
+
+**Useful derived quantities** (S&B pp. 48–49):
+
+- State-transition probabilities: $p(s' \mid s, a) = \sum_{r} p(s', r \mid s, a)$
+- Expected reward: $r(s, a) = \mathbb{E}[R_{t+1} \mid S_t=s, A_t=a] = \sum_{r} r \sum_{s'} p(s', r \mid s, a)$
+- Expected reward on transition: $r(s, a, s') = \mathbb{E}[R_{t+1} \mid S_t=s, A_t=a, S_{t+1}=s'] = \sum_{r} r\, \frac{p(s',r \mid s, a)}{p(s' \mid s, a)}$
+
+**Intuition:** The four-argument function $p(s', r \mid s, a)$ is the *complete specification* of the environment's stochastic dynamics. Once you know $p$ for all $(s, a, s', r)$ tuples, you can compute any policy-value or optimal-value quantity without interacting with the environment. Dynamic programming methods (Chapters 4) exploit this. Model-free methods (Chapters 5–6) work *without* knowing $p$, relying instead on sampled experience.
+
+**Prerequisites:** The agent–environment interface and the definition of states, actions, and rewards (S&B §3.1). No algorithms required.
+
+**Common misconceptions:**
+
+- **"p(s',r|s,a) is the probability that the agent chooses action a."** That is the policy $\pi(a \mid s)$. The transition function $p$ governs what the *environment* does in response to the agent's action — the agent has no control over it. (S&B p. 48: "the dynamics function $p$ defines the environment's response".)
+- **"A deterministic environment has p=1 for one outcome and p=0 for others."** Correct for deterministic environments (e.g., CliffWalking). In FrozenLake-v1 with `is_slippery=True`, an action has three possible outcomes each with probability 1/3 — the probabilities are strictly between 0 and 1.
+- **"p(s'|s,a) and p(s',r|s,a) are the same thing."** No — $p(s' \mid s, a) = \sum_r p(s', r \mid s, a)$ marginalizes over the reward. For deterministic rewards (e.g., a unique $r$ for each $(s, a, s')$ triple) they carry the same information, but the four-argument form is the canonical object.
+- **"You need to know p to do RL."** Model-free methods (Monte Carlo, TD learning) do not use $p$ directly — they estimate value functions from experience samples. The four-argument $p$ is only needed for model-based methods (DP).
+
+**Boundary conditions:**
+
+- **Terminal states:** $p(s_{\text{terminal}}, r \mid s, a) = 0$ for all successors beyond the terminal absorbing state. Gymnasium's `done=True` flag indicates a terminal transition; by convention no further transitions are taken.
+- **Deterministic transitions:** A single tuple `(prob=1.0, next_state=s', reward=r, done=False)` in `env.unwrapped.P[s][a]`. The four-argument form degenerates to a delta function.
+- **Single-reward per (s,a,s') triple:** Many toy environments (FrozenLake, CliffWalking) assign a unique reward for each $(s, a, s')$ combination, so the sum over $r$ has at most one non-zero term. The general four-argument form allows multiple rewards for the same $(s, a, s')$ triple.
+
+**Gymnasium connection:**
+
+In `toy_text` environments, $p(s', r \mid s, a)$ is stored as a list of `(prob, next_state, reward, done)` tuples accessible via `env.unwrapped.P[state][action]`. This is precisely the sample-space realization of S&B's four-argument function.
+
+```python
+env = gym.make("FrozenLake-v1", is_slippery=True)
+# env.unwrapped.P[state][action] returns:
+#   list of (transition_prob, next_state, reward, done) tuples
+for prob, next_state, reward, done in env.unwrapped.P[state][action]:
+    print(f"  prob={prob:.3f}  next_state={next_state}  reward={reward}  done={done}")
+```
+
+For FrozenLake state 6 (row 1, col 2 in the 4×4 grid) with action RIGHT:
+- The three slippery outcomes (RIGHT → state 7, UP → state 2, DOWN → state 10) each have probability 1/3.
+- All rewards are 0.0 except landing on the goal (state 15), which yields 1.0.
+
+**Note:** `env.unwrapped.P` is only available on environments whose model is enumerable. The `.unwrapped` accessor bypasses the `OrderEnforcing` and `TimeLimit` wrappers that would otherwise block attribute access.
+
+**Production note:** The Manim scene `transition_prob_concept.py` already exists and has been approved as the canonical reference production scene for this series. **No re-production is needed.** Registration in this knowledge base and in `backend/concept_videos/specs.py` was the only required action.
+
+**Reputable supplementary sources:**
+
+- Sutton & Barto errata page: http://incompleteideas.net/book/the-book-2nd.html
+- Gymnasium FrozenLake documentation: https://gymnasium.farama.org/v0.26.3/environments/toy_text/frozen_lake/
+- Puterman, M. L. (1994). *Markov Decision Processes: Discrete Stochastic Dynamic Programming.* Wiley — formal treatment of the four-argument dynamics function in the MDP literature.
+
+---
+
 ## Policy Evaluation (dp_policy_eval)
 
 **S&B Reference:** Chapter 4, Section 4.1 ("Policy Evaluation (Prediction)"), pages 74–75.

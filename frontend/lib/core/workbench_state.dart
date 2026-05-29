@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'backend_api.dart';
 import 'export_file_saver.dart';
@@ -18,6 +20,7 @@ enum RunStatus { idle, running, success, failed, stopped }
 enum AppSection { home, workspace, flashcards, quiz, admin }
 
 const Object _sentinel = Object();
+const String _authoredLessonsPrefsKey = 'rl_ide_authored_lessons_v1';
 
 bool _canUseGoogleSignInOnCurrentOrigin() {
   final uri = Uri.base;
@@ -399,6 +402,26 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   BackendApi get api => _api;
 
   Future<void> loadBackendLessonCatalog() async {
+    final authoredSections = await _loadAuthoredLessonSections();
+    if (authoredSections.isNotEmpty) {
+      final sectionsWithAuthored =
+          _mergeNonCoreLessons(state.sections, authoredSections);
+      final selectedLesson =
+          _findLessonById(sectionsWithAuthored, state.selectedLesson.id) ??
+              sectionsWithAuthored.first.lessons.first;
+      emit(
+        state.copyWith(
+          sections: sectionsWithAuthored,
+          selectedLesson: selectedLesson,
+          code: state.code == state.selectedLesson.starterCode
+              ? selectedLesson.starterCode
+              : state.code,
+          adminSelectedLessonId: selectedLesson.id,
+          adminMessage: 'Loaded locally saved authored lessons.',
+        ),
+      );
+    }
+
     try {
       final backendSections = await _api.fetchLessonSections();
       if (backendSections.isEmpty ||
@@ -406,14 +429,8 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         return;
       }
 
-      var mergedSections = backendSections;
-      for (final section in state.sections) {
-        for (final lesson in section.lessons) {
-          if (!_isCoreLessonId(lesson.id)) {
-            mergedSections = _upsertLessonInSections(mergedSections, lesson);
-          }
-        }
-      }
+      final mergedSections =
+          _mergeNonCoreLessons(backendSections, state.sections);
 
       final previousLesson = state.selectedLesson;
       final selectedLesson =
@@ -456,6 +473,44 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       _retainFallbackLessonCatalog();
     } catch (_) {
       _retainFallbackLessonCatalog();
+    }
+  }
+
+  Future<void> loadCloudAuthoredLessons() async {
+    if (!state.canAccessAuthoring) {
+      return;
+    }
+    try {
+      final lessons = await _api.fetchAuthoredLessons();
+      if (lessons.isEmpty) {
+        return;
+      }
+      var updatedSections = state.sections;
+      for (final lesson in lessons) {
+        if (!_isCoreLessonId(lesson.id)) {
+          updatedSections = _upsertLessonInSections(updatedSections, lesson);
+        }
+      }
+      final selectedLesson =
+          _findLessonById(updatedSections, state.selectedLesson.id) ??
+              state.selectedLesson;
+      emit(
+        state.copyWith(
+          sections: updatedSections,
+          selectedLesson: selectedLesson,
+          code: state.code == state.selectedLesson.starterCode
+              ? selectedLesson.starterCode
+              : state.code,
+          adminMessage: 'Loaded cloud-authored lessons.',
+        ),
+      );
+      unawaited(_persistAuthoredLessonSections(updatedSections));
+    } on BackendApiException catch (error) {
+      emit(state.copyWith(adminMessage: error.message));
+    } catch (_) {
+      emit(
+        state.copyWith(adminMessage: 'Could not load cloud-authored lessons.'),
+      );
     }
   }
 
@@ -1674,9 +1729,11 @@ def lesson_function(*args, **kwargs):
       state.copyWith(
         sections: sections,
         adminSelectedLessonId: draftId,
-        adminMessage: 'Draft lesson created.',
+        adminMessage: 'Draft lesson created and saved locally.',
       ),
     );
+    unawaited(_persistAuthoredLessonSections(sections));
+    unawaited(_syncAuthoredLessonToCloud(draftLesson));
   }
 
   void saveAdminLesson({
@@ -1766,9 +1823,11 @@ def lesson_function(*args, **kwargs):
             ? updatedLesson.starterCode
             : state.code,
         adminSelectedLessonId: updatedLesson.id,
-        adminMessage: 'Saved "${updatedLesson.title}".',
+        adminMessage: 'Saved "${updatedLesson.title}" locally.',
       ),
     );
+    unawaited(_persistAuthoredLessonSections(updatedSections));
+    unawaited(_syncAuthoredLessonToCloud(updatedLesson));
   }
 
   void deleteAdminLesson(String lessonId) {
@@ -1828,9 +1887,11 @@ def lesson_function(*args, **kwargs):
         adminSelectedLessonId: state.adminSelectedLessonId == lessonId
             ? fallbackLesson.id
             : state.adminSelectedLessonId,
-        adminMessage: 'Deleted lesson $lessonId from this session.',
+        adminMessage: 'Deleted lesson $lessonId from local authoring.',
       ),
     );
+    unawaited(_persistAuthoredLessonSections(updatedSections));
+    unawaited(_deleteAuthoredLessonFromCloud(lessonId));
   }
 
   Future<void> exportAdminNGainMetrics() async {
@@ -1921,6 +1982,53 @@ def lesson_function(*args, **kwargs):
               'Could not export learning analytics. Try again shortly.',
         ),
       );
+    }
+  }
+
+  Future<void> exportAdminALEIComponents() async {
+    if (!state.isAdmin) {
+      emit(state.copyWith(
+          adminMessage: 'Only admin users can export evaluation data.'));
+      return;
+    }
+    emit(
+      state.copyWith(
+        isAdminExporting: true,
+        adminMessage: 'Exporting ALEI component metrics...',
+      ),
+    );
+    try {
+      final export = await _api.exportALEIComponents();
+      await saveExportFile(
+        fileName: export.fileName,
+        bytes: export.bytes,
+      );
+      if (!isClosed) {
+        emit(
+          state.copyWith(
+            isAdminExporting: false,
+            adminMessage: 'ALEI component metrics exported.',
+          ),
+        );
+      }
+    } on BackendApiException catch (error) {
+      if (!isClosed) {
+        emit(
+          state.copyWith(
+            isAdminExporting: false,
+            adminMessage: error.message,
+          ),
+        );
+      }
+    } catch (_) {
+      if (!isClosed) {
+        emit(
+          state.copyWith(
+            isAdminExporting: false,
+            adminMessage: 'Could not export ALEI metrics. Try again shortly.',
+          ),
+        );
+      }
     }
   }
 
@@ -2116,6 +2224,7 @@ def lesson_function(*args, **kwargs):
       );
     }
     if (state.canAccessAuthoring) {
+      unawaited(loadCloudAuthoredLessons());
       unawaited(loadStaffProgressDirectory());
     }
     unawaited(refreshStudyBuddySummary(quiet: true));
@@ -2318,6 +2427,129 @@ def lesson_function(*args, **kwargs):
       }
     }
     return false;
+  }
+
+  List<LessonSection> _mergeNonCoreLessons(
+    List<LessonSection> baseSections,
+    List<LessonSection> authoredSections,
+  ) {
+    var mergedSections = baseSections;
+    for (final section in authoredSections) {
+      for (final lesson in section.lessons) {
+        if (!_isCoreLessonId(lesson.id)) {
+          mergedSections = _upsertLessonInSections(mergedSections, lesson);
+        }
+      }
+    }
+    return mergedSections;
+  }
+
+  Future<List<LessonSection>> _loadAuthoredLessonSections() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final rawValue = preferences.getString(_authoredLessonsPrefsKey);
+      if (rawValue == null || rawValue.isEmpty) {
+        return const [];
+      }
+      final decoded = jsonDecode(rawValue);
+      if (decoded is! List) {
+        return const [];
+      }
+      return decoded
+          .whereType<Map<String, dynamic>>()
+          .map(LessonSection.fromJson)
+          .toList(growable: false);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<void> _syncAuthoredLessonToCloud(LessonDefinition lesson) async {
+    if (!state.canAccessAuthoring || _isCoreLessonId(lesson.id)) {
+      return;
+    }
+    try {
+      final savedLesson = await _api.saveAuthoredLesson(lesson: lesson);
+      final updatedSections =
+          _upsertLessonInSections(state.sections, savedLesson);
+      if (!isClosed) {
+        emit(
+          state.copyWith(
+            sections: updatedSections,
+            adminMessage: 'Saved "${savedLesson.title}" to cloud authoring.',
+          ),
+        );
+      }
+      unawaited(_persistAuthoredLessonSections(updatedSections));
+    } on BackendApiException catch (error) {
+      if (!isClosed) {
+        emit(state.copyWith(adminMessage: error.message));
+      }
+    } catch (_) {
+      if (!isClosed) {
+        emit(
+          state.copyWith(
+            adminMessage: 'Saved locally, but cloud authoring sync failed.',
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteAuthoredLessonFromCloud(String lessonId) async {
+    if (!state.canAccessAuthoring || _isCoreLessonId(lessonId)) {
+      return;
+    }
+    try {
+      await _api.deleteAuthoredLesson(lessonId);
+    } on BackendApiException catch (error) {
+      if (!isClosed && error.message.contains('not found') == false) {
+        emit(state.copyWith(adminMessage: error.message));
+      }
+    } catch (_) {
+      if (!isClosed) {
+        emit(
+          state.copyWith(
+            adminMessage: 'Deleted locally, but cloud authoring sync failed.',
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _persistAuthoredLessonSections(
+    List<LessonSection> sections,
+  ) async {
+    final authoredSections = <LessonSection>[];
+    for (final section in sections) {
+      final authoredLessons = section.lessons
+          .where((lesson) => !_isCoreLessonId(lesson.id))
+          .toList(growable: false);
+      if (authoredLessons.isNotEmpty) {
+        authoredSections.add(
+          LessonSection(title: section.title, lessons: authoredLessons),
+        );
+      }
+    }
+
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      if (authoredSections.isEmpty) {
+        await preferences.remove(_authoredLessonsPrefsKey);
+        return;
+      }
+      await preferences.setString(
+        _authoredLessonsPrefsKey,
+        jsonEncode(
+            authoredSections.map((section) => section.toJson()).toList()),
+      );
+    } catch (_) {
+      if (!isClosed) {
+        emit(state.copyWith(
+          adminMessage: 'Could not save authored lessons locally.',
+        ));
+      }
+    }
   }
 
   List<LessonSection> _upsertLessonInSections(

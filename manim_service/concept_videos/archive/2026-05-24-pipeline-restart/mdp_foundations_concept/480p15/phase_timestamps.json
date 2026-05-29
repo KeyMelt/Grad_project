@@ -1,0 +1,46 @@
+{
+  "scene": "MdpFoundationsScene",
+  "total_duration_seconds": 1689.383,
+  "phases": [
+    {
+      "phase": 1,
+      "name": "mdp_framework",
+      "start_seconds": 0.0
+    },
+    {
+      "phase": 2,
+      "name": "rewards_returns",
+      "start_seconds": 250.583
+    },
+    {
+      "phase": 3,
+      "name": "transition_probability",
+      "start_seconds": 530.65
+    },
+    {
+      "phase": 4,
+      "name": "policies",
+      "start_seconds": 797.45
+    },
+    {
+      "phase": 5,
+      "name": "value_functions",
+      "start_seconds": 1004.517
+    },
+    {
+      "phase": 6,
+      "name": "recap",
+      "start_seconds": 1252.25
+    },
+    {
+      "phase": 7,
+      "name": "bellman_expectation",
+      "start_seconds": 1331.05
+    },
+    {
+      "phase": 8,
+      "name": "closing",
+      "start_seconds": 1610.583
+    }
+  ]
+}

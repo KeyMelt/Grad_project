@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
 
@@ -93,7 +92,6 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
     with AutomaticKeepAliveClientMixin {
   VideoPlayerController? _controller;
   bool _isLoading = false;
-  String? _errorMessage;
 
   // Caption state
   List<_VttCue> _captions = const [];
@@ -147,7 +145,6 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
 
     setState(() {
       _isLoading = true;
-      _errorMessage = null;
     });
 
     try {
@@ -164,10 +161,9 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
       });
     } catch (error, stackTrace) {
       if (!mounted) return;
-      final details = _extractVideoErrorDetails(error, stackTrace);
+      _logVideoError(error, stackTrace);
       setState(() {
         _isLoading = false;
-        _errorMessage = details;
       });
     }
 
@@ -271,6 +267,14 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
     if (mounted) setState(() {});
   }
 
+  Future<void> _stopPlayback() async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    await controller.pause();
+    await controller.seekTo(Duration.zero);
+    if (mounted) setState(() {});
+  }
+
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
   Uri _resolveBackendUri(String path) {
@@ -281,10 +285,9 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
     return base.replace(path: normalized);
   }
 
-  String _extractVideoErrorDetails(Object error, StackTrace stackTrace) {
+  void _logVideoError(Object error, StackTrace stackTrace) {
     debugPrint('Concept video load failure: $error');
     debugPrint(stackTrace.toString());
-    return 'Concept video asset unavailable';
   }
 
   void _onControllerChanged() {
@@ -375,7 +378,6 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final lessonVideo = widget.lesson.conceptVideo;
     final controller = _controller;
     final isInitialized = controller?.value.isInitialized ?? false;
     final isPlaying = controller?.value.isPlaying ?? false;
@@ -389,152 +391,22 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: AppTheme.borderLight),
           ),
-          child: SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Concept lesson video',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                        if (_captionsAvailable)
-                          const Padding(
-                            padding: EdgeInsets.only(right: 8),
-                            child: _InfoPill(
-                              label: 'CC available',
-                              icon: Icons.closed_caption_outlined,
-                            ),
-                          ),
-                        _InfoPill(
-                          label: lessonVideo.durationLabel,
-                          icon: Icons.ondemand_video_outlined,
-                        ),
-                      ],
-                    ),
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: SizedBox(
+                height: heroHeight,
+                child: Container(
+                  color: Colors.black,
+                  child: _buildVideoSurface(
+                    context,
+                    controller: controller,
+                    isInitialized: isInitialized,
+                    isPlaying: isPlaying,
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: SizedBox(
-                        height: heroHeight,
-                        child: Container(
-                          color: const Color(0xFF07111F),
-                          child: _buildVideoSurface(
-                            context,
-                            controller: controller,
-                            isInitialized: isInitialized,
-                            isPlaying: isPlaying,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-                    child: _buildControlBar(
-                      context,
-                      controller: controller,
-                      isInitialized: isInitialized,
-                      isPlaying: isPlaying,
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    child: ExpansionTile(
-                      maintainState: true,
-                      tilePadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 2),
-                      collapsedBackgroundColor: const Color(0xFFF8FAFC),
-                      backgroundColor: const Color(0xFFF8FAFC),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: const BorderSide(color: AppTheme.borderLight),
-                      ),
-                      collapsedShape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: const BorderSide(color: AppTheme.borderLight),
-                      ),
-                      title: const Text(
-                        'Lesson notes',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      subtitle: Text(
-                        lessonVideo.summary,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      children: [
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxHeight: 190),
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                ...lessonVideo.highlights.map(
-                                  (highlight) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 8),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        const Padding(
-                                          padding: EdgeInsets.only(top: 4),
-                                          child: Icon(
-                                            Icons.circle,
-                                            size: 7,
-                                            color: AppTheme.primaryBlue,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            highlight,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodyMedium
-                                                ?.copyWith(
-                                                  color: AppTheme.textPrimary,
-                                                  height: 1.4,
-                                                ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                if (lessonVideo.theoryEquation.isNotEmpty ||
-                                    lessonVideo.workedExample.isNotEmpty ||
-                                    lessonVideo
-                                        .misconceptionToPrevent.isNotEmpty ||
-                                    lessonVideo.takeawayLine.isNotEmpty ||
-                                    lessonVideo.theoryVerification.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                        16, 0, 16, 16),
-                                    child:
-                                        _buildTheoryPanel(context, lessonVideo),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -600,31 +472,52 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
               ),
             ),
           ),
-          // Caption overlay
           if (activeCaption != null)
             Positioned(
               left: 16,
               right: 16,
-              bottom: 16,
+              bottom: 92,
               child: IgnorePointer(
                 child: _CaptionOverlay(text: activeCaption),
               ),
             ),
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: 12,
+            child: _buildInlineControls(
+              context,
+              controller: controller,
+              isInitialized: true,
+              isPlaying: isPlaying,
+            ),
+          ),
         ],
       );
     }
 
-    return _VideoPlaceholder(
-      title: widget.lesson.title,
-      isLoading: _isLoading,
-      errorMessage: _errorMessage,
-      onRetry: _initializeVideo,
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _VideoPlaceholder(isLoading: _isLoading),
+        Positioned(
+          left: 12,
+          right: 12,
+          bottom: 12,
+          child: _buildInlineControls(
+            context,
+            controller: controller,
+            isInitialized: false,
+            isPlaying: false,
+          ),
+        ),
+      ],
     );
   }
 
-  // ── Control bar ──────────────────────────────────────────────────────────────
+  // ── Inline controls ──────────────────────────────────────────────────────────
 
-  Widget _buildControlBar(
+  Widget _buildInlineControls(
     BuildContext context, {
     required VideoPlayerController? controller,
     required bool isInitialized,
@@ -633,50 +526,55 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: const Color(0xE6000000),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderLight),
+        border: Border.all(color: Colors.white24),
       ),
       child: Column(
         children: [
           Row(
             children: [
-              // -10s
               _SkipButton(
                 icon: Icons.replay_10_rounded,
-                label: '−10',
+                label: 'Back 10 seconds',
                 enabled: isInitialized,
                 onTap: () => _seekRelative(const Duration(seconds: -10)),
               ),
               const SizedBox(width: 6),
-              // Play / pause
-              IconButton.filled(
+              IconButton(
                 onPressed: isInitialized ? _togglePlayback : null,
+                color: Colors.white,
+                disabledColor: Colors.white30,
                 icon: Icon(
                   isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
                 ),
               ),
               const SizedBox(width: 6),
-              // +10s
+              IconButton(
+                tooltip: 'Stop',
+                onPressed: isInitialized ? _stopPlayback : null,
+                color: Colors.white,
+                disabledColor: Colors.white30,
+                icon: const Icon(Icons.stop_rounded),
+              ),
+              const SizedBox(width: 6),
               _SkipButton(
                 icon: Icons.forward_10_rounded,
-                label: '+10',
+                label: 'Forward 10 seconds',
                 enabled: isInitialized,
                 onTap: () => _seekRelative(const Duration(seconds: 10)),
               ),
               const SizedBox(width: 10),
-              // Timeline label
               Expanded(
                 child: Text(
                   _timelineLabel(controller),
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppTheme.textPrimary,
+                        color: Colors.white,
                         fontWeight: FontWeight.w600,
                       ),
                 ),
               ),
               const SizedBox(width: 8),
-              // CC toggle
               _CcButton(
                 available: _captionsAvailable,
                 enabled: _captionsEnabled,
@@ -694,8 +592,8 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
                 padding: EdgeInsets.zero,
                 colors: const VideoProgressColors(
                   playedColor: AppTheme.primaryBlue,
-                  bufferedColor: Color(0xFFBBD2F6),
-                  backgroundColor: Color(0xFFE5E7EB),
+                  bufferedColor: Color(0xFF60A5FA),
+                  backgroundColor: Color(0xFF334155),
                 ),
               ),
             )
@@ -712,143 +610,11 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
     );
   }
 
-  // ── Theory panel ─────────────────────────────────────────────────────────────
-
-  Widget _buildTheoryPanel(
-    BuildContext context,
-    LessonConceptVideo lessonVideo,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.borderLight),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Theory framing',
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          if (lessonVideo.theoryEquation.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppTheme.borderLight),
-              ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Math.tex(
-                  lessonVideo.theoryEquation,
-                  textStyle: const TextStyle(
-                    color: Color(0xFF0F172A),
-                    fontSize: 18,
-                  ),
-                ),
-              ),
-            ),
-          ],
-          if (lessonVideo.workedExample.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            _TheoryBlock(
-              title: 'Worked example',
-              body: lessonVideo.workedExample,
-            ),
-          ],
-          if (lessonVideo.misconceptionToPrevent.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            _TheoryBlock(
-              title: 'Misconception to avoid',
-              body: lessonVideo.misconceptionToPrevent,
-            ),
-          ],
-          if (lessonVideo.takeawayLine.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            _TheoryBlock(
-              title: 'Key takeaway',
-              body: lessonVideo.takeawayLine,
-            ),
-          ],
-          if (lessonVideo.theoryVerification.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            Text(
-              'Source checks',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF0F172A),
-                  ),
-            ),
-            const SizedBox(height: 8),
-            ...lessonVideo.theoryVerification.map(
-              (verification) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.borderLight),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        verification.claim,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: const Color(0xFF0F172A),
-                              fontWeight: FontWeight.w700,
-                              height: 1.4,
-                            ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        verification.validationNote,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppTheme.textSecondary,
-                              height: 1.4,
-                            ),
-                      ),
-                      const SizedBox(height: 8),
-                      SelectableText(
-                        verification.sourceUrl,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: const Color(0xFF1A73E8),
-                            ),
-                      ),
-                      if (verification.isInference) ...[
-                        const SizedBox(height: 8),
-                        const _InfoPill(
-                          label: 'Interpretive link',
-                          icon: Icons.link_rounded,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
   String _timelineLabel(VideoPlayerController? controller) {
     if (controller == null || !controller.value.isInitialized) {
-      if (_isLoading) return 'Preparing lesson video...';
-      return _errorMessage ?? 'Preview unavailable';
+      return '00:00 / 00:00';
     }
     return '${_fmt(controller.value.position)} / ${_fmt(controller.value.duration)}';
   }
@@ -909,7 +675,7 @@ class _SkipButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = enabled ? AppTheme.primaryBlue : const Color(0xFFCBD5E1);
+    final color = enabled ? Colors.white : Colors.white30;
     return Tooltip(
       message: label,
       child: InkWell(
@@ -997,48 +763,11 @@ class _CcButton extends StatelessWidget {
 
 // ── Supporting widgets ───────────────────────────────────────────────────────
 
-class _TheoryBlock extends StatelessWidget {
-  final String title;
-  final String body;
-
-  const _TheoryBlock({required this.title, required this.body});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF0F172A),
-              ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          body,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppTheme.textSecondary,
-                height: 1.45,
-              ),
-        ),
-      ],
-    );
-  }
-}
-
 class _VideoPlaceholder extends StatelessWidget {
-  final String title;
   final bool isLoading;
-  final String? errorMessage;
-  final VoidCallback onRetry;
 
   const _VideoPlaceholder({
-    required this.title,
     required this.isLoading,
-    required this.errorMessage,
-    required this.onRetry,
   });
 
   @override
@@ -1059,161 +788,18 @@ class _VideoPlaceholder extends StatelessWidget {
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.movie_creation_outlined,
-                      color: Colors.white),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleLarge
-                          ?.copyWith(color: Colors.white),
-                    ),
-                  ),
-                ],
+        if (isLoading)
+          const Center(
+            child: SizedBox(
+              width: 26,
+              height: 26,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.4,
+                color: Colors.white70,
               ),
-              const Spacer(),
-              Text(
-                errorMessage ?? 'Pre-rendered lesson explainer',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                    ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                errorMessage == null
-                    ? 'Watch lesson video here. Replay is in Replay tab.'
-                    : 'The lesson still works without the generated MP4. Use the notes below, then continue with the code and replay tabs.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: const Color(0xFFD7E3F4),
-                      height: 1.45,
-                    ),
-              ),
-              const SizedBox(height: 18),
-              const Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  _OverlayPill(
-                    label: 'Gymnasium visuals',
-                    icon: Icons.grid_view_rounded,
-                  ),
-                  _OverlayPill(
-                    label: 'Code trace',
-                    icon: Icons.code_rounded,
-                  ),
-                  _OverlayPill(
-                    label: 'Mathematics',
-                    icon: Icons.functions_rounded,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              if (isLoading)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.hourglass_bottom_rounded,
-                      color: Colors.white,
-                      size: 22,
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Loading video...',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                  ],
-                ),
-              if (!isLoading && errorMessage != null) ...[
-                const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  onPressed: onRetry,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('Retry video'),
-                ),
-              ],
-            ],
+            ),
           ),
-        ),
       ],
-    );
-  }
-}
-
-class _OverlayPill extends StatelessWidget {
-  final String label;
-  final IconData icon;
-
-  const _OverlayPill({required this.label, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white24),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: Colors.white),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoPill extends StatelessWidget {
-  final String label;
-  final IconData icon;
-
-  const _InfoPill({required this.label, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE8F0FE),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: AppTheme.primaryBlue, size: 18),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppTheme.primaryBlue,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

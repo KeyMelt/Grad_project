@@ -1,0 +1,33 @@
+{
+  "lesson_id": "mdp_foundations",
+  "updated_at": "2026-05-23T08:43:56+00:00",
+  "current_owner": "claude",
+  "gates": {
+    "g1_rl_expert_plan": "pass",
+    "g2_tech_validator": "pass",
+    "g3_voice_bgm": "pass",
+    "g4_transcript": "pass",
+    "g5_qa": "pass",
+    "g6_series_continuity": "pass",
+    "g7_rl_expert_final": "pass",
+    "g8_producer": "pass"
+  },
+  "handoff": {
+    "stage": "narrate_mux",
+    "status": "codex_done",
+    "brief_path": "/Users/ultramarine/Desktop/grad_project/manim_service/concept_videos/mdp_foundations_narrate_mux_brief.md",
+    "result_path": "manim_service/concept_videos/mdp_foundations_narrate_mux_result.md"
+  },
+  "artifacts": {
+    "plan_md": "manim_service/concept_videos/mdp_foundations_plan.md",
+    "choreo_md": "manim_service/concept_videos/mdp_foundations_choreo.md",
+    "scene_py": "manim_service/concept_videos/mdp_foundations_concept.py",
+    "silent_mp4": "backend/media/concept_videos/mdp_foundations_concept.mp4",
+    "narration_script": "manim_service/concept_videos/mdp_foundations_narration_script.md",
+    "audio_brief": "manim_service/concept_videos/mdp_foundations_audio_brief.md",
+    "narrated_mp4": "backend/media/concept_videos/mdp_foundations_concept_narrated.mp4",
+    "audio_report": "backend/media/concept_videos/mdp_foundations_concept_narrated.audio_report.json",
+    "captions_vtt": "backend/media/concept_videos/mdp_foundations_captions.vtt",
+    "captions_srt": "backend/media/concept_videos/mdp_foundations_captions.srt"
+  }
+}

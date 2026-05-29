@@ -255,8 +255,6 @@ class _CourseOutlineDialog extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          _SelectedLessonBrief(lesson: selectedLesson),
           const SizedBox(height: 18),
           Expanded(
             child: Scrollbar(
@@ -404,27 +402,12 @@ class _OutlineLessonTile extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    lesson.title,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.textPrimary,
-                        ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    lesson.description,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppTheme.textSecondary,
-                          height: 1.35,
-                        ),
-                  ),
-                ],
+              child: Text(
+                lesson.title,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textPrimary,
+                    ),
               ),
             ),
             const SizedBox(width: 12),

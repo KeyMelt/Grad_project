@@ -17,11 +17,15 @@ import '../features/workspace/workspace_tabs.dart';
 class MainLayout extends StatefulWidget {
   final RLWorkbenchCubit? cubit;
   final bool showOnboardingOnStart;
+  final bool isDarkMode;
+  final VoidCallback? onToggleThemeMode;
 
   const MainLayout({
     super.key,
     this.cubit,
     this.showOnboardingOnStart = false,
+    this.isDarkMode = false,
+    this.onToggleThemeMode,
   });
 
   @override
@@ -140,25 +144,20 @@ class _MainLayoutState extends State<MainLayout> {
 
             return Padding(
               padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-              child: Stack(
-                clipBehavior: Clip.none,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Positioned.fill(child: workspace),
-                  Positioned(
-                    top: 0,
-                    bottom: 0,
-                    right: 0,
-                    child: _StudyBuddyDrawer(
-                      isOpen: _studyBuddyDrawerOpen,
-                      drawerWidth: _studyBuddyRailWidth(constraints.maxWidth),
-                      hasIntervention: state.studyBuddyIntervention != null,
-                      onToggle: () => _setStudyBuddyDrawerOpen(
-                        !_studyBuddyDrawerOpen,
-                      ),
-                      onOpen: () => _setStudyBuddyDrawerOpen(true),
-                      onClose: () => _setStudyBuddyDrawerOpen(false),
-                      panel: studyBuddyPanel,
+                  Expanded(child: workspace),
+                  _StudyBuddyDrawer(
+                    isOpen: _studyBuddyDrawerOpen,
+                    drawerWidth: _studyBuddyRailWidth(constraints.maxWidth),
+                    hasIntervention: state.studyBuddyIntervention != null,
+                    onToggle: () => _setStudyBuddyDrawerOpen(
+                      !_studyBuddyDrawerOpen,
                     ),
+                    onOpen: () => _setStudyBuddyDrawerOpen(true),
+                    onClose: () => _setStudyBuddyDrawerOpen(false),
+                    panel: studyBuddyPanel,
                   ),
                 ],
               ),
@@ -224,6 +223,7 @@ class _MainLayoutState extends State<MainLayout> {
           onDeleteLesson: _cubit.deleteAdminLesson,
           onExportNGainMetrics: _cubit.exportAdminNGainMetrics,
           onExportLearningAnalytics: _cubit.exportAdminLearningAnalytics,
+          onExportALEIComponents: _cubit.exportAdminALEIComponents,
           onSaveLesson: _cubit.saveAdminLesson,
         );
     }
@@ -280,7 +280,7 @@ class _MainLayoutState extends State<MainLayout> {
         child: Container(
           decoration: const BoxDecoration(
             border: Border(
-              bottom: BorderSide(color: Color(0xFFE5E7EB)),
+              bottom: BorderSide(color: AppTheme.borderLight),
             ),
           ),
           padding: const EdgeInsets.fromLTRB(10, 0, 10, 5),
@@ -311,7 +311,6 @@ class _MainLayoutState extends State<MainLayout> {
 
     return AppBar(
       primary: false,
-      backgroundColor: AppTheme.surfaceWhite,
       elevation: 0,
       toolbarHeight: 56,
       bottom: bottomBar,
@@ -447,6 +446,17 @@ class _MainLayoutState extends State<MainLayout> {
           ),
         ],
         const SizedBox(width: 6),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          tooltip: widget.isDarkMode ? 'Use light mode' : 'Use dark mode',
+          onPressed: widget.onToggleThemeMode,
+          icon: Icon(
+            widget.isDarkMode
+                ? Icons.light_mode_outlined
+                : Icons.dark_mode_outlined,
+          ),
+        ),
+        const SizedBox(width: 2),
         IconButton(
           visualDensity: VisualDensity.compact,
           tooltip: 'Show onboarding tutorial',
@@ -886,19 +896,26 @@ class _NavChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return InkWell(
       borderRadius: BorderRadius.circular(999),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFE8F0FE) : Colors.transparent,
+          color: selected
+              ? (isDark
+                  ? AppTheme.primaryBlue.withValues(alpha: 0.18)
+                  : const Color(0xFFE8F0FE))
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? AppTheme.primaryBlue : AppTheme.textPrimary,
+            color: selected ? AppTheme.primaryBlue : colorScheme.onSurface,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
           ),
         ),

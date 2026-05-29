@@ -1,0 +1,22 @@
+{
+  "lesson_id": "rl_intro",
+  "updated_at": "2026-05-24T14:57:24+00:00",
+  "current_owner": "claude",
+  "gates": {
+    "g1_rl_expert_plan": "pending",
+    "g2_tech_validator": "pending",
+    "g3_voice_bgm": "pending",
+    "g4_transcript": "pending",
+    "g5_qa": "pending",
+    "g6_series_continuity": "pending",
+    "g7_rl_expert_final": "pending",
+    "g8_producer": "pending"
+  },
+  "handoff": {
+    "stage": "none",
+    "status": "none",
+    "brief_path": "",
+    "result_path": ""
+  },
+  "artifacts": {}
+}

@@ -10,6 +10,18 @@ export 'http_backend_api.dart';
 abstract class BackendApi {
   Future<List<LessonSection>> fetchLessonSections();
 
+  Future<List<LessonDefinition>> fetchAuthoredLessons() async {
+    return const [];
+  }
+
+  Future<LessonDefinition> saveAuthoredLesson({
+    required LessonDefinition lesson,
+  }) {
+    throw UnimplementedError();
+  }
+
+  Future<void> deleteAuthoredLesson(String lessonId) async {}
+
   Future<LearnerDashboard> signIn({
     required String displayName,
     required String password,
@@ -79,6 +91,10 @@ abstract class BackendApi {
   Future<NGainMetricsExport> exportNGainMetrics();
 
   Future<LearningAnalyticsExport> exportLearningAnalytics() {
+    throw UnimplementedError();
+  }
+
+  Future<ALEIComponentsExport> exportALEIComponents() {
     throw UnimplementedError();
   }
 

@@ -53,6 +53,39 @@ class HttpBackendApi extends BackendApi {
   }
 
   @override
+  Future<List<LessonDefinition>> fetchAuthoredLessons() async {
+    final responseJson = await _getJson('/admin/lessons/authored');
+    final lessons = responseJson['lessons'];
+    if (lessons is! List) {
+      return const [];
+    }
+    return lessons
+        .whereType<Map<String, dynamic>>()
+        .map(LessonDefinition.fromJson)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<LessonDefinition> saveAuthoredLesson({
+    required LessonDefinition lesson,
+  }) async {
+    final responseJson = await _putJson(
+      '/admin/lessons/authored/${Uri.encodeComponent(lesson.id)}',
+      {'lesson': lesson.toJson()},
+    );
+    final lessonJson = responseJson['lesson'];
+    if (lessonJson is Map<String, dynamic>) {
+      return LessonDefinition.fromJson(lessonJson);
+    }
+    return lesson;
+  }
+
+  @override
+  Future<void> deleteAuthoredLesson(String lessonId) async {
+    await _delete('/admin/lessons/authored/${Uri.encodeComponent(lessonId)}');
+  }
+
+  @override
   Future<LearnerDashboard> signIn({
     required String displayName,
     required String password,
@@ -283,6 +316,27 @@ class HttpBackendApi extends BackendApi {
   }
 
   @override
+  Future<ALEIComponentsExport> exportALEIComponents() async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/evaluation/export/alei-components'),
+      headers: _authorizedHeaders(),
+    );
+
+    if (response.statusCode >= 400) {
+      throw _buildBackendException(_decodeBody(response.body));
+    }
+
+    final fileName = _extractExportFileName(
+      response.headers['content-disposition'],
+      fallback: 'alei_components.xlsx',
+    );
+    return ALEIComponentsExport(
+      fileName: fileName,
+      bytes: response.bodyBytes,
+    );
+  }
+
+  @override
   Future<WorkspaceSessionData> createWorkspaceSession({
     required String lessonId,
   }) async {
@@ -405,6 +459,16 @@ class HttpBackendApi extends BackendApi {
         )
         .timeout(AppConstants.backendRequestTimeout);
     return _decodeAndValidateResponse(response);
+  }
+
+  Future<void> _delete(String path) async {
+    final response = await _client
+        .delete(
+          Uri.parse('$baseUrl$path'),
+          headers: _authorizedHeaders(),
+        )
+        .timeout(AppConstants.backendRequestTimeout);
+    _decodeAndValidateResponse(response);
   }
 
   Map<String, String> _authorizedHeaders([

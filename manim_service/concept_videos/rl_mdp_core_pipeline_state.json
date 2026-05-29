@@ -1,0 +1,22 @@
+{
+  "lesson_id": "rl_mdp_core",
+  "updated_at": "2026-05-24T19:52:08+00:00",
+  "current_owner": "claude",
+  "gates": {
+    "g1_rl_expert_plan": "pass",
+    "g2_tech_validator": "pass",
+    "g3_voice_bgm": "pass",
+    "g4_transcript": "pass",
+    "g5_qa": "fail",
+    "g6_series_continuity": "pending",
+    "g7_rl_expert_final": "pending",
+    "g8_producer": "pending"
+  },
+  "handoff": {
+    "stage": "scene_render",
+    "status": "codex_done",
+    "brief_path": "/Users/ultramarine/Desktop/grad_project/manim_service/concept_videos/rl_mdp_core_codex_brief.md",
+    "result_path": "/Users/ultramarine/Desktop/grad_project/manim_service/concept_videos/rl_mdp_core_codex_result.md"
+  },
+  "artifacts": {}
+}

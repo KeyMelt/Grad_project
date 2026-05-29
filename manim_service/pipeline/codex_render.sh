@@ -53,7 +53,13 @@ done
 
 case "${STAGE}" in
   full_pipeline|scene_render|narrate_mux) ;;
-  *) echo "ERROR: --stage must be full_pipeline, scene_render, or narrate_mux" >&2; exit 2 ;;
+  # Producer-side Codex stages (the 6 OpenAI agents in the 6/6 split):
+  script_write|gate1_review|tech_validate|voice_bgm|transcript|continuity) ;;
+  *)
+    echo "ERROR: --stage must be one of: full_pipeline, scene_render, narrate_mux," >&2
+    echo "       script_write, gate1_review, tech_validate, voice_bgm, transcript, continuity" >&2
+    exit 2
+    ;;
 esac
 
 if [[ ! -x "${CODEX_BIN}" ]]; then
@@ -87,20 +93,35 @@ PY="/Users/ultramarine/.venvs/manim/bin/python"
 
 # The prompt is intentionally short — the full instructions are in the brief on
 # disk. This keeps the invocation reproducible and the brief auditable.
-if [[ "${STAGE}" == "full_pipeline" ]]; then
-  PROMPT="Execute the RL concept-video full_pipeline stage for lesson_id '${LESSON_ID}'.
+case "${STAGE}" in
+  full_pipeline)
+    PROMPT="Execute the RL concept-video full_pipeline stage for lesson_id '${LESSON_ID}'.
 Read your complete instructions from this brief file first: ${BRIEF}
 This stage covers: Script Writer plan.md, Visual Director choreo.md, Gate 1 RL Expert review,
 Gate 2 Technical Validator (including live Gymnasium checks), and Manim scene_render.
 Use all relevant skills listed in the brief. Do the work end-to-end without asking for confirmation.
 Your FINAL message must be exactly the structured result block specified in the brief's 'Result format' section — nothing else."
-else
-  PROMPT="Execute the RL concept-video ${STAGE} stage for lesson_id '${LESSON_ID}'.
+    ;;
+  scene_render|narrate_mux)
+    PROMPT="Execute the RL concept-video ${STAGE} stage for lesson_id '${LESSON_ID}'.
 Read your complete instructions from this brief file first: ${BRIEF}
 Use the manim-rl-animation-style-lock skill (canonical: ~/.codex/skills/manim-rl-animation-style-lock/SKILL.md).
 Do the work end-to-end without asking for confirmation.
 Your FINAL message must be exactly the structured result block specified in the brief's 'Result format' section — nothing else."
-fi
+    ;;
+  script_write|gate1_review|tech_validate|voice_bgm|transcript|continuity)
+    # New Codex stages (Phase 2 of the 6/6 split). Each has its own brief
+    # under manim_service/pipeline/codex_briefs/<stage>.md. The brief is
+    # path-only (lesson manifest + STYLE_BIBLE + COMMON_DEFECTS); no inline
+    # content. Codex reads the manifest, fetches what it needs from disk,
+    # writes its STAGE_RESULT block + any side artefacts (plan.md, etc.).
+    PROMPT="Execute the RL concept-video ${STAGE} stage for lesson_id '${LESSON_ID}'.
+Read your complete instructions from this brief file first: ${BRIEF}
+The brief points to a lesson manifest (manim_service/pipeline/cache/${LESSON_ID}/manifest.json) — read it first to discover every artefact path you need.
+Do the work end-to-end without asking for confirmation. Use the filesystem (Read/Edit/Bash) — do NOT inline large file contents.
+Your FINAL message must be exactly the structured result block specified in the brief's 'Result format' section — nothing else."
+    ;;
+esac
 
 MODEL_ARGS=()
 [[ -n "${MODEL}" ]] && MODEL_ARGS=(--model "${MODEL}")

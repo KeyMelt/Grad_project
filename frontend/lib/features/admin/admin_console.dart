@@ -22,6 +22,7 @@ class AdminConsole extends StatefulWidget {
   final ValueChanged<String> onDeleteLesson;
   final VoidCallback onExportNGainMetrics;
   final VoidCallback onExportLearningAnalytics;
+  final VoidCallback onExportALEIComponents;
   final void Function({
     required String lessonId,
     required String title,
@@ -58,6 +59,7 @@ class AdminConsole extends StatefulWidget {
     required this.onDeleteLesson,
     required this.onExportNGainMetrics,
     required this.onExportLearningAnalytics,
+    required this.onExportALEIComponents,
     required this.onSaveLesson,
   });
 
@@ -396,6 +398,16 @@ class _AdminConsoleState extends State<AdminConsole> {
                         label: const Text('Export Learning Analytics'),
                       ),
                     ),
+                    SizedBox(
+                      width: 240,
+                      child: OutlinedButton.icon(
+                        onPressed: widget.isAdmin && !widget.isExportingMetrics
+                            ? widget.onExportALEIComponents
+                            : null,
+                        icon: const Icon(Icons.science_outlined),
+                        label: const Text('Export ALEI Metrics'),
+                      ),
+                    ),
                   ],
                 ),
                 if (!widget.isAdmin) ...[
@@ -598,7 +610,7 @@ class _AdminConsoleState extends State<AdminConsole> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Edit lesson text, video metadata, and starter code.',
+              'Edit lesson text, video metadata, and starter code. Drafts are saved locally.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: AppTheme.textPrimary,
                     height: 1.45,

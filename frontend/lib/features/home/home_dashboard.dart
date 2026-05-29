@@ -148,6 +148,8 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
   Widget _buildHeroCard(int totalLessons) {
     final learner = widget.learner;
+    final textTheme = Theme.of(context).textTheme;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(28),
@@ -236,10 +238,9 @@ class _HomeDashboardState extends State<HomeDashboard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
+                      Text(
                         'Current Learner',
-                        style: TextStyle(
-                          color: AppTheme.textSecondary,
+                        style: textTheme.bodyMedium?.copyWith(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
@@ -247,8 +248,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                       const SizedBox(height: 8),
                       Text(
                         learner.displayName,
-                        style: const TextStyle(
-                          color: AppTheme.textPrimary,
+                        style: textTheme.titleLarge?.copyWith(
                           fontSize: 24,
                           fontWeight: FontWeight.w700,
                         ),
@@ -373,13 +373,14 @@ class _HomeDashboardState extends State<HomeDashboard> {
     required String title,
     required String subtitle,
   }) {
+    final textTheme = Theme.of(context).textTheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
-          style: const TextStyle(
-            color: AppTheme.textPrimary,
+          style: textTheme.titleLarge?.copyWith(
             fontSize: 24,
             fontWeight: FontWeight.w700,
           ),
@@ -387,10 +388,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
         const SizedBox(height: 6),
         Text(
           subtitle,
-          style: const TextStyle(
-            color: AppTheme.textSecondary,
-            fontSize: 14,
-          ),
+          style: textTheme.bodyMedium?.copyWith(fontSize: 14),
         ),
       ],
     );
@@ -440,6 +438,8 @@ class _ReviewRecommendationPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final recommendation = this.recommendation;
+    final textTheme = Theme.of(context).textTheme;
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -470,18 +470,16 @@ class _ReviewRecommendationPanel extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             if (recommendation == null)
-              const Text(
+              Text(
                 'No spaced review is due.',
-                style: TextStyle(
-                  color: AppTheme.textSecondary,
+                style: textTheme.bodyMedium?.copyWith(
                   height: 1.45,
                 ),
               )
             else ...[
               Text(
                 _formatConceptLabel(recommendation.conceptId),
-                style: const TextStyle(
-                  color: AppTheme.textPrimary,
+                style: textTheme.titleLarge?.copyWith(
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
                 ),
@@ -490,8 +488,7 @@ class _ReviewRecommendationPanel extends StatelessWidget {
               Text(
                 '${recommendation.stalenessDays} days stale, '
                 '${(recommendation.masteryScore * 100).round()}% mastery',
-                style: const TextStyle(
-                  color: AppTheme.textSecondary,
+                style: textTheme.bodyMedium?.copyWith(
                   height: 1.45,
                 ),
               ),
@@ -516,6 +513,8 @@ class _MasterySummaryPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -546,10 +545,9 @@ class _MasterySummaryPanel extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             if (snapshots.isEmpty)
-              const Text(
+              Text(
                 'No concept evidence yet.',
-                style: TextStyle(
-                  color: AppTheme.textSecondary,
+                style: textTheme.bodyMedium?.copyWith(
                   height: 1.45,
                 ),
               )
@@ -576,6 +574,8 @@ class _MasteryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final masteryPercent = (snapshot.masteryScore * 100).round();
     final supportPercent = (snapshot.supportNeedScore * 100).round();
+    final textTheme = Theme.of(context).textTheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -625,8 +625,7 @@ class _MasteryRow extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           '$masteryPercent% mastery, $supportPercent% support need',
-          style: const TextStyle(
-            color: AppTheme.textSecondary,
+          style: textTheme.bodyMedium?.copyWith(
             fontSize: 12,
           ),
         ),
@@ -659,6 +658,8 @@ class _LessonSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -699,8 +700,7 @@ class _LessonSummaryCard extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               lesson.title,
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
+              style: textTheme.titleLarge?.copyWith(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
               ),
@@ -711,8 +711,7 @@ class _LessonSummaryCard extends StatelessWidget {
                 lesson.description,
                 maxLines: 4,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppTheme.textSecondary,
+                style: textTheme.bodyMedium?.copyWith(
                   height: 1.5,
                 ),
               ),

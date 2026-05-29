@@ -22,6 +22,15 @@ class LessonTheoryVerification {
       isInference: json['is_inference'] as bool? ?? false,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'claim': claim,
+      'source_url': sourceUrl,
+      'validation_note': validationNote,
+      'is_inference': isInference,
+    };
+  }
 }
 
 @immutable
@@ -84,6 +93,22 @@ class LessonConceptVideo {
               .toList(growable: false)
           : const [],
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'stream_path': streamPath,
+      'caption_path': captionPath,
+      'duration_label': durationLabel,
+      'summary': summary,
+      'highlights': highlights,
+      'theory_equation': theoryEquation,
+      'worked_example': workedExample,
+      'misconception_to_prevent': misconceptionToPrevent,
+      'takeaway_line': takeawayLine,
+      'theory_verification':
+          theoryVerification.map((item) => item.toJson()).toList(),
+    };
   }
 
   LessonConceptVideo copyWith({
@@ -155,6 +180,17 @@ class LessonExerciseBrief {
     );
   }
 
+  Map<String, dynamic> toJson() {
+    return {
+      'title': title,
+      'overview': overview,
+      'tasks': tasks,
+      'template_blanks': templateBlanks.map((blank) => blank.toJson()).toList(),
+      'success_criteria': successCriteria,
+      'code_tip': codeTip,
+    };
+  }
+
   LessonExerciseBrief copyWith({
     String? title,
     String? overview,
@@ -198,6 +234,16 @@ class LessonTemplateBlank {
       expectedConcept: json['expected_concept'] as String? ?? '',
       approxLineAnchor: (json['approx_line_anchor'] as num?)?.toInt() ?? 0,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'blank_id': blankId,
+      'kind': kind,
+      'prompt': prompt,
+      'expected_concept': expectedConcept,
+      'approx_line_anchor': approxLineAnchor,
+    };
   }
 }
 
@@ -253,6 +299,19 @@ class LessonDefinition {
     );
   }
 
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'description': description,
+      'category': category,
+      'starter_code': starterCode,
+      'concept_video': conceptVideo.toJson(),
+      'exercise': exercise.toJson(),
+      'backend_enabled': backendEnabled,
+    };
+  }
+
   bool get hasVideo => conceptVideo.effectiveStreamPath.isNotEmpty;
 
   LessonDefinition copyWith({
@@ -299,6 +358,13 @@ class LessonSection {
               .toList(growable: false)
           : const [],
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'title': title,
+      'lessons': lessons.map((lesson) => lesson.toJson()).toList(),
+    };
   }
 
   LessonSection copyWith({

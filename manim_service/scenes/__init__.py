@@ -14,6 +14,7 @@ from .rl_visuals import (
     QValueTable,
     EpisodeTrail,
 )
+from .code_ide import IDECodePanel, tokenize_python
 from .panels import (
     # Color constants
     STATE_COLOR,
@@ -95,6 +96,7 @@ __all__ = [
     "FormulaStepper", "StatefulHighlighter",
     "HighlightedAnimation", "highlighted_animation",
     "CodeStepper",
+    "IDECodePanel", "tokenize_python",
     "ActionBarChart", "SynchronizedFocusGroup", "action_arrows_overlay",
     "zoom_to", "zoom_reset",
     "EnvironmentPanel", "env_panel",

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
@@ -38,6 +40,8 @@ class TraceReplayPanel extends StatefulWidget {
 class _TraceReplayPanelState extends State<TraceReplayPanel> {
   int _currentStepIndex = 0;
   VideoPlayerController? _replayController;
+  Timer? _tracePlaybackTimer;
+  bool _isTracePlaying = false;
   bool _isReplayVideoLoading = false;
   String? _replayVideoError;
 
@@ -54,9 +58,13 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     super.didUpdateWidget(oldWidget);
     if (!listEquals(oldWidget.stepTrace, widget.stepTrace)) {
       _currentStepIndex = 0;
+      _stopTracePlayback(notify: false);
     } else if (_currentStepIndex >= widget.stepTrace.length &&
         widget.stepTrace.isNotEmpty) {
       _currentStepIndex = widget.stepTrace.length - 1;
+    }
+    if (widget.stepTrace.isEmpty) {
+      _stopTracePlayback(notify: false);
     }
     if (oldWidget.videoPath != widget.videoPath) {
       _disposeReplayController();
@@ -68,6 +76,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
 
   @override
   void dispose() {
+    _stopTracePlayback(notify: false);
     _disposeReplayController();
     super.dispose();
   }
@@ -145,6 +154,51 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  void _toggleTracePlayback() {
+    if (_isTracePlaying) {
+      _stopTracePlayback();
+      return;
+    }
+    if (widget.stepTrace.length < 2) {
+      return;
+    }
+    setState(() {
+      _isTracePlaying = true;
+      if (_currentStepIndex >= widget.stepTrace.length - 1) {
+        _currentStepIndex = 0;
+      }
+    });
+    _tracePlaybackTimer = Timer.periodic(
+      const Duration(milliseconds: 1200),
+      (_) {
+        if (!mounted || widget.stepTrace.isEmpty) {
+          _stopTracePlayback();
+          return;
+        }
+        if (_currentStepIndex >= widget.stepTrace.length - 1) {
+          _stopTracePlayback();
+          return;
+        }
+        setState(() => _currentStepIndex += 1);
+      },
+    );
+  }
+
+  void _stopTracePlayback({bool notify = true}) {
+    _tracePlaybackTimer?.cancel();
+    _tracePlaybackTimer = null;
+    if (_isTracePlaying && mounted && notify) {
+      setState(() => _isTracePlaying = false);
+    } else {
+      _isTracePlaying = false;
+    }
+  }
+
+  void _selectTraceStep(int index) {
+    _stopTracePlayback();
+    setState(() => _currentStepIndex = index);
   }
 
   void _disposeReplayController() {
@@ -329,10 +383,21 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
             children: [
               OutlinedButton.icon(
                 onPressed: _currentStepIndex > 0
-                    ? () => setState(() => _currentStepIndex -= 1)
+                    ? () => _selectTraceStep(_currentStepIndex - 1)
                     : null,
                 icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
                 label: const Text('Previous'),
+              ),
+              const SizedBox(width: 12),
+              FilledButton.icon(
+                onPressed: totalSteps > 1 ? _toggleTracePlayback : null,
+                icon: Icon(
+                  _isTracePlaying
+                      ? Icons.pause_rounded
+                      : Icons.play_arrow_rounded,
+                  size: 20,
+                ),
+                label: Text(_isTracePlaying ? 'Pause' : 'Play trace'),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -342,15 +407,14 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
                   max: totalSteps > 1 ? (totalSteps - 1).toDouble() : 1.0,
                   divisions: totalSteps > 1 ? totalSteps - 1 : 1,
                   onChanged: totalSteps > 1
-                      ? (value) =>
-                          setState(() => _currentStepIndex = value.round())
+                      ? (value) => _selectTraceStep(value.round())
                       : null,
                 ),
               ),
               const SizedBox(width: 12),
               ElevatedButton.icon(
                 onPressed: _currentStepIndex < totalSteps - 1
-                    ? () => setState(() => _currentStepIndex += 1)
+                    ? () => _selectTraceStep(_currentStepIndex + 1)
                     : null,
                 icon: const Icon(Icons.arrow_forward_ios_rounded, size: 18),
                 label: const Text('Next'),
@@ -375,7 +439,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
             final step = widget.stepTrace[index];
             final isSelected = index == _currentStepIndex;
             return GestureDetector(
-              onTap: () => setState(() => _currentStepIndex = index),
+              onTap: () => _selectTraceStep(index),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 160),
                 width: 170,

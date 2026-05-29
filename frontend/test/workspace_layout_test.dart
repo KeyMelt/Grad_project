@@ -303,7 +303,7 @@ void main() {
 
     expect(find.text('Course Outline'), findsOneWidget);
     expect(find.text('Study Buddy'), findsOneWidget);
-    expect(find.text('Concept lesson video'), findsOneWidget);
+    expect(find.text('Concept'), findsOneWidget);
 
     await tester.tap(find.text('Course Outline'));
     await tester.pumpAndSettle();

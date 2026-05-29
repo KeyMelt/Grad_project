@@ -1,0 +1,61 @@
+{
+  "scene": "RLIntroConcept",
+  "total_duration_seconds": 216.1,
+  "phases": [
+    {
+      "phase": 1,
+      "name": "geometry_entry",
+      "start_seconds": 0.0
+    },
+    {
+      "phase": 2,
+      "name": "attempt_1_failure",
+      "start_seconds": 8.867
+    },
+    {
+      "phase": 3,
+      "name": "attempt_2_failure",
+      "start_seconds": 18.867
+    },
+    {
+      "phase": 4,
+      "name": "attempt_3_success",
+      "start_seconds": 27.4
+    },
+    {
+      "phase": 5,
+      "name": "phase1_close",
+      "start_seconds": 42.6
+    },
+    {
+      "phase": 6,
+      "name": "ml_contrast",
+      "start_seconds": 54.667
+    },
+    {
+      "phase": 7,
+      "name": "loop_diagram",
+      "start_seconds": 78.667
+    },
+    {
+      "phase": 8,
+      "name": "cycle_animation",
+      "start_seconds": 114.867
+    },
+    {
+      "phase": 9,
+      "name": "path_contrast",
+      "start_seconds": 152.467
+    },
+    {
+      "phase": 10,
+      "name": "named_features",
+      "start_seconds": 173.967
+    },
+    {
+      "phase": 11,
+      "name": "takeaway",
+      "start_seconds": 196.367
+    }
+  ]
+}

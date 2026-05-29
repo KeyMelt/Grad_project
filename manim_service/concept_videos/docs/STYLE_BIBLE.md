@@ -56,10 +56,12 @@ Three layers only. Every object in every video belongs to exactly one layer.
 
 | Use case | font_size |
 |---|---|
-| Primary equation (standalone) | 36 |
-| Primary equation (inside panel) | 30 |
-| Secondary / contextual equation | 24 |
-| Inline annotation | 20 |
+| Primary equation (standalone, full-screen focus shot) | 48 |
+| Primary equation (inside panel or shared layout) | 36 |
+| Secondary / contextual equation | 28 |
+| Inline annotation | 22 |
+
+**Size rationale:** at 480p15 (development quality) and 720p30 (production), equations smaller than 28pt render as blurry hairlines that viewers cannot read without pausing. Primary standalone equations MUST fill ≥ 40% of the visible frame width. If they don't, increase font_size or reduce the number of concurrent on-screen elements.
 
 **Decomposition rule (mandatory):** any `MathTex` that will be transformed later must be written as an array of string components, not a raw multi-token string:
 
@@ -79,13 +81,15 @@ Use `TransformMatchingTex` for morphing between algebraic lines.
 
 | Use case | font_size |
 |---|---|
-| Scene title | 36 |
-| Scene subtitle | 22 |
-| Panel title | 20 |
-| Code lines | 19 |
-| Caption line | 18 |
-| Bar chart labels | 18–20 |
-| Grid cell labels | 16–18 |
+| Scene title | 40 |
+| Scene subtitle | 26 |
+| Panel title | 22 |
+| Code lines | 20 |
+| Caption line | 22 |
+| Bar chart labels | 20–22 |
+| Grid cell labels | 20 |
+
+**Caption legibility mandate:** captions at the bottom of the frame must be readable without zooming at the delivery resolution. 22pt is the minimum for any text that a viewer needs to read while the animation is playing. Text smaller than 20pt anywhere on screen is a QA REJECT unless it is a purely decorative axis tick label.
 
 ### Font family
 
@@ -352,7 +356,7 @@ Canonical names used in narration, captions, and on-screen text. Agents must not
 |---|---|
 | state-value function | value function, V function |
 | action-value function | Q function, quality function |
-| transition probability | dynamics, environment dynamics |
+| transition probability | dynamics, environment dynamics (**exception:** "dynamics function" is S&B §3.1's own term for the four-argument form p(s',r\|s,a) and is permitted when referring precisely to that form; the ban targets vague uses of "dynamics" or "environment dynamics" as substitutes for the full notation) |
 | policy | strategy, behavior |
 | episode | run, trial, rollout (use "rollout" only for policy rollouts, not episodes) |
 | discount factor γ | discount rate |
@@ -830,3 +834,467 @@ Followed by 2–3 sentences explaining why this pattern fits the
 lesson, and one sentence naming the specific misconception (from
 rl_knowledge_base.md) that this pattern is designed to defeat.
 (QA F52.)
+
+---
+
+## 29. Narration-Visual Synchronization Contract (mandatory)
+
+The narration and the visual are TWO SIDES OF THE SAME ARGUMENT. The visual
+shows the phenomenon; the narration explains what it means. Neither can do the
+other's job. All pipeline agents enforce this contract.
+
+### 29.1 Equation on-screen mandate (QA G55)
+
+Any equation **spoken** in the narration MUST be **visible on screen** at the
+moment the narrator says it, within a ±0.5 s window. This is a hard requirement,
+not a guideline. Implementation:
+
+- The Manim Expert schedules equation `Write` animations to fire at the timestamp
+  declared in the narration script's `[HH:MM:SS]` cue.
+- The Voice & BGM Agent flags every narration line containing an equation with a
+  `[EQ_ON_SCREEN]` marker; the QA Agent verifies the marker against the rendered
+  frame at the declared cue time.
+- No equation may be narrated before it appears (no "in a moment we'll see...") or
+  after it disappears.
+
+### 29.2 Visual primacy — narration explains meaning, never describes the screen (QA G56)
+
+The viewer can see the animation. **Do not describe it.** The narration explains
+WHY what is happening matters — the mathematical relationship, the physical
+intuition, the thing the viewer should feel.
+
+| ❌ BANNED — describing the screen | ✅ REQUIRED — explaining meaning |
+|---|---|
+| "A four-by-four grid is appearing on screen." | "The ice is slippery — the agent can slip sideways even when it chooses a direction." |
+| "The bar chart on the right shows three bars." | "Each bar is how likely the agent actually ends up in that cell." |
+| "Now we fade in the Bellman equation." | "The value of a state is just the weighted average of every future it might reach." |
+| "The elf moves to the right here." | "Choosing right doesn't guarantee arriving right — that's what makes this hard." |
+| "You can see the reward is plus one at the goal." | "That single plus-one is the only signal the agent ever receives — no partial credit." |
+| "Three items appear on screen." | (Describe nothing. Move directly to the meaning.) |
+
+**The litmus test:** remove the visual entirely. Does the narration still make
+coherent sense as a standalone audio explanation? If yes, the narration is doing
+its job. If the narration only makes sense because the viewer can see the
+animation, it is describing, not explaining — rewrite it.
+
+### 29.3 Narration-intention field in plan.md (mandatory)
+
+Every plan.md phase block must include a `narration_intention` line stating the
+conceptual insight the narrator is building in the viewer's mind — not a
+description of the animation events.
+
+```markdown
+## Phase 2 — Stochastic traversal
+
+**Animation events:** Agent moves right from state 6; slides to states 5, 7, and 2 in
+three successive attempts; each landing highlighted.
+
+**Narration intention:** build the intuition that "choosing an action" and "arriving
+at the intended cell" are two entirely different things on slippery ice.
+```
+
+If `narration_intention` is missing, the RL Expert rejects the plan at Gate 1.
+
+---
+
+## 30. Conversational Register — 3Blue1Brown Standard (mandatory)
+
+All narration for this series follows the register established in 3Blue1Brown's
+"Essence of Linear Algebra" and "Essence of Calculus." The voice is that of a
+knowledgeable guide building genuine curiosity — not a textbook being read aloud.
+
+### 30.1 Approved conversational moves
+
+| Move | Example |
+|---|---|
+| Rhetorical question | "But what does 'value' actually mean here?" |
+| Naming the tension | "The agent wants the goal — but has no map and no supervisor." |
+| Expressing discovery | "Here's what makes this beautiful:" |
+| Building suspense | "So the natural question becomes..." |
+| Acknowledging what the viewer already knows | "If you've seen the previous video, you know that..." |
+| Forward-teasing (used sparingly) | "We'll see exactly why this matters in a moment." |
+| Connecting equation to intuition | "That sum is just the weighted average of every future the agent might reach." |
+| Short punchy emphasis | "No labels. No supervisor. Just the number." |
+
+### 30.2 Banned narration patterns
+
+| ❌ Pattern | Why banned |
+|---|---|
+| "In this video, we're going to learn about..." | Robotic preamble — start with the concept |
+| "As you can see..." / "Notice on screen..." | Describes visuals — forbidden by §29.2 |
+| "The equation for the X is..." (cold drop) | Equation must be earned, not announced |
+| Opening with "So," / "Okay," / "Alright," / "Basically," | Filler openers — cut them |
+| "There are four actions: up, down, left, right." | Dry enumeration — show, don't list |
+| Reading symbols literally: "V of s equals max over a of..." | Robotic symbol recitation; explain meaning instead |
+| Hedging: "kind of," "sort of," "basically," "in a way" | Undermines authority |
+| Excited filler: "Wow!", "Amazing!", "Let's go!" | Performative — not educational |
+
+### 30.3 Sentence character
+
+- **Vary sentence length.** Mix short punchy sentences (4–8 words) with longer
+  explanatory ones (12–18 words). Monotone rhythm creates monotone delivery.
+- **Begin sentences with the concept, not a connector.** "Value functions capture
+  long-term worth" not "So, value functions capture long-term worth."
+- **Rhetorical questions are content.** "What happens if the reward is delayed by
+  ten steps?" is a valid narration sentence.
+- **One vocal stress per sentence.** Mark with `*asterisks*`. The synthesizer maps
+  these to Kokoro emphasis. Overusing emphasis kills it.
+- **Avoid run-on sentences.** A sentence with more than two clauses should be split.
+
+### 30.4 Equation spoken forms (mandatory conventions)
+
+| Symbol / LaTeX | Spoken form |
+|---|---|
+| `V(s)` | "the value of state s" |
+| `Q(s, a)` | "the Q-value of taking action a in state s" |
+| `π(a\|s)` | "the probability of choosing action a in state s under policy π" |
+| `\gamma` | "gamma" |
+| `\sum_{s'}` | "the sum over all reachable next states" |
+| `\max_a` | "the action that maximizes" |
+| `E_\pi` | "the expected value under policy π" |
+| `← ` (update arrow) | "is updated to" |
+| `+1` reward | "a reward of one" |
+| `0` reward | "no reward" |
+| `-1` reward | "a penalty of one" |
+
+**Never read raw LaTeX aloud.** Every equation narrated must have its spoken form
+written out in the narration script.
+
+---
+
+## 31. Gymnasium Asset Mandate (mandatory)
+
+All environment renders in any concept video **MUST use the actual Gymnasium PNG
+sprite assets.** Colored-rectangle fallbacks are **banned in all delivered
+renders**. This is a QA G57 block.
+
+### 31.1 Pre-production asset verification
+
+Before writing any FrozenLake, CliffWalking, or Blackjack scene, the Manim Expert
+(via Codex) MUST verify assets exist:
+
+```python
+import gymnasium, os
+asset_dir = os.path.join(os.path.dirname(gymnasium.__file__),
+                         'envs', 'toy_text', 'img')
+required = ['ice.png', 'stool.png', 'hole.png', 'goal.png',
+            'elf_right.png', 'elf_left.png', 'elf_up.png', 'elf_down.png']
+missing = [f for f in required if not os.path.exists(os.path.join(asset_dir, f))]
+assert not missing, f"Missing Gymnasium assets: {missing}"
+print("ASSET_DIR:", asset_dir)
+```
+
+If any asset is missing, **stop** and report `MISSING_ASSETS` to the Producer.
+Do not substitute rectangles. Do not proceed.
+
+### 31.2 Native Gymnasium frame embedding (preferred method)
+
+For Phase 1 "reveal the environment" beats, embedding actual Gymnasium render
+frames produces the highest-fidelity, most authentic representation:
+
+```python
+import gymnasium as gym, numpy as np
+from PIL import Image
+import tempfile, os
+
+env = gym.make('FrozenLake-v1', render_mode='rgb_array')
+env.reset(seed=42)
+frame = env.render()          # HxWx3 numpy array, native Gymnasium pixel art
+img = Image.fromarray(frame)
+tmp = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+img.save(tmp.name)
+mob = ImageMobject(tmp.name).scale_to_fit_width(5.5)
+```
+
+Wrap the ImageMobject in a soft container per §14 — never place it naked on
+the canvas.
+
+### 31.3 Per-tile composition (via helpers)
+
+`frozenlake_frame(state)` composes individual tile PNGs (ice, hole, goal, stool,
+elf sprites) into a Manim `VGroup`. Use this when you need to animate individual
+tiles (highlighting, scaling) that a flat frame image cannot support.
+
+Both methods are approved. Full Gymnasium frame is preferred for static reveals;
+per-tile composition is preferred for interactive/highlighted sequences.
+
+---
+
+## 32. Codex CLI Mandate for Execution Stages (mandatory)
+
+The two heavy execution stages — `scene_render` and `narrate_mux` — MUST run
+via the Codex CLI through `manim_service/pipeline/codex_render.sh`. These stages
+MUST NOT be executed by a Claude Code subagent writing Python directly.
+
+This is a **pipeline non-negotiable.** The Producer command (`produce-video.md`)
+already enforces this with a warning box at Step 7. Every Producer run must
+follow it — if a Claude subagent is tempted to write the Manim scene file
+directly, that is a violation.
+
+### 32.1 Why this matters
+
+| Issue | What happens without Codex | What happens with Codex |
+|---|---|---|
+| Context exhaustion | Claude orchestrator runs out of context while generating 30–40 KB of scene Python | Codex runs scene generation in a fresh context; Claude receives only the result |
+| Quality | Claude in a large context produces degraded Manim code and skips checklist items | Codex follows the brief strictly, runs the Quality Checklist, re-renders on failure |
+| Cost | Generating scene code in Claude burns expensive reasoning tokens | Codex handles code generation at lower cost |
+| Skill enforcement | A Claude agent writing Manim code shortcuts the 3-phase workflow | Codex brief explicitly requires the 3-phase workflow; no shortcuts possible |
+
+### 32.2 What the Codex brief MUST include (mandatory for quality)
+
+Beyond CODEX_HANDOFF.md §5 base requirements, every `scene_render` brief must
+explicitly contain (verbatim or by path reference):
+
+1. **STYLE_BIBLE §§29-33** (new quality requirements from this update) — narration sync, conversational register, Gymnasium asset mandate, screen focus standards
+2. **§3 updated font sizes** — 48pt standalone, 36pt panel
+3. The user's **8 quality complaints** mapped to specific STYLE_BIBLE sections:
+   - "Narrator describes the screen" → §29.2
+   - "Equations not on screen when narrated" → §29.1
+   - "Small illegible text" → §3 (updated)
+   - "Overlaying artifacts" → §23 (Element Lifecycle)
+   - "No Gymnasium assets" → §31
+4. The reference video style summary (§33 below)
+
+---
+
+## 33. Screen Focus Standards — 3Blue1Brown Focal Discipline (mandatory)
+
+At any given moment, the viewer's attention belongs to EXACTLY ONE primary
+teaching object. The 3-panel layout (§4) exists for organized co-presence; it
+is NOT a license for three competing focal points.
+
+### 33.1 Primary element occupancy rule (QA G58)
+
+The element being taught in the current beat must EITHER:
+- Occupy ≥ 50% of the visible screen area, OR
+- Be the sole object at `OPACITY_PRIMARY`
+
+If two objects share `OPACITY_PRIMARY`, they must be visually bound by a
+`trace_vector` or `cross_highlight_pair` at that exact moment — they are one
+teaching unit, not two independent focal points.
+
+### 33.2 The "equation introduction" shot (mandatory sequence)
+
+When an equation appears for the **first time** in the video:
+
+1. **Clear the stage** — all non-header elements fade to `OPACITY_SECONDARY` or
+   `FadeOut`. The equation gets the full frame.
+2. **Reveal the equation centered**, `font_size ≥ 48`, in the vertical middle of
+   the frame. Use `Write` or `LaggedStart(Write(...))` for token-by-token reveal.
+3. **Hold ≥ 2.0 s** before adding anything else — the viewer needs to see it whole.
+4. **THEN** add the geometric counterpart to the right or below, with the equation
+   repositioning if necessary.
+
+Shortcutting this sequence (e.g., equation appears in a small left panel while
+the environment is already visible in the center) is a QA G58 violation.
+
+### 33.3 The "focused explanation" shot
+
+When the narration is explaining a specific sub-expression (e.g., explaining what
+`γ` means inside the Bellman equation):
+
+1. All other tokens in the equation drop to `OPACITY_SECONDARY`.
+2. The token being explained pulses with `Indicate` once, then returns to
+   `OPACITY_PRIMARY`.
+3. The geometric partner of that token (if one exists on screen) simultaneously
+   highlights via `cross_highlight_pair`.
+4. The camera does NOT move — this is a focus-within-frame operation only.
+
+### 33.4 When the 3-panel layout is allowed
+
+The 3-panel layout (equation LEFT + environment CENTER + code/chart RIGHT) is
+only permitted in phases where:
+- All three panels are **individually familiar** to the viewer from prior beats
+- The current beat is showing a **relationship** among them (the algorithm step
+  connecting all three), not introducing any new element
+- All three panels have `font_size ≥ 36` for their primary text
+- The three panels have been **individually taught** in prior beats; this phase
+  is synthesis, not introduction
+
+Introducing any new element into a 3-panel layout (e.g., adding the equation
+for the first time while the environment is already showing) is banned.
+
+---
+
+## 34. Code Walkthrough Pattern — IDE-Style Step-Through Debugger (mandatory)
+
+**This is a non-negotiable production pattern.** Every phase that explains
+Gymnasium code (or any code) MUST follow this exact structure. No exceptions.
+
+### 34.1 Layout
+
+Two-panel split, environment-and-code only — no third panel:
+
+| Side | Content |
+|---|---|
+| LEFT (≈45% width) | The Gymnasium environment (grid, sprites, current-state highlight). Anchored via `place_left_panel`. |
+| RIGHT (≈45% width) | The actual Python/Gymnasium code, rendered IDE-style. Anchored via `place_mid_right_panel` or a dedicated `place_code_panel` helper. |
+
+Center gutter (≈10%) is empty; it becomes the stage when an artifact
+needs to be brought forward (see §34.4).
+
+### 34.2 IDE rendering requirements
+
+The code panel is NOT plain `Text`. It MUST be rendered as if displayed in
+an IDE:
+
+- **Monospaced font:** `Consolas`, `Menlo`, `Fira Code`, or any monospaced
+  family available to manim. Plain proportional Text is banned for code.
+- **Syntax highlighting:** keywords (def, for, in, if, return, import,
+  class, lambda, with, as) in one accent color; built-ins (range, len,
+  print, int, float, list, dict) in another; string literals in a third;
+  numeric literals in a fourth; comments dimmed. The palette must reuse
+  the STYLE_BIBLE 10-color set — no new hex literals.
+- **Line numbers:** subdued line numbers in the gutter at
+  `OPACITY_BACKGROUND` (≈0.17), `CODE_ACCENT` color.
+- **Active-line highlight:** a translucent `Rectangle` behind the current
+  line at `BG_PANEL` with `stroke_color=VALUE_COLOR` (the "debugger
+  highlight"). The rectangle moves line-by-line as the walkthrough steps.
+- **Font size:** `font_size ≥ 22` for code, `font_size ≥ 18` for line
+  numbers. Never below.
+
+A new helper `manim_service/scenes/code_ide.py::IDECodePanel` SHOULD be
+authored when the next video needs it; until then, every code-walkthrough
+phase must apply the rules above inline.
+
+### 34.3 Step-through cadence
+
+The walkthrough is a debugger session, not a reading. For each code line:
+
+1. Move the debugger highlight to the current line (`smooth_move_to`,
+   run_time ≤ 0.5 s).
+2. Narration explains what THIS line does in the context of the env.
+3. If this line produces an observable effect in the environment
+   (state change, sampled outcome, value update, action selection), the
+   effect MUST be shown on the LEFT panel at the same time the line
+   executes. Narration ties them: "this line samples the next state — the
+   left panel shows it land on cell 7".
+4. `self.wait()` ≥ 1.5 s after the line executes (debugger pause).
+5. Advance to next line.
+
+A code line that produces no observable effect (an import, a constant
+binding) gets ≤ 1.0 s with no environment update — keep it short.
+
+### 34.4 Sampling / table-lookup interlude
+
+When the code samples from or reads a table (transition probabilities,
+reward table, policy distribution, action-value table), the walkthrough
+PAUSES on that line and the referenced table is brought to center stage:
+
+1. The env (LEFT) and the code panel (RIGHT) dim to `OPACITY_SECONDARY`.
+2. The relevant table fades in **centered**, at `OPACITY_PRIMARY`, at
+   `font_size ≥ 28`. No element on the LEFT or RIGHT remains at PRIMARY
+   while the table is on stage.
+3. The narration explains what is being sampled, walks one row of the
+   table, and the env may briefly mirror that row (e.g., the three
+   possible next states each glow once in turn) — but this brief env
+   activity stays at `OPACITY_SECONDARY` underneath the centered table.
+4. The table fades out completely (`FadeOut`, not dim — it does not need
+   to persist), the env and code panel return to `OPACITY_PRIMARY`, and
+   the walkthrough resumes from the next line.
+
+**No overlap is permitted between the centered table and the code or env
+panels.** If the renderer is producing simultaneous PRIMARY-opacity
+elements in different parts of the frame during a sampling interlude,
+that is a hard QA REJECT.
+
+### 34.5 Forbidden patterns
+
+- Showing the code panel and any third panel (chart, second equation,
+  recap card) at PRIMARY simultaneously.
+- Letting the centered sampling artifact (table) overlap the code or env
+  panel — they must be fully dimmed first.
+- Plain non-monospaced code text.
+- Code without syntax highlighting (single-color code is banned).
+- Stepping forward in code while a sampling-interlude artifact is still
+  on screen.
+
+---
+
+## 35. Equation Dissection Pattern — Token-by-Token with Env Anchor (mandatory)
+
+**This is a non-negotiable production pattern.** Every phase that introduces,
+derives, or re-explains an equation MUST follow this exact structure.
+
+### 35.1 Layout
+
+Two-panel split, equation-and-env only — no code panel during equation
+dissection:
+
+| Side | Content |
+|---|---|
+| LEFT or CENTER | The equation, rendered as a decomposed `MathTex` array (every variable, operator, and grouping is its own token). |
+| RIGHT or paired with the equation | The Gymnasium environment showing the agent's situation that the equation is describing. |
+
+### 35.2 Dissection cadence
+
+The equation is read token by token. For each token:
+
+1. All other tokens drop to `OPACITY_SECONDARY`. The current token alone
+   stays at `OPACITY_PRIMARY`. (Per §33.3.)
+2. Narration explains what THIS token means **relative to the agent's
+   actions in the environment**, not as a math symbol. Examples of
+   acceptable narration framings:
+   - "γ — the agent discounts future reward by this factor every step."
+   - "Σ over a — the agent doesn't know which action it'll pick yet, so
+     we average over all of them weighted by the policy."
+   - "p(s', r | s, a) — what the environment does in response, sampled
+     from this table."
+   - "v_π(s') — the value the agent would expect from the next state,
+     under the same policy."
+3. The env (RIGHT) animates the corresponding agent behavior:
+   - For state symbols: the relevant cell highlights.
+   - For action symbols: an arrow or sprite move into that action.
+   - For transition / probability terms: the sampled successors highlight
+     in turn at their probability weights.
+   - For value / return terms: the value label appears on the relevant
+     cells.
+   - For discount γ: an animated `γ^k` decay across cells the agent could
+     visit.
+4. `cross_highlight_pair(token, env_partner)` is mandatory for every
+   token that has a geometric partner.
+5. `self.wait()` ≥ 1.5 s after the token is explained.
+6. Advance to next token.
+
+### 35.3 Derivation chains
+
+When an equation is derived in N steps (e.g., the 5-step Bellman
+derivation), each step lives in its own phase and follows §35.2 for the
+newly-introduced token(s) of that step. The previously-derived form
+remains visible at `OPACITY_SECONDARY` above the current form; it is
+never erased mid-derivation. The full chain is only erased after the
+boxed final form is held in a dedicated full-frame solo (per §33.2).
+
+### 35.4 Forbidden patterns
+
+- Reading an equation left-to-right with no token-level highlights ("here
+  is the Bellman equation:" then a 5-second wait) — this teaches nothing.
+- Explaining a symbol as a math object alone ("γ is a real number between
+  0 and 1") with no env anchor.
+- A token at `OPACITY_PRIMARY` with no geometric partner highlighted on
+  the env panel for tokens that have one.
+- Showing the code panel during equation dissection. Code walkthroughs
+  (§34) and equation dissections (§35) are **mutually exclusive** phase
+  types — never combined in one phase.
+
+### 35.5 QA enforcement
+
+QA Phase 0 (see qa-agent SKILL.md) extracts a frame in the middle of
+every equation-dissection phase. The frame must show:
+- Exactly ONE token at `OPACITY_PRIMARY` in the equation.
+- ALL other tokens visibly dimmer.
+- The env panel showing the agent-behavior partner for that token.
+
+Frames that show multiple tokens at PRIMARY simultaneously, or no env
+anchor activity, are hard REJECTs.
+
+---
+
+## Mutual exclusion: §34 vs §35
+
+A single phase is EITHER a code walkthrough (§34) OR an equation
+dissection (§35) — never both. If a beat needs to connect code to an
+equation, it must be its own phase that explicitly hands off (e.g.,
+"the line we just walked through computes the inner sum of the equation
+— let's look at that equation now"), with a clean transition between
+the two-panel layouts.

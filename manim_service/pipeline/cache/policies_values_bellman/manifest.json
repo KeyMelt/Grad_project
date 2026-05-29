@@ -1,0 +1,46 @@
+{
+  "lesson_id": "policies_values_bellman",
+  "phase_count": null,
+  "render_target_seconds": null,
+  "artifacts": {
+    "specs": "manim_service/concept_videos/policies_values_bellman_specs.md",
+    "plan": "manim_service/concept_videos/policies_values_bellman_plan.md",
+    "choreo": "manim_service/concept_videos/policies_values_bellman_choreo.md",
+    "tv_canonical": "manim_service/concept_videos/policies_values_bellman_tv_canonical.md",
+    "scene": "manim_service/concept_videos/policies_values_bellman_concept.py",
+    "narration_script": "manim_service/concept_videos/policies_values_bellman_narration_script.md",
+    "audio_brief": "manim_service/concept_videos/policies_values_bellman_audio_brief.md",
+    "captions_srt": "manim_service/concept_videos/policies_values_bellman_captions.srt",
+    "captions_vtt": "manim_service/concept_videos/policies_values_bellman_captions.vtt",
+    "silent_mp4": "media/videos/policies_values_bellman_concept/480p15/PoliciesValuesBellmanConcept.mp4",
+    "phase_timestamps": "media/videos/policies_values_bellman_concept/480p15/phase_timestamps.json",
+    "narrated_mp4": "backend/media/concept_videos/policies_values_bellman_concept_narrated.mp4",
+    "audio_report": "backend/media/concept_videos/policies_values_bellman_concept_narrated.audio_report.json",
+    "style_bible": "manim_service/concept_videos/docs/STYLE_BIBLE.md",
+    "common_defects": "manim_service/concept_videos/docs/COMMON_DEFECTS.md",
+    "rl_knowledge_base": "manim_service/concept_videos/docs/rl_knowledge_base.md",
+    "session_log": "manim_service/SESSION_LOG.md",
+    "codex_handoff": "manim_service/concept_videos/docs/CODEX_HANDOFF.md"
+  },
+  "stage_results": [
+    {
+      "stage": "scene_render",
+      "result_path": "manim_service/concept_videos/policies_values_bellman_self_qa_report.md",
+      "verdict": "SELF_QA_PASSED",
+      "timestamp": "2026-05-28T13:27:03.663665Z"
+    },
+    {
+      "stage": "gate5_qa",
+      "result_path": "manim_service/concept_videos/policies_values_bellman_qa_review_v2.md",
+      "verdict": "APPROVED",
+      "timestamp": "2026-05-28T13:29:10.589443Z"
+    },
+    {
+      "stage": "gate7_rl_final",
+      "result_path": "manim_service/concept_videos/policies_values_bellman_rl_expert_final_v2.md",
+      "verdict": "APPROVED",
+      "timestamp": "2026-05-28T13:33:28.627182Z"
+    }
+  ],
+  "notes": {}
+}

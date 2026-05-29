@@ -4,6 +4,7 @@ import 'package:rl_ide/core/backend_api.dart';
 import 'package:rl_ide/core/workbench_state.dart';
 import 'package:rl_ide/layout/main_layout.dart';
 import 'package:rl_ide/main.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class FakeBackendApi extends BackendApi {
   LearnerProfile? _student;
@@ -343,6 +344,37 @@ class FakeBackendApi extends BackendApi {
 }
 
 void main() {
+  testWidgets('Theme toggle switches dark mode and persists the preference', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final cubit = RLWorkbenchCubit(api: FakeBackendApi());
+
+    await tester.pumpWidget(
+      RLSimulationIDE(
+        home: MainLayout(cubit: cubit),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(materialApp.themeMode, ThemeMode.light);
+    expect(find.byTooltip('Use dark mode'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Use dark mode'));
+    await tester.pumpAndSettle();
+
+    final darkMaterialApp =
+        tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(darkMaterialApp.themeMode, ThemeMode.dark);
+    expect(find.byTooltip('Use light mode'), findsOneWidget);
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool('rl_ide_dark_mode'), isTrue);
+
+    await cubit.close();
+  });
+
   testWidgets('Home dashboard signs in a learner through the auth dialog', (
     WidgetTester tester,
   ) async {
@@ -411,7 +443,7 @@ void main() {
     await tester.tap(find.text('Workspace'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Concept lesson video'), findsOneWidget);
+    expect(find.text('Concept'), findsOneWidget);
 
     await tester.tap(find.text('Code'));
     await tester.pumpAndSettle();

@@ -1,0 +1,1379 @@
+{
+  "lesson_id": "mdp_foundations",
+  "voice": "am_michael",
+  "speed": 1.0,
+  "silent_video_seconds": 1689.4,
+  "narration_seconds": 1700.365,
+  "narration_wav": "/Users/ultramarine/Desktop/grad_project/manim_service/_audio_cache/mdp_foundations/narration.wav",
+  "narrated_mp4": "backend/media/concept_videos/mdp_foundations_concept_narrated.mp4",
+  "lines": [
+    {
+      "index": 0,
+      "phase": 0,
+      "intended_start_seconds": 3.0,
+      "text_preview": "A four-by-four grid of frozen ice appears \u2014 sixteen tiles, numbered zero through",
+      "warnings": [],
+      "duration_seconds": 6.144,
+      "actual_start_seconds": 3.0,
+      "actual_end_seconds": 9.144
+    },
+    {
+      "index": 1,
+      "phase": 0,
+      "intended_start_seconds": 10.0,
+      "text_preview": "Row zero is at the top: states zero, one, two, three. Each subsequent row adds f",
+      "warnings": [],
+      "duration_seconds": 6.336,
+      "actual_start_seconds": 10.0,
+      "actual_end_seconds": 16.336
+    },
+    {
+      "index": 2,
+      "phase": 0,
+      "intended_start_seconds": 18.0,
+      "text_preview": "Five tiles are different from the rest. Dark holes mark states five, seven, elev",
+      "warnings": [],
+      "duration_seconds": 10.005,
+      "actual_start_seconds": 18.0,
+      "actual_end_seconds": 28.005
+    },
+    {
+      "index": 3,
+      "phase": 0,
+      "intended_start_seconds": 28.0,
+      "text_preview": "These five tiles are terminal \u2014 once the agent lands on any of them, the episode",
+      "warnings": [
+        "shifted 0.09s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 5.675,
+      "actual_start_seconds": 28.085,
+      "actual_end_seconds": 33.76
+    },
+    {
+      "index": 4,
+      "phase": 0,
+      "intended_start_seconds": 35.0,
+      "text_preview": "The remaining eleven tiles are frozen surface. The agent can take four actions f",
+      "warnings": [],
+      "duration_seconds": 12.181,
+      "actual_start_seconds": 35.0,
+      "actual_end_seconds": 47.181
+    },
+    {
+      "index": 5,
+      "phase": 0,
+      "intended_start_seconds": 47.0,
+      "text_preview": "Every idea in this video lives on this grid. It will stay on screen throughout, ",
+      "warnings": [
+        "shifted 0.26s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 8.064,
+      "actual_start_seconds": 47.261,
+      "actual_end_seconds": 55.325
+    },
+    {
+      "index": 6,
+      "phase": 0,
+      "intended_start_seconds": 56.0,
+      "text_preview": "The first idea: why does this grid constitute a Markov Decision Process?",
+      "warnings": [],
+      "duration_seconds": 5.184,
+      "actual_start_seconds": 56.0,
+      "actual_end_seconds": 61.184
+    },
+    {
+      "index": 7,
+      "phase": 0,
+      "intended_start_seconds": 62.0,
+      "text_preview": "An MDP is a formal description of an agent interacting with an environment. It i",
+      "warnings": [],
+      "duration_seconds": 17.408,
+      "actual_start_seconds": 62.0,
+      "actual_end_seconds": 79.408
+    },
+    {
+      "index": 8,
+      "phase": 0,
+      "intended_start_seconds": 77.0,
+      "text_preview": "The state set here is all sixteen cell indices. The action set at every non-term",
+      "warnings": [
+        "shifted 2.49s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 8.043,
+      "actual_start_seconds": 79.488,
+      "actual_end_seconds": 87.531
+    },
+    {
+      "index": 9,
+      "phase": 0,
+      "intended_start_seconds": 86.0,
+      "text_preview": "The defining mathematical property of an MDP is the Markov property. It states t",
+      "warnings": [
+        "shifted 1.61s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 15.915,
+      "actual_start_seconds": 87.611,
+      "actual_end_seconds": 103.525
+    },
+    {
+      "index": 10,
+      "phase": 0,
+      "intended_start_seconds": 101.0,
+      "text_preview": "Written precisely: the probability that S sub t-plus-one equals s-prime and R su",
+      "warnings": [
+        "shifted 2.61s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 17.472,
+      "actual_start_seconds": 103.605,
+      "actual_end_seconds": 121.077
+    },
+    {
+      "index": 11,
+      "phase": 0,
+      "intended_start_seconds": 116.0,
+      "text_preview": "The past is compressed into the present state. The elf's tile index is sufficien",
+      "warnings": [
+        "shifted 5.16s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 9.515,
+      "actual_start_seconds": 121.157,
+      "actual_end_seconds": 130.672
+    },
+    {
+      "index": 12,
+      "phase": 0,
+      "intended_start_seconds": 128.0,
+      "text_preview": "The environment's response rule \u2014 the function that computes that probability \u2014 ",
+      "warnings": [
+        "shifted 2.75s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 18.219,
+      "actual_start_seconds": 130.752,
+      "actual_end_seconds": 148.971
+    },
+    {
+      "index": 13,
+      "phase": 0,
+      "intended_start_seconds": 145.0,
+      "text_preview": "Holes five, seven, eleven, and twelve, and the goal at fifteen, are highlighted ",
+      "warnings": [
+        "shifted 4.05s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 15.211,
+      "actual_start_seconds": 149.051,
+      "actual_end_seconds": 164.261
+    },
+    {
+      "index": 14,
+      "phase": 0,
+      "intended_start_seconds": 160.0,
+      "text_preview": "That is the MDP framework: states, actions, the Markov property, and an unnamed ",
+      "warnings": [
+        "shifted 4.34s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 12.011,
+      "actual_start_seconds": 164.341,
+      "actual_end_seconds": 176.352
+    },
+    {
+      "index": 15,
+      "phase": 0,
+      "intended_start_seconds": 172.0,
+      "text_preview": "Before we move on: notice that this grid has been built once. It will not be reb",
+      "warnings": [
+        "shifted 4.43s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 11.861,
+      "actual_start_seconds": 176.432,
+      "actual_end_seconds": 188.293
+    },
+    {
+      "index": 16,
+      "phase": 0,
+      "intended_start_seconds": 253.0,
+      "text_preview": "The RL agent's goal is to accumulate reward. But what, precisely, is reward?",
+      "warnings": [],
+      "duration_seconds": 5.76,
+      "actual_start_seconds": 253.0,
+      "actual_end_seconds": 258.76
+    },
+    {
+      "index": 17,
+      "phase": 0,
+      "intended_start_seconds": 259.0,
+      "text_preview": "At each time step, after the agent acts, the environment returns a single scalar",
+      "warnings": [],
+      "duration_seconds": 13.824,
+      "actual_start_seconds": 259.0,
+      "actual_end_seconds": 272.824
+    },
+    {
+      "index": 18,
+      "phase": 0,
+      "intended_start_seconds": 271.0,
+      "text_preview": "The reward hypothesis \u2014 stated in Sutton and Barto \u2014 is the foundational bet of ",
+      "warnings": [
+        "shifted 1.90s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 14.741,
+      "actual_start_seconds": 272.904,
+      "actual_end_seconds": 287.645
+    },
+    {
+      "index": 19,
+      "phase": 0,
+      "intended_start_seconds": 285.0,
+      "text_preview": "Not just the next reward. The cumulative reward \u2014 summed over the entire episode",
+      "warnings": [
+        "shifted 2.73s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 6.293,
+      "actual_start_seconds": 287.725,
+      "actual_end_seconds": 294.019
+    },
+    {
+      "index": 20,
+      "phase": 0,
+      "intended_start_seconds": 294.0,
+      "text_preview": "That cumulative sum is the return, written G sub t.",
+      "warnings": [
+        "shifted 0.10s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 3.669,
+      "actual_start_seconds": 294.099,
+      "actual_end_seconds": 297.768
+    },
+    {
+      "index": 21,
+      "phase": 0,
+      "intended_start_seconds": 299.0,
+      "text_preview": "For a stream of future rewards, the return is: G sub t equals R sub t-plus-one, ",
+      "warnings": [],
+      "duration_seconds": 13.419,
+      "actual_start_seconds": 299.0,
+      "actual_end_seconds": 312.419
+    },
+    {
+      "index": 22,
+      "phase": 0,
+      "intended_start_seconds": 312.0,
+      "text_preview": "Written as a sum: G sub t equals the sum over k from zero to infinity of gamma t",
+      "warnings": [
+        "shifted 0.50s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 9.877,
+      "actual_start_seconds": 312.499,
+      "actual_end_seconds": 322.376
+    },
+    {
+      "index": 23,
+      "phase": 0,
+      "intended_start_seconds": 323.0,
+      "text_preview": "The new object is gamma \u2014 the discount factor. Gamma lives in the closed interva",
+      "warnings": [],
+      "duration_seconds": 6.443,
+      "actual_start_seconds": 323.0,
+      "actual_end_seconds": 329.443
+    },
+    {
+      "index": 24,
+      "phase": 0,
+      "intended_start_seconds": 330.0,
+      "text_preview": "Watch what gamma does to a concrete reward stream. Suppose the agent receives ze",
+      "warnings": [],
+      "duration_seconds": 20.971,
+      "actual_start_seconds": 330.0,
+      "actual_end_seconds": 350.971
+    },
+    {
+      "index": 25,
+      "phase": 0,
+      "intended_start_seconds": 348.0,
+      "text_preview": "Zero-point-nine-nine squared is zero-point-nine-eight-zero-one. The return for t",
+      "warnings": [
+        "shifted 3.05s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 8.853,
+      "actual_start_seconds": 351.051,
+      "actual_end_seconds": 359.904
+    },
+    {
+      "index": 26,
+      "phase": 0,
+      "intended_start_seconds": 357.0,
+      "text_preview": "Rewards in the far future contribute, but they are scaled down by gamma for ever",
+      "warnings": [
+        "shifted 2.98s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 6.379,
+      "actual_start_seconds": 359.984,
+      "actual_end_seconds": 366.363
+    },
+    {
+      "index": 27,
+      "phase": 0,
+      "intended_start_seconds": 366.0,
+      "text_preview": "Two boundary conditions to remember.",
+      "warnings": [
+        "shifted 0.44s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 2.261,
+      "actual_start_seconds": 366.443,
+      "actual_end_seconds": 368.704
+    },
+    {
+      "index": 28,
+      "phase": 0,
+      "intended_start_seconds": 370.0,
+      "text_preview": "When gamma equals zero, the agent is myopic \u2014 G sub t collapses to just R sub t-",
+      "warnings": [],
+      "duration_seconds": 9.685,
+      "actual_start_seconds": 370.0,
+      "actual_end_seconds": 379.685
+    },
+    {
+      "index": 29,
+      "phase": 0,
+      "intended_start_seconds": 379.0,
+      "text_preview": "When gamma equals one, all future rewards count equally. This is valid only when",
+      "warnings": [
+        "shifted 0.77s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 14.656,
+      "actual_start_seconds": 379.765,
+      "actual_end_seconds": 394.421
+    },
+    {
+      "index": 30,
+      "phase": 0,
+      "intended_start_seconds": 392.0,
+      "text_preview": "The episodic case \u2014 tasks with a terminal time T \u2014 is the one this video uses. T",
+      "warnings": [
+        "shifted 2.50s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 12.117,
+      "actual_start_seconds": 394.501,
+      "actual_end_seconds": 406.619
+    },
+    {
+      "index": 31,
+      "phase": 0,
+      "intended_start_seconds": 404.0,
+      "text_preview": "Now the most important line of this entire video before segment six.",
+      "warnings": [
+        "shifted 2.70s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 4.587,
+      "actual_start_seconds": 406.699,
+      "actual_end_seconds": 411.285
+    },
+    {
+      "index": 32,
+      "phase": 0,
+      "intended_start_seconds": 410.0,
+      "text_preview": "The return satisfies a recursive identity: G sub t equals R sub t-plus-one plus ",
+      "warnings": [
+        "shifted 1.37s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 9.024,
+      "actual_start_seconds": 411.365,
+      "actual_end_seconds": 420.389
+    },
+    {
+      "index": 33,
+      "phase": 0,
+      "intended_start_seconds": 419.0,
+      "text_preview": "Read it aloud: the return starting now equals the immediate reward, plus gamma t",
+      "warnings": [
+        "shifted 1.47s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 8.363,
+      "actual_start_seconds": 420.469,
+      "actual_end_seconds": 428.832
+    },
+    {
+      "index": 34,
+      "phase": 0,
+      "intended_start_seconds": 428.0,
+      "text_preview": "This one line is the seed of the Bellman equation. We will substitute it directl",
+      "warnings": [
+        "shifted 0.91s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 9.28,
+      "actual_start_seconds": 428.912,
+      "actual_end_seconds": 438.192
+    },
+    {
+      "index": 35,
+      "phase": 0,
+      "intended_start_seconds": 439.0,
+      "text_preview": "Gamma close to one: the agent is patient \u2014 it weighs distant rewards almost as m",
+      "warnings": [],
+      "duration_seconds": 6.933,
+      "actual_start_seconds": 439.0,
+      "actual_end_seconds": 445.933
+    },
+    {
+      "index": 36,
+      "phase": 0,
+      "intended_start_seconds": 446.0,
+      "text_preview": "Gamma close to zero: the agent is impatient \u2014 only the immediate reward matters.",
+      "warnings": [
+        "shifted 0.01s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 5.739,
+      "actual_start_seconds": 446.013,
+      "actual_end_seconds": 451.752
+    },
+    {
+      "index": 37,
+      "phase": 0,
+      "intended_start_seconds": 452.0,
+      "text_preview": "For FrozenLake, a reasonable gamma is zero-point-nine-nine. A single reward of o",
+      "warnings": [],
+      "duration_seconds": 13.675,
+      "actual_start_seconds": 452.0,
+      "actual_end_seconds": 465.675
+    },
+    {
+      "index": 38,
+      "phase": 0,
+      "intended_start_seconds": 533.0,
+      "text_preview": "Segment three: the dynamics function p in full detail.",
+      "warnings": [],
+      "duration_seconds": 3.797,
+      "actual_start_seconds": 533.0,
+      "actual_end_seconds": 536.797
+    },
+    {
+      "index": 39,
+      "phase": 0,
+      "intended_start_seconds": 538.0,
+      "text_preview": "The Markov property told us the next state and reward depend only on the current",
+      "warnings": [],
+      "duration_seconds": 10.752,
+      "actual_start_seconds": 538.0,
+      "actual_end_seconds": 548.752
+    },
+    {
+      "index": 40,
+      "phase": 0,
+      "intended_start_seconds": 549.0,
+      "text_preview": "p of s-prime, r given s, a is defined as the probability that the next state equ",
+      "warnings": [],
+      "duration_seconds": 13.269,
+      "actual_start_seconds": 549.0,
+      "actual_end_seconds": 562.269
+    },
+    {
+      "index": 41,
+      "phase": 0,
+      "intended_start_seconds": 562.0,
+      "text_preview": "This is a four-argument function of the transition tuple: successor state, rewar",
+      "warnings": [
+        "shifted 0.35s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 7.36,
+      "actual_start_seconds": 562.349,
+      "actual_end_seconds": 569.709
+    },
+    {
+      "index": 42,
+      "phase": 0,
+      "intended_start_seconds": 572.0,
+      "text_preview": "It is a valid probability distribution. For every fixed s and a, summing over al",
+      "warnings": [],
+      "duration_seconds": 10.133,
+      "actual_start_seconds": 572.0,
+      "actual_end_seconds": 582.133
+    },
+    {
+      "index": 43,
+      "phase": 0,
+      "intended_start_seconds": 582.0,
+      "text_preview": "This normalization is not optional \u2014 it is part of the definition.",
+      "warnings": [
+        "shifted 0.21s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 4.309,
+      "actual_start_seconds": 582.213,
+      "actual_end_seconds": 586.523
+    },
+    {
+      "index": 44,
+      "phase": 0,
+      "intended_start_seconds": 590.0,
+      "text_preview": "Let us read it from FrozenLake directly. Focus on state six \u2014 row one, column tw",
+      "warnings": [],
+      "duration_seconds": 8.0,
+      "actual_start_seconds": 590.0,
+      "actual_end_seconds": 598.0
+    },
+    {
+      "index": 45,
+      "phase": 0,
+      "intended_start_seconds": 599.0,
+      "text_preview": "The environment \u2014 not the agent \u2014 determines where the elf ends up. Because the ",
+      "warnings": [],
+      "duration_seconds": 11.115,
+      "actual_start_seconds": 599.0,
+      "actual_end_seconds": 610.115
+    },
+    {
+      "index": 46,
+      "phase": 0,
+      "intended_start_seconds": 612.0,
+      "text_preview": "The code on the left queries the transition table:",
+      "warnings": [],
+      "duration_seconds": 2.795,
+      "actual_start_seconds": 612.0,
+      "actual_end_seconds": 614.795
+    },
+    {
+      "index": 47,
+      "phase": 0,
+      "intended_start_seconds": 616.0,
+      "text_preview": "`env dot unwrapped dot P open-bracket six close-bracket open-bracket two close-b",
+      "warnings": [],
+      "duration_seconds": 6.123,
+      "actual_start_seconds": 616.0,
+      "actual_end_seconds": 622.123
+    },
+    {
+      "index": 48,
+      "phase": 0,
+      "intended_start_seconds": 623.0,
+      "text_preview": "This returns a list of four-tuples: probability, next-state, reward, done.",
+      "warnings": [],
+      "duration_seconds": 4.843,
+      "actual_start_seconds": 623.0,
+      "actual_end_seconds": 627.843
+    },
+    {
+      "index": 49,
+      "phase": 0,
+      "intended_start_seconds": 631.0,
+      "text_preview": "Three tuples come back \u2014 not one. The slippery model distributes probability acr",
+      "warnings": [],
+      "duration_seconds": 6.997,
+      "actual_start_seconds": 631.0,
+      "actual_end_seconds": 637.997
+    },
+    {
+      "index": 50,
+      "phase": 0,
+      "intended_start_seconds": 639.0,
+      "text_preview": "One-third probability to state seven \u2014 that is the intended rightward step. Stat",
+      "warnings": [],
+      "duration_seconds": 8.619,
+      "actual_start_seconds": 639.0,
+      "actual_end_seconds": 647.619
+    },
+    {
+      "index": 51,
+      "phase": 0,
+      "intended_start_seconds": 649.0,
+      "text_preview": "One-third probability to state two \u2014 the grid cell directly above, where the per",
+      "warnings": [],
+      "duration_seconds": 7.061,
+      "actual_start_seconds": 649.0,
+      "actual_end_seconds": 656.061
+    },
+    {
+      "index": 52,
+      "phase": 0,
+      "intended_start_seconds": 656.0,
+      "text_preview": "One-third probability to state ten \u2014 the grid cell directly below, where the per",
+      "warnings": [
+        "shifted 0.14s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 7.403,
+      "actual_start_seconds": 656.141,
+      "actual_end_seconds": 663.544
+    },
+    {
+      "index": 53,
+      "phase": 0,
+      "intended_start_seconds": 664.0,
+      "text_preview": "All three rewards are zero. The goal at state fifteen is not reachable from stat",
+      "warnings": [],
+      "duration_seconds": 7.424,
+      "actual_start_seconds": 664.0,
+      "actual_end_seconds": 671.424
+    },
+    {
+      "index": 54,
+      "phase": 0,
+      "intended_start_seconds": 673.0,
+      "text_preview": "The ActionBarChart on the right makes this concrete: three equal bars, each exac",
+      "warnings": [],
+      "duration_seconds": 9.92,
+      "actual_start_seconds": 673.0,
+      "actual_end_seconds": 682.92
+    },
+    {
+      "index": 55,
+      "phase": 0,
+      "intended_start_seconds": 684.0,
+      "text_preview": "The sum of the three bars is one. The normalization condition is satisfied for t",
+      "warnings": [],
+      "duration_seconds": 9.856,
+      "actual_start_seconds": 684.0,
+      "actual_end_seconds": 693.856
+    },
+    {
+      "index": 56,
+      "phase": 0,
+      "intended_start_seconds": 695.0,
+      "text_preview": "Notice what p is not: p is not the agent's choice. The agent chose action RIGHT.",
+      "warnings": [],
+      "duration_seconds": 15.723,
+      "actual_start_seconds": 695.0,
+      "actual_end_seconds": 710.723
+    },
+    {
+      "index": 57,
+      "phase": 0,
+      "intended_start_seconds": 710.0,
+      "text_preview": "That distinction \u2014 environment dynamics versus agent policy \u2014 is the conceptual ",
+      "warnings": [
+        "shifted 0.80s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 8.768,
+      "actual_start_seconds": 710.803,
+      "actual_end_seconds": 719.571
+    },
+    {
+      "index": 58,
+      "phase": 0,
+      "intended_start_seconds": 720.0,
+      "text_preview": "Two optional derived forms: the state-transition marginal p of s-prime given s a",
+      "warnings": [],
+      "duration_seconds": 25.237,
+      "actual_start_seconds": 720.0,
+      "actual_end_seconds": 745.237
+    },
+    {
+      "index": 59,
+      "phase": 0,
+      "intended_start_seconds": 803.0,
+      "text_preview": "Segment four: the agent's side of the boundary. Until now, we described the envi",
+      "warnings": [],
+      "duration_seconds": 10.688,
+      "actual_start_seconds": 803.0,
+      "actual_end_seconds": 813.688
+    },
+    {
+      "index": 60,
+      "phase": 0,
+      "intended_start_seconds": 815.0,
+      "text_preview": "The agent's decision rule is called a policy, written pi.",
+      "warnings": [],
+      "duration_seconds": 3.712,
+      "actual_start_seconds": 815.0,
+      "actual_end_seconds": 818.712
+    },
+    {
+      "index": 61,
+      "phase": 0,
+      "intended_start_seconds": 821.0,
+      "text_preview": "pi of a given s is the probability that the agent chooses action a when it obser",
+      "warnings": [],
+      "duration_seconds": 6.635,
+      "actual_start_seconds": 821.0,
+      "actual_end_seconds": 827.635
+    },
+    {
+      "index": 62,
+      "phase": 0,
+      "intended_start_seconds": 829.0,
+      "text_preview": "Like p, it is a probability distribution. But unlike p, this one belongs to the ",
+      "warnings": [],
+      "duration_seconds": 15.531,
+      "actual_start_seconds": 829.0,
+      "actual_end_seconds": 844.531
+    },
+    {
+      "index": 63,
+      "phase": 0,
+      "intended_start_seconds": 843.0,
+      "text_preview": "For every state, the agent's action probabilities form a valid simplex.",
+      "warnings": [
+        "shifted 1.61s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 4.928,
+      "actual_start_seconds": 844.611,
+      "actual_end_seconds": 849.539
+    },
+    {
+      "index": 64,
+      "phase": 0,
+      "intended_start_seconds": 851.0,
+      "text_preview": "On the left side of the screen: a deterministic policy. One arrow per cell \u2014 the",
+      "warnings": [],
+      "duration_seconds": 16.875,
+      "actual_start_seconds": 851.0,
+      "actual_end_seconds": 867.875
+    },
+    {
+      "index": 65,
+      "phase": 0,
+      "intended_start_seconds": 865.0,
+      "text_preview": "On the right side: a stochastic policy. For every state, the agent assigns a pos",
+      "warnings": [
+        "shifted 2.95s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 16.448,
+      "actual_start_seconds": 867.955,
+      "actual_end_seconds": 884.403
+    },
+    {
+      "index": 66,
+      "phase": 0,
+      "intended_start_seconds": 882.0,
+      "text_preview": "Read the uniform-random policy aloud: at state six, pi of LEFT given six is zero",
+      "warnings": [
+        "shifted 2.48s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 19.115,
+      "actual_start_seconds": 884.483,
+      "actual_end_seconds": 903.597
+    },
+    {
+      "index": 67,
+      "phase": 0,
+      "intended_start_seconds": 898.0,
+      "text_preview": "Critical distinction \u2014 say it explicitly:",
+      "warnings": [
+        "shifted 5.68s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 2.731,
+      "actual_start_seconds": 903.677,
+      "actual_end_seconds": 906.408
+    },
+    {
+      "index": 68,
+      "phase": 0,
+      "intended_start_seconds": 902.0,
+      "text_preview": "p chooses which outcome occurs after the agent acts. The agent cannot control p.",
+      "warnings": [
+        "shifted 4.49s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 5.845,
+      "actual_start_seconds": 906.488,
+      "actual_end_seconds": 912.333
+    },
+    {
+      "index": 69,
+      "phase": 0,
+      "intended_start_seconds": 909.0,
+      "text_preview": "pi chooses which action the agent takes. The environment cannot control pi.",
+      "warnings": [
+        "shifted 3.41s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 5.333,
+      "actual_start_seconds": 912.413,
+      "actual_end_seconds": 917.747
+    },
+    {
+      "index": 70,
+      "phase": 0,
+      "intended_start_seconds": 916.0,
+      "text_preview": "They are separate objects \u2014 one owned by the environment, one owned by the agent",
+      "warnings": [
+        "shifted 1.83s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 5.163,
+      "actual_start_seconds": 917.827,
+      "actual_end_seconds": 922.989
+    },
+    {
+      "index": 71,
+      "phase": 0,
+      "intended_start_seconds": 925.0,
+      "text_preview": "The uniform-random policy shown here is not a strategic choice. It is deliberate",
+      "warnings": [],
+      "duration_seconds": 8.768,
+      "actual_start_seconds": 925.0,
+      "actual_end_seconds": 933.768
+    },
+    {
+      "index": 72,
+      "phase": 0,
+      "intended_start_seconds": 934.0,
+      "text_preview": "The next video \u2014 policy evaluation \u2014 evaluates exactly this uniform-random polic",
+      "warnings": [],
+      "duration_seconds": 15.723,
+      "actual_start_seconds": 934.0,
+      "actual_end_seconds": 949.723
+    },
+    {
+      "index": 73,
+      "phase": 0,
+      "intended_start_seconds": 948.0,
+      "text_preview": "Policies are evaluated, not just optimised.",
+      "warnings": [
+        "shifted 1.80s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 3.499,
+      "actual_start_seconds": 949.803,
+      "actual_end_seconds": 953.301
+    },
+    {
+      "index": 74,
+      "phase": 0,
+      "intended_start_seconds": 1013.0,
+      "text_preview": "Segment five: measuring the expected return under a policy. This is the value fu",
+      "warnings": [],
+      "duration_seconds": 6.187,
+      "actual_start_seconds": 1013.0,
+      "actual_end_seconds": 1019.187
+    },
+    {
+      "index": 75,
+      "phase": 0,
+      "intended_start_seconds": 1020.0,
+      "text_preview": "The state-value function v sub pi of s is the expected value of the return G sub",
+      "warnings": [],
+      "duration_seconds": 11.285,
+      "actual_start_seconds": 1020.0,
+      "actual_end_seconds": 1031.285
+    },
+    {
+      "index": 76,
+      "phase": 0,
+      "intended_start_seconds": 1032.0,
+      "text_preview": "Written as an expectation: v sub pi of s equals E sub pi of G sub t, given that ",
+      "warnings": [],
+      "duration_seconds": 8.427,
+      "actual_start_seconds": 1032.0,
+      "actual_end_seconds": 1040.427
+    },
+    {
+      "index": 77,
+      "phase": 0,
+      "intended_start_seconds": 1041.0,
+      "text_preview": "The subscript pi on the expectation means: we average over all trajectories gene",
+      "warnings": [],
+      "duration_seconds": 9.941,
+      "actual_start_seconds": 1041.0,
+      "actual_end_seconds": 1050.941
+    },
+    {
+      "index": 78,
+      "phase": 0,
+      "intended_start_seconds": 1053.0,
+      "text_preview": "The colour overlay on the grid is a value heatmap. Each cell's brightness encode",
+      "warnings": [],
+      "duration_seconds": 9.387,
+      "actual_start_seconds": 1053.0,
+      "actual_end_seconds": 1062.387
+    },
+    {
+      "index": 79,
+      "phase": 0,
+      "intended_start_seconds": 1063.0,
+      "text_preview": "Lighter cells have higher expected return. Darker cells have lower expected retu",
+      "warnings": [],
+      "duration_seconds": 13.269,
+      "actual_start_seconds": 1063.0,
+      "actual_end_seconds": 1076.269
+    },
+    {
+      "index": 80,
+      "phase": 0,
+      "intended_start_seconds": 1075.0,
+      "text_preview": "The five terminal cells \u2014 holes five, seven, eleven, twelve and goal fifteen \u2014 a",
+      "warnings": [
+        "shifted 1.35s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 17.899,
+      "actual_start_seconds": 1076.349,
+      "actual_end_seconds": 1094.248
+    },
+    {
+      "index": 81,
+      "phase": 0,
+      "intended_start_seconds": 1090.0,
+      "text_preview": "This is the second value function: the action-value function q sub pi of s, a \u2014 ",
+      "warnings": [
+        "shifted 4.33s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 13.547,
+      "actual_start_seconds": 1094.328,
+      "actual_end_seconds": 1107.875
+    },
+    {
+      "index": 82,
+      "phase": 0,
+      "intended_start_seconds": 1104.0,
+      "text_preview": "The bars on the right show q sub pi of six, a for each of the four actions at ou",
+      "warnings": [
+        "shifted 3.95s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 16.96,
+      "actual_start_seconds": 1107.955,
+      "actual_end_seconds": 1124.915
+    },
+    {
+      "index": 83,
+      "phase": 0,
+      "intended_start_seconds": 1120.0,
+      "text_preview": "The bridge between state-value and action-value is: v sub pi of s equals the sum",
+      "warnings": [
+        "shifted 4.99s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 11.093,
+      "actual_start_seconds": 1124.995,
+      "actual_end_seconds": 1136.088
+    },
+    {
+      "index": 84,
+      "phase": 0,
+      "intended_start_seconds": 1132.0,
+      "text_preview": "The state value is the policy-weighted average of the action values. This is the",
+      "warnings": [
+        "shifted 4.17s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 9.216,
+      "actual_start_seconds": 1136.168,
+      "actual_end_seconds": 1145.384
+    },
+    {
+      "index": 85,
+      "phase": 0,
+      "intended_start_seconds": 1144.0,
+      "text_preview": "One misconception to address explicitly: value functions do not require the opti",
+      "warnings": [
+        "shifted 1.46s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 26.325,
+      "actual_start_seconds": 1145.464,
+      "actual_end_seconds": 1171.789
+    },
+    {
+      "index": 86,
+      "phase": 0,
+      "intended_start_seconds": 1167.0,
+      "text_preview": "The next video evaluates this exact policy. If you believe value functions only ",
+      "warnings": [
+        "shifted 4.87s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 11.499,
+      "actual_start_seconds": 1171.869,
+      "actual_end_seconds": 1183.368
+    },
+    {
+      "index": 87,
+      "phase": 0,
+      "intended_start_seconds": 1263.0,
+      "text_preview": "Before we derive the Bellman equation, a brief reset.",
+      "warnings": [],
+      "duration_seconds": 3.499,
+      "actual_start_seconds": 1263.0,
+      "actual_end_seconds": 1266.499
+    },
+    {
+      "index": 88,
+      "phase": 0,
+      "intended_start_seconds": 1268.0,
+      "text_preview": "Five objects are in play. Each one on the card:",
+      "warnings": [],
+      "duration_seconds": 3.349,
+      "actual_start_seconds": 1268.0,
+      "actual_end_seconds": 1271.349
+    },
+    {
+      "index": 89,
+      "phase": 0,
+      "intended_start_seconds": 1273.0,
+      "text_preview": "pi chooses the agent's actions. It is the decision rule, owned by the agent.",
+      "warnings": [],
+      "duration_seconds": 5.291,
+      "actual_start_seconds": 1273.0,
+      "actual_end_seconds": 1278.291
+    },
+    {
+      "index": 90,
+      "phase": 0,
+      "intended_start_seconds": 1280.0,
+      "text_preview": "p chooses the environment's outcomes. It is the dynamics function, owned by the ",
+      "warnings": [],
+      "duration_seconds": 6.485,
+      "actual_start_seconds": 1280.0,
+      "actual_end_seconds": 1286.485
+    },
+    {
+      "index": 91,
+      "phase": 0,
+      "intended_start_seconds": 1288.0,
+      "text_preview": "r is the immediate scalar reward, received after each action.",
+      "warnings": [],
+      "duration_seconds": 4.437,
+      "actual_start_seconds": 1288.0,
+      "actual_end_seconds": 1292.437
+    },
+    {
+      "index": 92,
+      "phase": 0,
+      "intended_start_seconds": 1293.0,
+      "text_preview": "gamma discounts future rewards: each additional time step costs one factor of ga",
+      "warnings": [],
+      "duration_seconds": 5.632,
+      "actual_start_seconds": 1293.0,
+      "actual_end_seconds": 1298.632
+    },
+    {
+      "index": 93,
+      "phase": 0,
+      "intended_start_seconds": 1300.0,
+      "text_preview": "v sub pi is the expected discounted return starting from a state, following pi.",
+      "warnings": [],
+      "duration_seconds": 5.781,
+      "actual_start_seconds": 1300.0,
+      "actual_end_seconds": 1305.781
+    },
+    {
+      "index": 94,
+      "phase": 0,
+      "intended_start_seconds": 1308.0,
+      "text_preview": "These five objects are connected by an equation that every state must satisfy si",
+      "warnings": [],
+      "duration_seconds": 9.237,
+      "actual_start_seconds": 1308.0,
+      "actual_end_seconds": 1317.237
+    },
+    {
+      "index": 95,
+      "phase": 0,
+      "intended_start_seconds": 1343.0,
+      "text_preview": "Segment six: the Bellman expectation equation. We derive it \u2014 we do not state it",
+      "warnings": [],
+      "duration_seconds": 5.397,
+      "actual_start_seconds": 1343.0,
+      "actual_end_seconds": 1348.397
+    },
+    {
+      "index": 96,
+      "phase": 0,
+      "intended_start_seconds": 1351.0,
+      "text_preview": "Start from the recursion highlighted in segment two: G sub t equals R sub t-plus",
+      "warnings": [],
+      "duration_seconds": 9.301,
+      "actual_start_seconds": 1351.0,
+      "actual_end_seconds": 1360.301
+    },
+    {
+      "index": 97,
+      "phase": 0,
+      "intended_start_seconds": 1362.0,
+      "text_preview": "Substitute directly into the definition of v sub pi.",
+      "warnings": [],
+      "duration_seconds": 3.925,
+      "actual_start_seconds": 1362.0,
+      "actual_end_seconds": 1365.925
+    },
+    {
+      "index": 98,
+      "phase": 0,
+      "intended_start_seconds": 1367.0,
+      "text_preview": "v sub pi of s equals E sub pi of G sub t given S sub t equals s.",
+      "warnings": [],
+      "duration_seconds": 6.08,
+      "actual_start_seconds": 1367.0,
+      "actual_end_seconds": 1373.08
+    },
+    {
+      "index": 99,
+      "phase": 0,
+      "intended_start_seconds": 1375.0,
+      "text_preview": "Replace G sub t with R sub t-plus-one plus gamma G sub t-plus-one:",
+      "warnings": [],
+      "duration_seconds": 5.461,
+      "actual_start_seconds": 1375.0,
+      "actual_end_seconds": 1380.461
+    },
+    {
+      "index": 100,
+      "phase": 0,
+      "intended_start_seconds": 1382.0,
+      "text_preview": "v sub pi of s equals E sub pi of open-bracket R sub t-plus-one plus gamma G sub ",
+      "warnings": [],
+      "duration_seconds": 10.965,
+      "actual_start_seconds": 1382.0,
+      "actual_end_seconds": 1392.965
+    },
+    {
+      "index": 101,
+      "phase": 0,
+      "intended_start_seconds": 1395.0,
+      "text_preview": "Now expand the expectation by peeling apart the contributions of the policy and ",
+      "warnings": [],
+      "duration_seconds": 6.549,
+      "actual_start_seconds": 1395.0,
+      "actual_end_seconds": 1401.549
+    },
+    {
+      "index": 102,
+      "phase": 0,
+      "intended_start_seconds": 1402.0,
+      "text_preview": "The BackupDiagram on the right makes the structure visible. The root is state s ",
+      "warnings": [],
+      "duration_seconds": 6.443,
+      "actual_start_seconds": 1402.0,
+      "actual_end_seconds": 1408.443
+    },
+    {
+      "index": 103,
+      "phase": 0,
+      "intended_start_seconds": 1411.0,
+      "text_preview": "The first level of branching is the policy: from state s, the agent chooses acti",
+      "warnings": [],
+      "duration_seconds": 11.307,
+      "actual_start_seconds": 1411.0,
+      "actual_end_seconds": 1422.307
+    },
+    {
+      "index": 104,
+      "phase": 0,
+      "intended_start_seconds": 1424.0,
+      "text_preview": "The second level of branching is the dynamics: from state s after action a, the ",
+      "warnings": [],
+      "duration_seconds": 16.896,
+      "actual_start_seconds": 1424.0,
+      "actual_end_seconds": 1440.896
+    },
+    {
+      "index": 105,
+      "phase": 0,
+      "intended_start_seconds": 1439.0,
+      "text_preview": "At each leaf, the contribution is r plus gamma times v sub pi of s-prime. The im",
+      "warnings": [
+        "shifted 1.98s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 12.48,
+      "actual_start_seconds": 1440.976,
+      "actual_end_seconds": 1453.456
+    },
+    {
+      "index": 106,
+      "phase": 0,
+      "intended_start_seconds": 1452.0,
+      "text_preview": "This is the recursion: the value at s is expressed in terms of values at the suc",
+      "warnings": [
+        "shifted 1.54s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 6.443,
+      "actual_start_seconds": 1453.536,
+      "actual_end_seconds": 1459.979
+    },
+    {
+      "index": 107,
+      "phase": 0,
+      "intended_start_seconds": 1462.0,
+      "text_preview": "Summing over all actions weighted by the policy, and over all successors weighte",
+      "warnings": [],
+      "duration_seconds": 9.515,
+      "actual_start_seconds": 1462.0,
+      "actual_end_seconds": 1471.515
+    },
+    {
+      "index": 108,
+      "phase": 0,
+      "intended_start_seconds": 1473.0,
+      "text_preview": "v sub pi of s equals the sum over a of pi of a given s, times the sum over s-pri",
+      "warnings": [],
+      "duration_seconds": 16.619,
+      "actual_start_seconds": 1473.0,
+      "actual_end_seconds": 1489.619
+    },
+    {
+      "index": 109,
+      "phase": 0,
+      "intended_start_seconds": 1491.0,
+      "text_preview": "This is Sutton and Barto equation three-point-fourteen.",
+      "warnings": [],
+      "duration_seconds": 3.413,
+      "actual_start_seconds": 1491.0,
+      "actual_end_seconds": 1494.413
+    },
+    {
+      "index": 110,
+      "phase": 0,
+      "intended_start_seconds": 1500.0,
+      "text_preview": "Read each piece from the diagram:",
+      "warnings": [],
+      "duration_seconds": 2.155,
+      "actual_start_seconds": 1500.0,
+      "actual_end_seconds": 1502.155
+    },
+    {
+      "index": 111,
+      "phase": 0,
+      "intended_start_seconds": 1504.0,
+      "text_preview": "The outer sum over a: that is the policy branching \u2014 each action branch contribu",
+      "warnings": [],
+      "duration_seconds": 5.653,
+      "actual_start_seconds": 1504.0,
+      "actual_end_seconds": 1509.653
+    },
+    {
+      "index": 112,
+      "phase": 0,
+      "intended_start_seconds": 1511.0,
+      "text_preview": "The factor pi of a given s: the probability of each policy branch.",
+      "warnings": [],
+      "duration_seconds": 4.565,
+      "actual_start_seconds": 1511.0,
+      "actual_end_seconds": 1515.565
+    },
+    {
+      "index": 113,
+      "phase": 0,
+      "intended_start_seconds": 1517.0,
+      "text_preview": "The inner sum over s-prime and r: that is the dynamics branching \u2014 each leaf con",
+      "warnings": [],
+      "duration_seconds": 6.123,
+      "actual_start_seconds": 1517.0,
+      "actual_end_seconds": 1523.123
+    },
+    {
+      "index": 114,
+      "phase": 0,
+      "intended_start_seconds": 1524.0,
+      "text_preview": "The factor p of s-prime, r given s, a: the probability of each dynamics leaf.",
+      "warnings": [],
+      "duration_seconds": 5.909,
+      "actual_start_seconds": 1524.0,
+      "actual_end_seconds": 1529.909
+    },
+    {
+      "index": 115,
+      "phase": 0,
+      "intended_start_seconds": 1531.0,
+      "text_preview": "The bracket r plus gamma v sub pi of s-prime: the payoff at each leaf.",
+      "warnings": [],
+      "duration_seconds": 5.099,
+      "actual_start_seconds": 1531.0,
+      "actual_end_seconds": 1536.099
+    },
+    {
+      "index": 116,
+      "phase": 0,
+      "intended_start_seconds": 1541.0,
+      "text_preview": "This equation holds simultaneously at every state s in the state set. It is a co",
+      "warnings": [],
+      "duration_seconds": 16.939,
+      "actual_start_seconds": 1541.0,
+      "actual_end_seconds": 1557.939
+    },
+    {
+      "index": 117,
+      "phase": 0,
+      "intended_start_seconds": 1558.0,
+      "text_preview": "v sub pi is the unique function that satisfies this equation at every state. The",
+      "warnings": [
+        "shifted 0.02s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 10.091,
+      "actual_start_seconds": 1558.019,
+      "actual_end_seconds": 1568.109
+    },
+    {
+      "index": 118,
+      "phase": 0,
+      "intended_start_seconds": 1570.0,
+      "text_preview": "Two observations to cement this:",
+      "warnings": [],
+      "duration_seconds": 2.197,
+      "actual_start_seconds": 1570.0,
+      "actual_end_seconds": 1572.197
+    },
+    {
+      "index": 119,
+      "phase": 0,
+      "intended_start_seconds": 1574.0,
+      "text_preview": "First: the equation is not trivially satisfied. For an arbitrary function, the l",
+      "warnings": [],
+      "duration_seconds": 16.448,
+      "actual_start_seconds": 1574.0,
+      "actual_end_seconds": 1590.448
+    },
+    {
+      "index": 120,
+      "phase": 0,
+      "intended_start_seconds": 1588.0,
+      "text_preview": "Second: this derivation required both the policy and the dynamics. The Bellman e",
+      "warnings": [
+        "shifted 2.53s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 12.736,
+      "actual_start_seconds": 1590.528,
+      "actual_end_seconds": 1603.264
+    },
+    {
+      "index": 121,
+      "phase": 0,
+      "intended_start_seconds": 1623.0,
+      "text_preview": "The full Bellman expectation equation is on screen.",
+      "warnings": [],
+      "duration_seconds": 3.392,
+      "actual_start_seconds": 1623.0,
+      "actual_end_seconds": 1626.392
+    },
+    {
+      "index": 122,
+      "phase": 0,
+      "intended_start_seconds": 1628.0,
+      "text_preview": "Each term maps to an object introduced in this video: the state set, the action ",
+      "warnings": [],
+      "duration_seconds": 11.989,
+      "actual_start_seconds": 1628.0,
+      "actual_end_seconds": 1639.989
+    },
+    {
+      "index": 123,
+      "phase": 0,
+      "intended_start_seconds": 1640.0,
+      "text_preview": "The equation exists. It characterises the value function. It does not compute it",
+      "warnings": [
+        "shifted 0.07s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 5.547,
+      "actual_start_seconds": 1640.069,
+      "actual_end_seconds": 1645.616
+    },
+    {
+      "index": 124,
+      "phase": 0,
+      "intended_start_seconds": 1649.0,
+      "text_preview": "In the next video \u2014 dp_policy_eval \u2014 you will turn this equality into an assignm",
+      "warnings": [],
+      "duration_seconds": 13.397,
+      "actual_start_seconds": 1649.0,
+      "actual_end_seconds": 1662.397
+    },
+    {
+      "index": 125,
+      "phase": 0,
+      "intended_start_seconds": 1664.0,
+      "text_preview": "That iterative sweep is policy evaluation, and the Bellman equation you just der",
+      "warnings": [],
+      "duration_seconds": 8.64,
+      "actual_start_seconds": 1664.0,
+      "actual_end_seconds": 1672.64
+    },
+    {
+      "index": 126,
+      "phase": 0,
+      "intended_start_seconds": 1674.0,
+      "text_preview": "Takeaway: a finite MDP is the tuple of states, actions, and dynamics p. A policy",
+      "warnings": [
+        "clip extends 9.97s past video end (audio will determine final duration)"
+      ],
+      "duration_seconds": 25.365,
+      "actual_start_seconds": 1674.0,
+      "actual_end_seconds": 1699.365
+    }
+  ]
+}

@@ -1,0 +1,571 @@
+{
+  "lesson_id": "rl_intro",
+  "voice": "am_michael",
+  "speed": 1.0,
+  "silent_video_seconds": 168.4,
+  "narration_seconds": 218.163,
+  "narration_wav": "/Users/ultramarine/Desktop/grad_project/manim_service/_audio_cache/rl_intro/narration.wav",
+  "narrated_mp4": "media/videos/rl_intro_concept/480p15/RLIntroConcept_narrated.mp4",
+  "lines": [
+    {
+      "index": 0,
+      "phase": 1,
+      "intended_start_seconds": 2.0,
+      "text_preview": "A four-by-four FrozenLake grid appears \u2014 sixteen tiles of ice.",
+      "warnings": [],
+      "duration_seconds": 4.331,
+      "actual_start_seconds": 2.0,
+      "actual_end_seconds": 6.331
+    },
+    {
+      "index": 1,
+      "phase": 1,
+      "intended_start_seconds": 5.0,
+      "text_preview": "The bottom-right tile is the goal. Four dark holes wait between here and there.",
+      "warnings": [
+        "shifted 1.41s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 5.077,
+      "actual_start_seconds": 6.411,
+      "actual_end_seconds": 11.488
+    },
+    {
+      "index": 2,
+      "phase": 1,
+      "intended_start_seconds": 7.0,
+      "text_preview": "The elf starts at the top-left corner and steps right \u2014 then right again, then d",
+      "warnings": [
+        "shifted 4.57s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 5.376,
+      "actual_start_seconds": 11.568,
+      "actual_end_seconds": 16.944
+    },
+    {
+      "index": 3,
+      "phase": 1,
+      "intended_start_seconds": 11.0,
+      "text_preview": "The ice is slippery. The elf lands on a hole and vanishes.",
+      "warnings": [
+        "shifted 6.02s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 3.904,
+      "actual_start_seconds": 17.024,
+      "actual_end_seconds": 20.928
+    },
+    {
+      "index": 4,
+      "phase": 1,
+      "intended_start_seconds": 14.0,
+      "text_preview": "It returns to the start, having learned nothing yet \u2014 only that one path failed.",
+      "warnings": [
+        "shifted 7.01s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 4.736,
+      "actual_start_seconds": 21.008,
+      "actual_end_seconds": 25.744
+    },
+    {
+      "index": 5,
+      "phase": 1,
+      "intended_start_seconds": 17.0,
+      "text_preview": "A second attempt: the elf steps down three tiles in a row.",
+      "warnings": [
+        "shifted 8.82s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 3.925,
+      "actual_start_seconds": 25.824,
+      "actual_end_seconds": 29.749
+    },
+    {
+      "index": 6,
+      "phase": 1,
+      "intended_start_seconds": 20.0,
+      "text_preview": "A different hole. The same outcome.",
+      "warnings": [
+        "shifted 9.83s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 2.197,
+      "actual_start_seconds": 29.829,
+      "actual_end_seconds": 32.027
+    },
+    {
+      "index": 7,
+      "phase": 1,
+      "intended_start_seconds": 22.0,
+      "text_preview": "No one tells the elf which moves are safe \u2014 it can only observe what happens.",
+      "warnings": [
+        "shifted 10.11s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 5.056,
+      "actual_start_seconds": 32.107,
+      "actual_end_seconds": 37.163
+    },
+    {
+      "index": 8,
+      "phase": 1,
+      "intended_start_seconds": 24.0,
+      "text_preview": "On the third attempt, the elf finds a different path.",
+      "warnings": [
+        "shifted 13.24s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 3.093,
+      "actual_start_seconds": 37.243,
+      "actual_end_seconds": 40.336
+    },
+    {
+      "index": 9,
+      "phase": 1,
+      "intended_start_seconds": 27.0,
+      "text_preview": "It reaches the goal tile.",
+      "warnings": [
+        "shifted 13.42s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 1.835,
+      "actual_start_seconds": 40.416,
+      "actual_end_seconds": 42.251
+    },
+    {
+      "index": 10,
+      "phase": 1,
+      "intended_start_seconds": 30.0,
+      "text_preview": "A single number appears: plus one. That is the reward \u2014 the signal that this out",
+      "warnings": [
+        "shifted 12.33s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 6.059,
+      "actual_start_seconds": 42.331,
+      "actual_end_seconds": 48.389
+    },
+    {
+      "index": 11,
+      "phase": 1,
+      "intended_start_seconds": 34.0,
+      "text_preview": "This is the reinforcement learning problem: learn to act by interacting \u2014 no lab",
+      "warnings": [
+        "shifted 14.47s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 6.613,
+      "actual_start_seconds": 48.469,
+      "actual_end_seconds": 55.083
+    },
+    {
+      "index": 12,
+      "phase": 2,
+      "intended_start_seconds": 42.0,
+      "text_preview": "Three learning paradigms side by side.",
+      "warnings": [
+        "shifted 13.16s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 2.667,
+      "actual_start_seconds": 55.163,
+      "actual_end_seconds": 57.829
+    },
+    {
+      "index": 13,
+      "phase": 2,
+      "intended_start_seconds": 45.0,
+      "text_preview": "Supervised learning trains from labeled examples: an input paired with the corre",
+      "warnings": [
+        "shifted 12.91s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 5.824,
+      "actual_start_seconds": 57.909,
+      "actual_end_seconds": 63.733
+    },
+    {
+      "index": 14,
+      "phase": 2,
+      "intended_start_seconds": 50.0,
+      "text_preview": "Unsupervised learning finds hidden structure in data \u2014 no labels and no rewards.",
+      "warnings": [
+        "shifted 13.81s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 5.781,
+      "actual_start_seconds": 63.813,
+      "actual_end_seconds": 69.595
+    },
+    {
+      "index": 15,
+      "phase": 2,
+      "intended_start_seconds": 54.0,
+      "text_preview": "Reinforcement learning is different from both.",
+      "warnings": [
+        "shifted 15.67s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 2.837,
+      "actual_start_seconds": 69.675,
+      "actual_end_seconds": 72.512
+    },
+    {
+      "index": 16,
+      "phase": 2,
+      "intended_start_seconds": 56.0,
+      "text_preview": "The agent receives no labels. There is no supervisor. Only a reward signal.",
+      "warnings": [
+        "shifted 16.59s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 5.376,
+      "actual_start_seconds": 72.592,
+      "actual_end_seconds": 77.968
+    },
+    {
+      "index": 17,
+      "phase": 2,
+      "intended_start_seconds": 59.0,
+      "text_preview": "The agent must discover which actions are good \u2014 the supervisor does not exist.",
+      "warnings": [
+        "shifted 19.05s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 5.141,
+      "actual_start_seconds": 78.048,
+      "actual_end_seconds": 83.189
+    },
+    {
+      "index": 18,
+      "phase": 3,
+      "intended_start_seconds": 61.0,
+      "text_preview": "The Agent \u2014 the decision-maker in the loop.",
+      "warnings": [
+        "shifted 22.27s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 2.667,
+      "actual_start_seconds": 83.269,
+      "actual_end_seconds": 85.936
+    },
+    {
+      "index": 19,
+      "phase": 3,
+      "intended_start_seconds": 65.0,
+      "text_preview": "The Environment \u2014 everything outside the agent.",
+      "warnings": [
+        "shifted 21.02s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 2.965,
+      "actual_start_seconds": 86.016,
+      "actual_end_seconds": 88.981
+    },
+    {
+      "index": 20,
+      "phase": 3,
+      "intended_start_seconds": 68.0,
+      "text_preview": "The elf navigating FrozenLake is an agent. The grid itself is the environment.",
+      "warnings": [
+        "shifted 21.06s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 5.803,
+      "actual_start_seconds": 89.061,
+      "actual_end_seconds": 94.864
+    },
+    {
+      "index": 21,
+      "phase": 3,
+      "intended_start_seconds": 72.0,
+      "text_preview": "The agent chooses an Action \u2014 one direction to step on each time step.",
+      "warnings": [
+        "shifted 22.94s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 4.651,
+      "actual_start_seconds": 94.944,
+      "actual_end_seconds": 99.595
+    },
+    {
+      "index": 22,
+      "phase": 3,
+      "intended_start_seconds": 77.0,
+      "text_preview": "The environment sends back a State \u2014 what the agent perceives after acting.",
+      "warnings": [
+        "shifted 22.67s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 4.885,
+      "actual_start_seconds": 99.675,
+      "actual_end_seconds": 104.56
+    },
+    {
+      "index": 23,
+      "phase": 3,
+      "intended_start_seconds": 81.0,
+      "text_preview": "In FrozenLake, the elf sees exactly which tile it occupies. That is its state.",
+      "warnings": [
+        "shifted 23.64s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 5.461,
+      "actual_start_seconds": 104.64,
+      "actual_end_seconds": 110.101
+    },
+    {
+      "index": 24,
+      "phase": 3,
+      "intended_start_seconds": 84.0,
+      "text_preview": "The environment also sends a Reward \u2014 a single number signaling how well the las",
+      "warnings": [
+        "shifted 26.18s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 6.379,
+      "actual_start_seconds": 110.181,
+      "actual_end_seconds": 116.56
+    },
+    {
+      "index": 25,
+      "phase": 3,
+      "intended_start_seconds": 88.0,
+      "text_preview": "In FrozenLake that reward is one at the goal and zero everywhere else.",
+      "warnings": [
+        "shifted 28.64s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 4.651,
+      "actual_start_seconds": 116.64,
+      "actual_end_seconds": 121.291
+    },
+    {
+      "index": 26,
+      "phase": 3,
+      "intended_start_seconds": 91.0,
+      "text_preview": "The loop is now complete: Agent and Environment, connected by Action, State, and",
+      "warnings": [
+        "shifted 30.37s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 6.08,
+      "actual_start_seconds": 121.371,
+      "actual_end_seconds": 127.451
+    },
+    {
+      "index": 27,
+      "phase": 3,
+      "intended_start_seconds": 94.0,
+      "text_preview": "Not every environment reveals its full state \u2014 the elf is an unusually transpare",
+      "warnings": [
+        "shifted 33.53s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 6.165,
+      "actual_start_seconds": 127.531,
+      "actual_end_seconds": 133.696
+    },
+    {
+      "index": 28,
+      "phase": 4,
+      "intended_start_seconds": 97.0,
+      "text_preview": "At every time step: the agent observes the state.",
+      "warnings": [
+        "shifted 36.78s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 3.456,
+      "actual_start_seconds": 133.776,
+      "actual_end_seconds": 137.232
+    },
+    {
+      "index": 29,
+      "phase": 4,
+      "intended_start_seconds": 100.0,
+      "text_preview": "It chooses an action.",
+      "warnings": [
+        "shifted 37.31s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 1.728,
+      "actual_start_seconds": 137.312,
+      "actual_end_seconds": 139.04
+    },
+    {
+      "index": 30,
+      "phase": 4,
+      "intended_start_seconds": 102.0,
+      "text_preview": "The environment reacts and returns a new state and a reward.",
+      "warnings": [
+        "shifted 37.12s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 3.925,
+      "actual_start_seconds": 139.12,
+      "actual_end_seconds": 143.045
+    },
+    {
+      "index": 31,
+      "phase": 4,
+      "intended_start_seconds": 106.0,
+      "text_preview": "Then the agent observes again \u2014 and the cycle continues.",
+      "warnings": [
+        "shifted 37.13s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 3.627,
+      "actual_start_seconds": 143.125,
+      "actual_end_seconds": 146.752
+    },
+    {
+      "index": 32,
+      "phase": 4,
+      "intended_start_seconds": 110.0,
+      "text_preview": "This repeats on every time step, for the length of the entire episode.",
+      "warnings": [
+        "shifted 36.83s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 4.523,
+      "actual_start_seconds": 146.832,
+      "actual_end_seconds": 151.355
+    },
+    {
+      "index": 33,
+      "phase": 5,
+      "intended_start_seconds": 122.0,
+      "text_preview": "Two paths on the same grid \u2014 one successful, one not.",
+      "warnings": [
+        "shifted 29.43s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 3.477,
+      "actual_start_seconds": 151.435,
+      "actual_end_seconds": 154.912
+    },
+    {
+      "index": 34,
+      "phase": 5,
+      "intended_start_seconds": 125.0,
+      "text_preview": "The green trail reaches the goal and collects a reward of one.",
+      "warnings": [
+        "shifted 29.99s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 4.011,
+      "actual_start_seconds": 154.992,
+      "actual_end_seconds": 159.003
+    },
+    {
+      "index": 35,
+      "phase": 5,
+      "intended_start_seconds": 128.0,
+      "text_preview": "The red trail ends at a hole \u2014 reward zero.",
+      "warnings": [
+        "shifted 31.08s later than intended to avoid overlap with previous clip"
+      ],
+      "duration_seconds": 3.008,
+      "actual_start_seconds": 159.083,
+      "actual_end_seconds": 162.091
+    },
+    {
+      "index": 36,
+      "phase": 5,
+      "intended_start_seconds": 131.0,
+      "text_preview": "The agent's goal is to accumulate reward across the whole episode \u2014 not just sur",
+      "warnings": [
+        "shifted 31.17s later than intended to avoid overlap with previous clip",
+        "clip extends 0.32s past video end (audio will determine final duration)"
+      ],
+      "duration_seconds": 6.549,
+      "actual_start_seconds": 162.171,
+      "actual_end_seconds": 168.72
+    },
+    {
+      "index": 37,
+      "phase": 5,
+      "intended_start_seconds": 135.0,
+      "text_preview": "Rewards can be positive, zero, or negative \u2014 the exact values depend on the envi",
+      "warnings": [
+        "shifted 33.80s later than intended to avoid overlap with previous clip",
+        "clip extends 5.63s past video end (audio will determine final duration)"
+      ],
+      "duration_seconds": 6.549,
+      "actual_start_seconds": 168.8,
+      "actual_end_seconds": 175.349
+    },
+    {
+      "index": 38,
+      "phase": 6,
+      "intended_start_seconds": 139.0,
+      "text_preview": "The first distinguishing feature of reinforcement learning: Trial-and-Error Sear",
+      "warnings": [
+        "shifted 36.43s later than intended to avoid overlap with previous clip",
+        "clip extends 4.05s past video end (audio will determine final duration)"
+      ],
+      "duration_seconds": 4.971,
+      "actual_start_seconds": 175.429,
+      "actual_end_seconds": 180.4
+    },
+    {
+      "index": 39,
+      "phase": 6,
+      "intended_start_seconds": 143.0,
+      "text_preview": "The agent must explore \u2014 no supervisor labels which action is correct.",
+      "warnings": [
+        "shifted 37.48s later than intended to avoid overlap with previous clip",
+        "clip extends 3.86s past video end (audio will determine final duration)"
+      ],
+      "duration_seconds": 4.779,
+      "actual_start_seconds": 180.48,
+      "actual_end_seconds": 185.259
+    },
+    {
+      "index": 40,
+      "phase": 6,
+      "intended_start_seconds": 147.0,
+      "text_preview": "The second distinguishing feature: Delayed Reward.",
+      "warnings": [
+        "shifted 38.34s later than intended to avoid overlap with previous clip",
+        "clip extends 2.17s past video end (audio will determine final duration)"
+      ],
+      "duration_seconds": 3.093,
+      "actual_start_seconds": 185.339,
+      "actual_end_seconds": 188.432
+    },
+    {
+      "index": 41,
+      "phase": 6,
+      "intended_start_seconds": 151.0,
+      "text_preview": "An action now may affect rewards many steps later.",
+      "warnings": [
+        "shifted 37.51s later than intended to avoid overlap with previous clip",
+        "clip extends 2.39s past video end (audio will determine final duration)"
+      ],
+      "duration_seconds": 3.307,
+      "actual_start_seconds": 188.512,
+      "actual_end_seconds": 191.819
+    },
+    {
+      "index": 42,
+      "phase": 6,
+      "intended_start_seconds": 154.0,
+      "text_preview": "The agent also faces a tension \u2014 try known good actions, or explore new ones. We",
+      "warnings": [
+        "shifted 37.90s later than intended to avoid overlap with previous clip",
+        "clip extends 6.25s past video end (audio will determine final duration)"
+      ],
+      "duration_seconds": 7.168,
+      "actual_start_seconds": 191.899,
+      "actual_end_seconds": 199.067
+    },
+    {
+      "index": 43,
+      "phase": 7,
+      "intended_start_seconds": 158.0,
+      "text_preview": "Reinforcement learning is the science of learning to act by trial and error \u2014 no",
+      "warnings": [
+        "shifted 41.15s later than intended to avoid overlap with previous clip",
+        "clip extends 6.27s past video end (audio will determine final duration)"
+      ],
+      "duration_seconds": 7.189,
+      "actual_start_seconds": 199.147,
+      "actual_end_seconds": 206.336
+    },
+    {
+      "index": 44,
+      "phase": 7,
+      "intended_start_seconds": 163.0,
+      "text_preview": "The Agent, the Environment, the loop \u2014 that is reinforcement learning.",
+      "warnings": [
+        "shifted 43.42s later than intended to avoid overlap with previous clip",
+        "clip extends 3.22s past video end (audio will determine final duration)"
+      ],
+      "duration_seconds": 4.139,
+      "actual_start_seconds": 206.416,
+      "actual_end_seconds": 210.555
+    },
+    {
+      "index": 45,
+      "phase": 7,
+      "intended_start_seconds": 166.0,
+      "text_preview": "In the next video, we give this loop a precise mathematical home: the Markov Dec",
+      "warnings": [
+        "shifted 44.63s later than intended to avoid overlap with previous clip",
+        "clip extends 5.61s past video end (audio will determine final duration)"
+      ],
+      "duration_seconds": 6.528,
+      "actual_start_seconds": 210.635,
+      "actual_end_seconds": 217.163
+    }
+  ]
+}

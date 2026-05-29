@@ -1,0 +1,509 @@
+WEBVTT
+
+1
+00:00:03.000 --> 00:00:09.144
+A four-by-four grid of frozen ice appears — sixteen tiles, numbered zero through
+
+2
+00:00:10.000 --> 00:00:16.336
+Row zero is at the top: states zero, one, two, three. Each subsequent row adds f
+
+3
+00:00:18.000 --> 00:00:28.005
+Five tiles are different from the rest. Dark holes mark states five, seven, elev
+
+4
+00:00:28.085 --> 00:00:33.760
+These five tiles are terminal — once the agent lands on any of them, the episode
+
+5
+00:00:35.000 --> 00:00:47.181
+The remaining eleven tiles are frozen surface. The agent can take four actions f
+
+6
+00:00:47.261 --> 00:00:55.325
+Every idea in this video lives on this grid. It will stay on screen throughout, 
+
+7
+00:00:56.000 --> 00:01:01.184
+The first idea: why does this grid constitute a Markov Decision Process?
+
+8
+00:01:02.000 --> 00:01:19.408
+An MDP is a formal description of an agent interacting with an environment. It i
+
+9
+00:01:19.488 --> 00:01:27.531
+The state set here is all sixteen cell indices. The action set at every non-term
+
+10
+00:01:27.611 --> 00:01:43.525
+The defining mathematical property of an MDP is the Markov property. It states t
+
+11
+00:01:43.605 --> 00:02:01.077
+Written precisely: the probability that S sub t-plus-one equals s-prime and R su
+
+12
+00:02:01.157 --> 00:02:10.672
+The past is compressed into the present state. The elf's tile index is sufficien
+
+13
+00:02:10.752 --> 00:02:28.971
+The environment's response rule — the function that computes that probability — 
+
+14
+00:02:29.051 --> 00:02:44.261
+Holes five, seven, eleven, and twelve, and the goal at fifteen, are highlighted 
+
+15
+00:02:44.341 --> 00:02:56.352
+That is the MDP framework: states, actions, the Markov property, and an unnamed 
+
+16
+00:02:56.432 --> 00:03:08.293
+Before we move on: notice that this grid has been built once. It will not be reb
+
+17
+00:04:13.000 --> 00:04:18.760
+The RL agent's goal is to accumulate reward. But what, precisely, is reward?
+
+18
+00:04:19.000 --> 00:04:32.824
+At each time step, after the agent acts, the environment returns a single scalar
+
+19
+00:04:32.904 --> 00:04:47.645
+The reward hypothesis — stated in Sutton and Barto — is the foundational bet of 
+
+20
+00:04:47.725 --> 00:04:54.019
+Not just the next reward. The cumulative reward — summed over the entire episode
+
+21
+00:04:54.099 --> 00:04:57.768
+That cumulative sum is the return, written G sub t.
+
+22
+00:04:59.000 --> 00:05:12.419
+For a stream of future rewards, the return is: G sub t equals R sub t-plus-one, 
+
+23
+00:05:12.499 --> 00:05:22.376
+Written as a sum: G sub t equals the sum over k from zero to infinity of gamma t
+
+24
+00:05:23.000 --> 00:05:29.443
+The new object is gamma — the discount factor. Gamma lives in the closed interva
+
+25
+00:05:30.000 --> 00:05:50.971
+Watch what gamma does to a concrete reward stream. Suppose the agent receives ze
+
+26
+00:05:51.051 --> 00:05:59.904
+Zero-point-nine-nine squared is zero-point-nine-eight-zero-one. The return for t
+
+27
+00:05:59.984 --> 00:06:06.363
+Rewards in the far future contribute, but they are scaled down by gamma for ever
+
+28
+00:06:06.443 --> 00:06:08.704
+Two boundary conditions to remember.
+
+29
+00:06:10.000 --> 00:06:19.685
+When gamma equals zero, the agent is myopic — G sub t collapses to just R sub t-
+
+30
+00:06:19.765 --> 00:06:34.421
+When gamma equals one, all future rewards count equally. This is valid only when
+
+31
+00:06:34.501 --> 00:06:46.619
+The episodic case — tasks with a terminal time T — is the one this video uses. T
+
+32
+00:06:46.699 --> 00:06:51.285
+Now the most important line of this entire video before segment six.
+
+33
+00:06:51.365 --> 00:07:00.389
+The return satisfies a recursive identity: G sub t equals R sub t-plus-one plus 
+
+34
+00:07:00.469 --> 00:07:08.832
+Read it aloud: the return starting now equals the immediate reward, plus gamma t
+
+35
+00:07:08.912 --> 00:07:18.192
+This one line is the seed of the Bellman equation. We will substitute it directl
+
+36
+00:07:19.000 --> 00:07:25.933
+Gamma close to one: the agent is patient — it weighs distant rewards almost as m
+
+37
+00:07:26.013 --> 00:07:31.752
+Gamma close to zero: the agent is impatient — only the immediate reward matters.
+
+38
+00:07:32.000 --> 00:07:45.675
+For FrozenLake, a reasonable gamma is zero-point-nine-nine. A single reward of o
+
+39
+00:08:53.000 --> 00:08:56.797
+Segment three: the dynamics function p in full detail.
+
+40
+00:08:58.000 --> 00:09:08.752
+The Markov property told us the next state and reward depend only on the current
+
+41
+00:09:09.000 --> 00:09:22.269
+p of s-prime, r given s, a is defined as the probability that the next state equ
+
+42
+00:09:22.349 --> 00:09:29.709
+This is a four-argument function of the transition tuple: successor state, rewar
+
+43
+00:09:32.000 --> 00:09:42.133
+It is a valid probability distribution. For every fixed s and a, summing over al
+
+44
+00:09:42.213 --> 00:09:46.523
+This normalization is not optional — it is part of the definition.
+
+45
+00:09:50.000 --> 00:09:58.000
+Let us read it from FrozenLake directly. Focus on state six — row one, column tw
+
+46
+00:09:59.000 --> 00:10:10.115
+The environment — not the agent — determines where the elf ends up. Because the 
+
+47
+00:10:12.000 --> 00:10:14.795
+The code on the left queries the transition table:
+
+48
+00:10:16.000 --> 00:10:22.123
+`env dot unwrapped dot P open-bracket six close-bracket open-bracket two close-b
+
+49
+00:10:23.000 --> 00:10:27.843
+This returns a list of four-tuples: probability, next-state, reward, done.
+
+50
+00:10:31.000 --> 00:10:37.997
+Three tuples come back — not one. The slippery model distributes probability acr
+
+51
+00:10:39.000 --> 00:10:47.619
+One-third probability to state seven — that is the intended rightward step. Stat
+
+52
+00:10:49.000 --> 00:10:56.061
+One-third probability to state two — the grid cell directly above, where the per
+
+53
+00:10:56.141 --> 00:11:03.544
+One-third probability to state ten — the grid cell directly below, where the per
+
+54
+00:11:04.000 --> 00:11:11.424
+All three rewards are zero. The goal at state fifteen is not reachable from stat
+
+55
+00:11:13.000 --> 00:11:22.920
+The ActionBarChart on the right makes this concrete: three equal bars, each exac
+
+56
+00:11:24.000 --> 00:11:33.856
+The sum of the three bars is one. The normalization condition is satisfied for t
+
+57
+00:11:35.000 --> 00:11:50.723
+Notice what p is not: p is not the agent's choice. The agent chose action RIGHT.
+
+58
+00:11:50.803 --> 00:11:59.571
+That distinction — environment dynamics versus agent policy — is the conceptual 
+
+59
+00:12:00.000 --> 00:12:25.237
+Two optional derived forms: the state-transition marginal p of s-prime given s a
+
+60
+00:13:23.000 --> 00:13:33.688
+Segment four: the agent's side of the boundary. Until now, we described the envi
+
+61
+00:13:35.000 --> 00:13:38.712
+The agent's decision rule is called a policy, written pi.
+
+62
+00:13:41.000 --> 00:13:47.635
+pi of a given s is the probability that the agent chooses action a when it obser
+
+63
+00:13:49.000 --> 00:14:04.531
+Like p, it is a probability distribution. But unlike p, this one belongs to the 
+
+64
+00:14:04.611 --> 00:14:09.539
+For every state, the agent's action probabilities form a valid simplex.
+
+65
+00:14:11.000 --> 00:14:27.875
+On the left side of the screen: a deterministic policy. One arrow per cell — the
+
+66
+00:14:27.955 --> 00:14:44.403
+On the right side: a stochastic policy. For every state, the agent assigns a pos
+
+67
+00:14:44.483 --> 00:15:03.597
+Read the uniform-random policy aloud: at state six, pi of LEFT given six is zero
+
+68
+00:15:03.677 --> 00:15:06.408
+Critical distinction — say it explicitly:
+
+69
+00:15:06.488 --> 00:15:12.333
+p chooses which outcome occurs after the agent acts. The agent cannot control p.
+
+70
+00:15:12.413 --> 00:15:17.747
+pi chooses which action the agent takes. The environment cannot control pi.
+
+71
+00:15:17.827 --> 00:15:22.989
+They are separate objects — one owned by the environment, one owned by the agent
+
+72
+00:15:25.000 --> 00:15:33.768
+The uniform-random policy shown here is not a strategic choice. It is deliberate
+
+73
+00:15:34.000 --> 00:15:49.723
+The next video — policy evaluation — evaluates exactly this uniform-random polic
+
+74
+00:15:49.803 --> 00:15:53.301
+Policies are evaluated, not just optimised.
+
+75
+00:16:53.000 --> 00:16:59.187
+Segment five: measuring the expected return under a policy. This is the value fu
+
+76
+00:17:00.000 --> 00:17:11.285
+The state-value function v sub pi of s is the expected value of the return G sub
+
+77
+00:17:12.000 --> 00:17:20.427
+Written as an expectation: v sub pi of s equals E sub pi of G sub t, given that 
+
+78
+00:17:21.000 --> 00:17:30.941
+The subscript pi on the expectation means: we average over all trajectories gene
+
+79
+00:17:33.000 --> 00:17:42.387
+The colour overlay on the grid is a value heatmap. Each cell's brightness encode
+
+80
+00:17:43.000 --> 00:17:56.269
+Lighter cells have higher expected return. Darker cells have lower expected retu
+
+81
+00:17:56.349 --> 00:18:14.248
+The five terminal cells — holes five, seven, eleven, twelve and goal fifteen — a
+
+82
+00:18:14.328 --> 00:18:27.875
+This is the second value function: the action-value function q sub pi of s, a — 
+
+83
+00:18:27.955 --> 00:18:44.915
+The bars on the right show q sub pi of six, a for each of the four actions at ou
+
+84
+00:18:44.995 --> 00:18:56.088
+The bridge between state-value and action-value is: v sub pi of s equals the sum
+
+85
+00:18:56.168 --> 00:19:05.384
+The state value is the policy-weighted average of the action values. This is the
+
+86
+00:19:05.464 --> 00:19:31.789
+One misconception to address explicitly: value functions do not require the opti
+
+87
+00:19:31.869 --> 00:19:43.368
+The next video evaluates this exact policy. If you believe value functions only 
+
+88
+00:21:03.000 --> 00:21:06.499
+Before we derive the Bellman equation, a brief reset.
+
+89
+00:21:08.000 --> 00:21:11.349
+Five objects are in play. Each one on the card:
+
+90
+00:21:13.000 --> 00:21:18.291
+pi chooses the agent's actions. It is the decision rule, owned by the agent.
+
+91
+00:21:20.000 --> 00:21:26.485
+p chooses the environment's outcomes. It is the dynamics function, owned by the 
+
+92
+00:21:28.000 --> 00:21:32.437
+r is the immediate scalar reward, received after each action.
+
+93
+00:21:33.000 --> 00:21:38.632
+gamma discounts future rewards: each additional time step costs one factor of ga
+
+94
+00:21:40.000 --> 00:21:45.781
+v sub pi is the expected discounted return starting from a state, following pi.
+
+95
+00:21:48.000 --> 00:21:57.237
+These five objects are connected by an equation that every state must satisfy si
+
+96
+00:22:23.000 --> 00:22:28.397
+Segment six: the Bellman expectation equation. We derive it — we do not state it
+
+97
+00:22:31.000 --> 00:22:40.301
+Start from the recursion highlighted in segment two: G sub t equals R sub t-plus
+
+98
+00:22:42.000 --> 00:22:45.925
+Substitute directly into the definition of v sub pi.
+
+99
+00:22:47.000 --> 00:22:53.080
+v sub pi of s equals E sub pi of G sub t given S sub t equals s.
+
+100
+00:22:55.000 --> 00:23:00.461
+Replace G sub t with R sub t-plus-one plus gamma G sub t-plus-one:
+
+101
+00:23:02.000 --> 00:23:12.965
+v sub pi of s equals E sub pi of open-bracket R sub t-plus-one plus gamma G sub 
+
+102
+00:23:15.000 --> 00:23:21.549
+Now expand the expectation by peeling apart the contributions of the policy and 
+
+103
+00:23:22.000 --> 00:23:28.443
+The BackupDiagram on the right makes the structure visible. The root is state s 
+
+104
+00:23:31.000 --> 00:23:42.307
+The first level of branching is the policy: from state s, the agent chooses acti
+
+105
+00:23:44.000 --> 00:24:00.896
+The second level of branching is the dynamics: from state s after action a, the 
+
+106
+00:24:00.976 --> 00:24:13.456
+At each leaf, the contribution is r plus gamma times v sub pi of s-prime. The im
+
+107
+00:24:13.536 --> 00:24:19.979
+This is the recursion: the value at s is expressed in terms of values at the suc
+
+108
+00:24:22.000 --> 00:24:31.515
+Summing over all actions weighted by the policy, and over all successors weighte
+
+109
+00:24:33.000 --> 00:24:49.619
+v sub pi of s equals the sum over a of pi of a given s, times the sum over s-pri
+
+110
+00:24:51.000 --> 00:24:54.413
+This is Sutton and Barto equation three-point-fourteen.
+
+111
+00:25:00.000 --> 00:25:02.155
+Read each piece from the diagram:
+
+112
+00:25:04.000 --> 00:25:09.653
+The outer sum over a: that is the policy branching — each action branch contribu
+
+113
+00:25:11.000 --> 00:25:15.565
+The factor pi of a given s: the probability of each policy branch.
+
+114
+00:25:17.000 --> 00:25:23.123
+The inner sum over s-prime and r: that is the dynamics branching — each leaf con
+
+115
+00:25:24.000 --> 00:25:29.909
+The factor p of s-prime, r given s, a: the probability of each dynamics leaf.
+
+116
+00:25:31.000 --> 00:25:36.099
+The bracket r plus gamma v sub pi of s-prime: the payoff at each leaf.
+
+117
+00:25:41.000 --> 00:25:57.939
+This equation holds simultaneously at every state s in the state set. It is a co
+
+118
+00:25:58.019 --> 00:26:08.109
+v sub pi is the unique function that satisfies this equation at every state. The
+
+119
+00:26:10.000 --> 00:26:12.197
+Two observations to cement this:
+
+120
+00:26:14.000 --> 00:26:30.448
+First: the equation is not trivially satisfied. For an arbitrary function, the l
+
+121
+00:26:30.528 --> 00:26:43.264
+Second: this derivation required both the policy and the dynamics. The Bellman e
+
+122
+00:27:03.000 --> 00:27:06.392
+The full Bellman expectation equation is on screen.
+
+123
+00:27:08.000 --> 00:27:19.989
+Each term maps to an object introduced in this video: the state set, the action 
+
+124
+00:27:20.069 --> 00:27:25.616
+The equation exists. It characterises the value function. It does not compute it
+
+125
+00:27:29.000 --> 00:27:42.397
+In the next video — dp_policy_eval — you will turn this equality into an assignm
+
+126
+00:27:44.000 --> 00:27:52.640
+That iterative sweep is policy evaluation, and the Bellman equation you just der
+
+127
+00:27:54.000 --> 00:28:19.365
+Takeaway: a finite MDP is the tuple of states, actions, and dynamics p. A policy

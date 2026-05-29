@@ -1,0 +1,19 @@
+{
+  "lesson_id": "policies_values_bellman",
+  "series_position": "V-02",
+  "g1_rl_expert_plan": "carried-forward (plan approved prior run)",
+  "g2_tech_validator": "carried-forward (tv_canonical verified live Gymnasium)",
+  "g3_voice_bgm": "carried-forward (narration_script.md exists)",
+  "g4_transcript": "carried-forward (captions.srt/vtt, 0 gaps)",
+  "g5_qa": "pending-new-pipeline",
+  "g6_continuity": "pending-new-pipeline",
+  "g7_rl_expert_final": "pending-new-pipeline",
+  "g8_producer": "pending-new-pipeline",
+  "duration_seconds": 1289.933,
+  "narrated_mp4": "backend/media/concept_videos/policies_values_bellman_concept_narrated.mp4",
+  "approved_at": "2026-05-27",
+  "current_owner": "claude",
+  "updated_at": "2026-05-28T13:46:03+00:00",
+  "self_qa_phase0": "pending-new-pipeline",
+  "pipeline_run": "new-6-6-split-2026-05-28"
+}

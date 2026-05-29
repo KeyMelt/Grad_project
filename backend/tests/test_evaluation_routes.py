@@ -7,6 +7,7 @@ from backend.api_gateway.base import ServiceContainer, create_app
 from backend.auth.roles import AccountStatus, PlatformRole, Principal
 from backend.persistence import Database
 from backend.services.alei_export_service import ALEIExportService
+from backend.services.authored_lesson_service import AuthoredLessonService
 from backend.services.evaluation_session_service import EvaluationSessionService
 from backend.services.prediction_probe_service import PredictionProbeService
 from backend.services.study_session_survey_service import StudySessionSurveyService
@@ -55,6 +56,7 @@ def client():
         prediction_probe=PredictionProbeService(database=db),
         study_session_survey=StudySessionSurveyService(database=db),
         alei_export=ALEIExportService(database=db),
+        authored_lessons=AuthoredLessonService(database=db),
     )
     app = create_app(services=svc)
     return TestClient(app)
@@ -211,3 +213,54 @@ def test_export_alei_returns_xlsx_for_admin(client):
     assert response.headers["content-disposition"].startswith('attachment; filename="alei_components_')
     # Verify it's a valid xlsx (PK zip magic bytes)
     assert response.content[:2] == b"PK"
+
+
+def test_admin_can_persist_and_delete_authored_lesson(client):
+    lesson = {
+        "id": "draft_cloud_lesson",
+        "title": "Cloud Draft",
+        "category": "Studio Drafts",
+        "description": "A deployable authored lesson.",
+        "starter_code": "def lesson_function():\n    return None\n",
+        "backend_enabled": False,
+        "concept_video": {
+            "stream_path": "/media/concept-videos/draft.mp4",
+            "duration_label": "00:45",
+            "summary": "Draft video.",
+            "highlights": ["One key idea"],
+        },
+        "exercise": {
+            "title": "Draft exercise",
+            "overview": "Complete the draft.",
+            "tasks": ["Write the update."],
+            "success_criteria": ["The goal is clear."],
+            "code_tip": "Edit constants in code.",
+        },
+    }
+
+    save_response = client.put(
+        "/admin/lessons/authored/draft_cloud_lesson",
+        json={"lesson": lesson},
+        headers=_admin_headers(),
+    )
+    assert save_response.status_code == 200
+    assert save_response.json()["lesson"]["title"] == "Cloud Draft"
+
+    list_response = client.get(
+        "/admin/lessons/authored",
+        headers=_admin_headers(),
+    )
+    assert list_response.status_code == 200
+    assert list_response.json()["lessons"][0]["id"] == "draft_cloud_lesson"
+
+    delete_response = client.delete(
+        "/admin/lessons/authored/draft_cloud_lesson",
+        headers=_admin_headers(),
+    )
+    assert delete_response.status_code == 204
+
+    empty_response = client.get(
+        "/admin/lessons/authored",
+        headers=_admin_headers(),
+    )
+    assert empty_response.json()["lessons"] == []

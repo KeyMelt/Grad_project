@@ -1,0 +1,715 @@
+1
+00:00:00,000 --> 00:00:06,950
+Last time we built the language
+of reinforcement learning.
+
+2
+00:00:07,000 --> 00:00:14,950
+States, actions, rewards, and a transition rule
+the agent never controls.
+
+3
+00:00:15,000 --> 00:00:22,950
+From those four pieces we defined the return —
+the discounted sum of every reward still to come.
+
+4
+00:00:23,000 --> 00:00:29,950
+That return is the only thing
+the agent ever tries to maximize.
+
+5
+00:00:30,000 --> 00:00:35,950
+We also found that the return
+obeys a recursion.
+
+6
+00:00:36,000 --> 00:00:45,950
+The return at time t equals the next reward
+plus gamma times the return that follows.
+
+7
+00:00:46,000 --> 00:00:52,950
+One step now, the whole future
+folded into a single discounted term.
+
+8
+00:00:53,000 --> 00:00:59,950
+This recursion is the seed everything
+in today's video will grow from.
+
+9
+00:01:00,000 --> 00:01:07,950
+What we never had in V-01 was a way
+to describe how the agent chooses.
+
+10
+00:01:08,000 --> 00:01:17,950
+A policy, written pi of a given s,
+is a probability distribution over actions.
+
+11
+00:01:18,000 --> 00:01:24,450
+It is the probability that the agent
+picks action A-sub-t equals a,
+
+12
+00:01:24,500 --> 00:01:29,950
+when the state is S-sub-t equals s.
+
+13
+00:01:30,000 --> 00:01:39,950
+Notice what this is not — it is not a memorised
+solution, not a plan, not an answer.
+
+14
+00:01:40,000 --> 00:01:48,950
+A policy is simply a table of probabilities,
+one row per state.
+
+15
+00:01:49,000 --> 00:01:58,950
+Any such table is a valid policy.
+Whether it is a good one is a separate question.
+
+16
+00:01:59,000 --> 00:02:05,950
+Here are two policies
+for the same environment.
+
+17
+00:02:06,000 --> 00:02:14,950
+On the left, the agent always picks right —
+a deterministic policy.
+
+18
+00:02:15,000 --> 00:02:24,950
+On the right, the agent splits its choice
+equally across four actions — a stochastic policy.
+
+19
+00:02:25,000 --> 00:02:33,950
+Both are policies.
+Neither is more "real" than the other.
+
+20
+00:02:34,000 --> 00:02:39,950
+The deterministic case is just the stochastic case
+
+21
+00:02:40,000 --> 00:02:45,950
+where one probability is one
+and the rest are zero.
+
+22
+00:02:46,000 --> 00:02:52,950
+So policy is not a function
+from state to action —
+
+23
+00:02:53,000 --> 00:02:59,950
+it is a distribution that happens, sometimes,
+to put all its mass on one action.
+
+24
+00:03:00,000 --> 00:03:10,950
+Keep this picture in mind.
+Today's machinery treats every policy the same way.
+
+25
+00:03:11,000 --> 00:03:19,950
+The randomness we are about to integrate over
+lives in this table.
+
+26
+00:03:20,000 --> 00:03:27,950
+Every policy must satisfy
+one structural constraint.
+
+27
+00:03:28,000 --> 00:03:38,950
+For each state, the probabilities across actions
+must sum to one.
+
+28
+00:03:39,000 --> 00:03:47,950
+That is the only rule.
+No other shape is required of pi.
+
+29
+00:03:48,000 --> 00:03:53,950
+For the rest of this video
+we adopt the equiprobable policy —
+
+30
+00:03:54,000 --> 00:03:59,950
+one quarter, one quarter,
+one quarter, one quarter.
+
+31
+00:04:00,000 --> 00:04:11,950
+It is the simplest non-trivial policy we can study,
+and it makes the value computations transparent.
+
+32
+00:04:12,000 --> 00:04:21,950
+Every number you are about to see
+is measured under this single policy.
+
+33
+00:04:22,000 --> 00:04:29,950
+Change pi, and every number
+changes with it.
+
+34
+00:04:30,000 --> 00:04:35,950
+Now the question
+this entire video is built around.
+
+35
+00:04:36,000 --> 00:04:45,950
+How good is state s,
+if from here on we follow the policy pi?
+
+36
+00:04:46,000 --> 00:04:56,950
+We quantify that with the state-value function,
+v-sub-pi of s.
+
+37
+00:04:57,000 --> 00:05:03,450
+It is the expectation, under pi,
+of the return G-sub-t,
+
+38
+00:05:03,500 --> 00:05:09,950
+given that we are in state s.
+
+39
+00:05:10,000 --> 00:05:20,950
+Read it slowly: average future return,
+starting from s, behaving according to pi.
+
+40
+00:05:21,000 --> 00:05:29,950
+One number per state.
+A complete answer to "how good is here?"
+
+41
+00:05:30,000 --> 00:05:39,950
+Run that definition on every cell of FrozenLake
+and you get a grid of numbers.
+
+42
+00:05:40,000 --> 00:05:49,950
+The brighter the cell, the higher the expected
+return when the agent starts there.
+
+43
+00:05:50,000 --> 00:06:01,950
+Notice the bright corridor leading toward the goal —
+that is where the expected return concentrates.
+
+44
+00:06:02,000 --> 00:06:08,450
+The start state sits at 0.012 —
+not zero, but small.
+
+45
+00:06:08,500 --> 00:06:13,950
+The agent is far from the goal
+and the ice is slippery.
+
+46
+00:06:14,000 --> 00:06:20,450
+State 14, the cell adjacent to the goal,
+reaches 0.434 —
+
+47
+00:06:20,500 --> 00:06:26,950
+the highest non-terminal value on the board.
+
+48
+00:06:27,000 --> 00:06:33,450
+This grid is v-sub-pi.
+The rest of the video is one question:
+
+49
+00:06:33,500 --> 00:06:39,950
+where did these numbers come from?
+
+50
+00:06:40,000 --> 00:06:49,950
+Segment 5 will derive them from first principles.
+For now, just feel their shape.
+
+51
+00:06:50,000 --> 00:06:57,950
+Look at state 14 —
+the cell sitting one step from the goal.
+
+52
+00:06:58,000 --> 00:07:06,950
+FrozenLake gives the agent
+zero immediate reward for being there.
+
+53
+00:07:07,000 --> 00:07:16,950
+Zero. There is no bonus for proximity,
+no partial credit, no shaping signal.
+
+54
+00:07:17,000 --> 00:07:26,950
+And yet v-sub-pi at state 14 is 0.434 —
+the brightest non-terminal cell.
+
+55
+00:07:27,000 --> 00:07:35,950
+That gap — zero immediate reward,
+non-zero value — is the entire idea.
+
+56
+00:07:36,000 --> 00:07:39,950
+Value is not what you get now.
+Value is what you can expect later.
+
+57
+00:07:40,000 --> 00:07:45,950
+Now a fact that catches
+almost everyone the first time.
+
+58
+00:07:46,000 --> 00:07:54,950
+The goal state — the place we want to reach —
+has value zero.
+
+59
+00:07:55,000 --> 00:08:03,950
+Not infinity, not a hundred,
+not the largest number on the board. Zero.
+
+60
+00:08:04,000 --> 00:08:12,950
+The intuition "the goal should have the highest
+value" is wrong, and here is why.
+
+61
+00:08:13,000 --> 00:08:18,450
+Once the agent is at the goal,
+the episode is over.
+
+62
+00:08:18,500 --> 00:08:24,950
+There is no future return left to collect.
+
+63
+00:08:25,000 --> 00:08:29,950
+v-sub-pi of a terminal state is zero by definition —
+for the goal and every hole.
+
+64
+00:08:30,000 --> 00:08:36,950
+The state-value answers
+"how good is here?"
+
+65
+00:08:37,000 --> 00:08:47,950
+The action-value function, q-sub-pi of s and a,
+answers a slightly different question.
+
+66
+00:08:48,000 --> 00:08:54,450
+How good is it to commit
+to action a right now,
+
+67
+00:08:54,500 --> 00:08:59,950
+then follow pi from the next state onward?
+
+68
+00:09:00,000 --> 00:09:09,950
+One action of commitment, then back to the policy.
+That is the only difference.
+
+69
+00:09:10,000 --> 00:09:18,950
+At state 14, there are four action-values —
+one per action.
+
+70
+00:09:19,000 --> 00:09:25,450
+Going down gives the highest expected return —
+0.533 —
+
+71
+00:09:25,500 --> 00:09:30,950
+because the goal is south.
+
+72
+00:09:31,000 --> 00:09:37,450
+Going right is almost as good — 0.522 —
+
+73
+00:09:37,500 --> 00:09:41,950
+the slip can still carry the agent home.
+
+74
+00:09:42,000 --> 00:09:54,950
+Up and left are worse, but never zero.
+Even a bad action keeps some hope alive on slippery ice.
+
+75
+00:09:55,000 --> 00:09:58,950
+These four bars are not separate from v-sub-pi.
+They are its decomposition.
+
+76
+00:09:59,000 --> 00:10:09,950
+Under the equiprobable policy, v-sub-pi of s
+is the average of the four q-values at s.
+
+77
+00:10:10,000 --> 00:10:21,950
+At state 14, the four q-values average to 0.434 —
+exactly the heatmap cell.
+
+78
+00:10:22,000 --> 00:10:29,950
+In general, v-sub-pi is the policy-weighted sum
+of q-sub-pi over actions.
+
+79
+00:10:30,000 --> 00:10:38,950
+Look at what happens when the agent is at state 6,
+one step into its future.
+
+80
+00:10:39,000 --> 00:10:48,950
+First, pi picks an action —
+four possible branches, weighted by the policy.
+
+81
+00:10:49,000 --> 00:10:54,450
+Then, for each action,
+the environment picks a next state —
+
+82
+00:10:54,500 --> 00:10:59,950
+three more branches, weighted by p.
+
+83
+00:11:00,000 --> 00:11:08,950
+Two layers of randomness.
+Two distinct sums are about to appear in the equation.
+
+84
+00:11:09,000 --> 00:11:17,950
+We are going to derive the Bellman equation,
+one identity at a time.
+
+85
+00:11:18,000 --> 00:11:26,950
+We start from the definition
+you have already seen.
+
+86
+00:11:27,000 --> 00:11:33,450
+v-sub-pi of s is the expectation, under pi,
+
+87
+00:11:33,500 --> 00:11:39,950
+of the return given S-sub-t equals s.
+
+88
+00:11:40,000 --> 00:11:58,950
+Nothing new yet. Just the entry point.
+Watch what unfolds from here.
+
+89
+00:11:59,000 --> 00:12:05,950
+Recall the recursion from V-01.
+
+90
+00:12:06,000 --> 00:12:17,950
+G-sub-t equals R-sub-t-plus-1
+plus gamma times G-sub-t-plus-1.
+
+91
+00:12:18,000 --> 00:12:29,950
+Substitute that inside the expectation,
+and the return splits into two pieces.
+
+92
+00:12:30,000 --> 00:12:41,950
+The next reward, plus the discounted
+future return from the next state.
+
+93
+00:12:42,000 --> 00:12:48,450
+The expectation now ranges
+over both pieces,
+
+94
+00:12:48,500 --> 00:12:54,950
+because both depend on the policy
+and the environment.
+
+95
+00:12:55,000 --> 00:12:59,950
+We pull the randomness out, one source at a time.
+
+96
+00:13:00,000 --> 00:13:06,950
+First, pi —
+the agent's choice of action.
+
+97
+00:13:07,000 --> 00:13:13,450
+Replace expectation-under-pi
+with an outer sum over actions,
+
+98
+00:13:13,500 --> 00:13:19,950
+weighted by pi of a given s.
+
+99
+00:13:20,000 --> 00:13:31,950
+That is the policy contribution to the expectation,
+made explicit.
+
+100
+00:13:32,000 --> 00:13:38,950
+Notice on the diagram — the four action branches
+now glow in sync with the new sum.
+
+101
+00:13:39,000 --> 00:13:49,950
+Inside each action branch lies the second source
+of randomness — the environment.
+
+102
+00:13:50,000 --> 00:14:00,950
+Replace what remains with an inner sum
+over next-state and reward pairs.
+
+103
+00:14:01,000 --> 00:14:12,950
+Each pair is weighted by
+p of s-prime and r given s and a.
+
+104
+00:14:13,000 --> 00:14:24,950
+The outer sum is over actions.
+The inner sum is over transitions. They never collapse into one.
+
+105
+00:14:25,000 --> 00:14:28,950
+Two sums, two sources of randomness —
+exactly as the backup diagram promised.
+
+106
+00:14:29,000 --> 00:14:35,950
+One last move,
+and the recursion closes.
+
+107
+00:14:36,000 --> 00:14:48,950
+The expected return from the next state is,
+by definition, v-sub-pi of that next state.
+
+108
+00:14:49,000 --> 00:14:59,950
+Substitute, and v-sub-pi appears
+on both sides of the equation.
+
+109
+00:15:00,000 --> 00:15:10,950
+Outside the sum, evaluated at s.
+Inside the sum, evaluated at s-prime.
+
+110
+00:15:11,000 --> 00:15:18,950
+v-sub-pi is the fixed point of this relationship —
+the function that is consistent with itself under pi.
+
+111
+00:15:19,000 --> 00:15:29,950
+This is the Bellman expectation equation
+for v-sub-pi.
+
+112
+00:15:30,000 --> 00:15:36,450
+Outer sum over actions,
+weighted by the policy.
+
+113
+00:15:36,500 --> 00:15:42,950
+Inner sum over transitions,
+weighted by p.
+
+114
+00:15:43,000 --> 00:15:53,950
+It is the single most important relationship
+in everything that follows in this course.
+
+115
+00:15:54,000 --> 00:15:58,950
+Let it sit for a moment.
+
+116
+00:15:59,000 --> 00:16:06,950
+The Bellman equation is an equality,
+not an instruction.
+
+117
+00:16:07,000 --> 00:16:15,950
+The true v-sub-pi satisfies it
+at every state, simultaneously.
+
+118
+00:16:16,000 --> 00:16:26,950
+Take state 6. The heatmap reports
+v-sub-pi of 6 is approximately 0.039.
+
+119
+00:16:27,000 --> 00:16:38,950
+Now evaluate the right-hand side
+from the converged values — the same 0.039 falls out.
+
+120
+00:16:39,000 --> 00:16:49,950
+Left side and right side agree at machine precision.
+The identity holds.
+
+121
+00:16:50,000 --> 00:16:58,950
+The Bellman equation does not compute v-sub-pi.
+It checks that v-sub-pi is itself.
+
+122
+00:16:59,000 --> 00:17:06,950
+The equation can be read as math,
+or it can be read as code.
+
+123
+00:17:07,000 --> 00:17:17,950
+On the right is the exact same relationship,
+written in Python against the Gymnasium API.
+
+124
+00:17:18,000 --> 00:17:29,950
+One outer loop over actions.
+One inner loop over the transitions returned by env-dot-P.
+
+125
+00:17:30,000 --> 00:17:38,950
+Every symbol in the equation
+has a variable in the code waiting to receive it.
+
+126
+00:17:39,000 --> 00:17:46,950
+Watch how three views move together.
+
+127
+00:17:47,000 --> 00:17:57,950
+pi of state and action is pi of a given s —
+the policy weight for the outer sum.
+
+128
+00:17:58,000 --> 00:18:10,950
+prob is p of s-prime and r given s and a —
+the transition weight for the inner sum.
+
+129
+00:18:11,000 --> 00:18:22,950
+reward is r — the immediate reward
+returned by the environment on that transition.
+
+130
+00:18:23,000 --> 00:18:30,450
+And gamma times v-prev of next-state
+is gamma times v-sub-pi of s-prime —
+
+131
+00:18:30,500 --> 00:18:37,950
+the discounted value
+of where the agent lands.
+
+132
+00:18:38,000 --> 00:18:52,950
+Each line of Python is one term of the Bellman
+equation, applied to one cell of the grid.
+
+133
+00:18:53,000 --> 00:19:07,950
+The equation, the code, and the geometry
+are three views of a single object.
+
+134
+00:19:08,000 --> 00:19:28,950
+Trust the link. From here on, when we write code,
+we are writing the Bellman equation.
+
+135
+00:19:29,000 --> 00:19:37,950
+Run that code once,
+starting from a guess of all zeros.
+
+136
+00:19:38,000 --> 00:19:47,950
+The right-hand side at state 6
+evaluates to 0.000000.
+
+137
+00:19:48,000 --> 00:19:54,450
+One sweep is not enough —
+the heatmap takes many sweeps to emerge.
+
+138
+00:19:54,500 --> 00:19:58,950
+V-03 is where we iterate this loop
+until the numbers stop changing.
+
+139
+00:19:59,000 --> 00:20:07,950
+Back to the equation
+that organizes everything we have done.
+
+140
+00:20:08,000 --> 00:20:21,950
+Outer sum, policy. Inner sum, environment.
+Recursion, closure. Identity, not algorithm.
+
+141
+00:20:22,000 --> 00:20:28,950
+One picture to carry forward.
+
+142
+00:20:29,000 --> 00:20:39,950
+What if you do not know v-sub-pi?
+What if you only have a guess?
+
+143
+00:20:40,000 --> 00:20:50,950
+Turn the equality into an assignment.
+Sweep every state. Repeat until nothing changes.
+
+144
+00:20:51,000 --> 00:20:58,950
+That algorithm is the next video — policy evaluation.
+v-sub-pi is the fixed point it converges to.
+
+145
+00:20:59,000 --> 00:21:10,950
+A policy is a distribution over actions.
+A state-value function is the expected return under that policy.
+
+146
+00:21:11,000 --> 00:21:21,950
+The Bellman equation is the self-consistency
+the true state-value function must satisfy.
+
+147
+00:21:22,000 --> 00:21:29,433
+Next time we turn that consistency
+into a computation.

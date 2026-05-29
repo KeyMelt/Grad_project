@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/backend_api.dart';
+import '../../core/theme.dart';
 import '../../core/workbench_state.dart';
 import 'code_editor.dart';
 import 'exercise_brief_panel.dart';
@@ -81,6 +82,7 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
   late final TabController _tabController;
   int _activeTabIndex = 0;
   DateTime _focusStartedAt = DateTime.now();
+  bool _lessonNotesOpen = false;
 
   @override
   void initState() {
@@ -112,7 +114,9 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
       return;
     }
     _emitFocusSession();
-    _activeTabIndex = _tabController.index;
+    setState(() {
+      _activeTabIndex = _tabController.index;
+    });
     _focusStartedAt = DateTime.now();
   }
 
@@ -163,46 +167,62 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
       child: Column(
         children: [
           Expanded(
-            child: TabBarView(
-              controller: _tabController,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                VideoPlayerTab(
-                  lesson: lesson,
-                  onSessionEnded: widget.onConceptVideoSession,
-                ),
-                _CodeExercisePane(
-                  lesson: lesson,
-                  code: code,
-                  workspaceSessionId: workspaceSessionId,
-                  workspaceReady: workspaceReady,
-                  editorConnectionStatus: editorConnectionStatus,
-                  consoleConnectionStatus: consoleConnectionStatus,
-                  editorShellUrl: editorShellUrl,
-                  scriptVersion: scriptVersion,
-                  statusMessage: statusMessage,
-                  runStatusLabel: runStatusLabel,
-                  failureKind: failureKind,
-                  unresolvedBlanks: unresolvedBlanks,
-                  studentFeedback: studentFeedback,
-                  testResults: testResults,
-                  onSubmit: widget.onSubmit,
-                  onStop: widget.onStop,
-                  onReset: widget.onReset,
-                  onReconnectWorkspace: widget.onReconnectWorkspace,
-                  onRun: widget.onRun,
-                  showExerciseBrief: widget.showExerciseBriefInCodePane,
-                ),
-                TraceReplayPanel(
-                  runStatusLabel: runStatusLabel,
-                  statusMessage: statusMessage,
-                  totalReward: totalReward,
-                  averageReward: averageReward,
-                  bestEpisodeReward: bestEpisodeReward,
-                  episodesCompleted: episodesCompleted,
-                  stepsRecorded: stepsRecorded,
-                  videoPath: videoPath,
-                  testResults: testResults,
-                  stepTrace: stepTrace,
+                if (_activeTabIndex == 0)
+                  _LessonNotesDrawer(
+                    lesson: lesson,
+                    isOpen: _lessonNotesOpen,
+                    onToggle: () =>
+                        setState(() => _lessonNotesOpen = !_lessonNotesOpen),
+                    onOpen: () => setState(() => _lessonNotesOpen = true),
+                    onClose: () => setState(() => _lessonNotesOpen = false),
+                  ),
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      VideoPlayerTab(
+                        lesson: lesson,
+                        onSessionEnded: widget.onConceptVideoSession,
+                      ),
+                      _CodeExercisePane(
+                        lesson: lesson,
+                        code: code,
+                        workspaceSessionId: workspaceSessionId,
+                        workspaceReady: workspaceReady,
+                        editorConnectionStatus: editorConnectionStatus,
+                        consoleConnectionStatus: consoleConnectionStatus,
+                        editorShellUrl: editorShellUrl,
+                        scriptVersion: scriptVersion,
+                        statusMessage: statusMessage,
+                        runStatusLabel: runStatusLabel,
+                        failureKind: failureKind,
+                        unresolvedBlanks: unresolvedBlanks,
+                        studentFeedback: studentFeedback,
+                        testResults: testResults,
+                        onSubmit: widget.onSubmit,
+                        onStop: widget.onStop,
+                        onReset: widget.onReset,
+                        onReconnectWorkspace: widget.onReconnectWorkspace,
+                        onRun: widget.onRun,
+                        showExerciseBrief: widget.showExerciseBriefInCodePane,
+                      ),
+                      TraceReplayPanel(
+                        runStatusLabel: runStatusLabel,
+                        statusMessage: statusMessage,
+                        totalReward: totalReward,
+                        averageReward: averageReward,
+                        bestEpisodeReward: bestEpisodeReward,
+                        episodesCompleted: episodesCompleted,
+                        stepsRecorded: stepsRecorded,
+                        videoPath: videoPath,
+                        testResults: testResults,
+                        stepTrace: stepTrace,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -284,6 +304,44 @@ class _CodeExercisePane extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (showExerciseBrief) {
+          if (constraints.maxWidth >= 900) {
+            final briefWidth =
+                (constraints.maxWidth * 0.30).clamp(320.0, 420.0);
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  width: briefWidth,
+                  child: ExerciseBriefPanel(lesson: lesson),
+                ),
+                const SizedBox(width: 18),
+                Expanded(
+                  child: CodeEditorTab(
+                    lesson: lesson,
+                    code: code,
+                    workspaceSessionId: workspaceSessionId,
+                    workspaceReady: workspaceReady,
+                    editorConnectionStatus: editorConnectionStatus,
+                    consoleConnectionStatus: consoleConnectionStatus,
+                    editorShellUrl: editorShellUrl,
+                    statusMessage: statusMessage,
+                    runStatusLabel: runStatusLabel,
+                    scriptVersion: scriptVersion,
+                    failureKind: failureKind,
+                    unresolvedBlanks: unresolvedBlanks,
+                    studentFeedback: studentFeedback,
+                    testResults: testResults,
+                    onSubmit: onSubmit,
+                    onStop: onStop,
+                    onReset: onReset,
+                    onReconnect: onReconnectWorkspace,
+                    onRun: onRun,
+                  ),
+                ),
+              ],
+            );
+          }
+
           final briefHeight =
               (constraints.maxHeight * 0.30).clamp(220.0, 320.0);
           return Column(
@@ -342,6 +400,189 @@ class _CodeExercisePane extends StatelessWidget {
           onRun: onRun,
         );
       },
+    );
+  }
+}
+
+class _LessonNotesDrawer extends StatelessWidget {
+  final LessonDefinition lesson;
+  final bool isOpen;
+  final VoidCallback onToggle;
+  final VoidCallback onOpen;
+  final VoidCallback onClose;
+
+  const _LessonNotesDrawer({
+    required this.lesson,
+    required this.isOpen,
+    required this.onToggle,
+    required this.onOpen,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final panelWidth = (width * 0.28).clamp(300.0, 420.0);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeInOut,
+          width: isOpen ? panelWidth : 0,
+          child: OverflowBox(
+            minWidth: 0,
+            maxWidth: panelWidth,
+            alignment: Alignment.centerRight,
+            child: SizedBox(
+              width: panelWidth,
+              child: _LessonNotesPanel(lesson: lesson),
+            ),
+          ),
+        ),
+        Tooltip(
+          message: isOpen ? 'Close notes' : 'Open notes',
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onToggle,
+            onHorizontalDragUpdate: (details) {
+              if (details.primaryDelta != null && details.primaryDelta! > 16) {
+                onOpen();
+              } else if (details.primaryDelta != null &&
+                  details.primaryDelta! < -16) {
+                onClose();
+              }
+            },
+            child: Container(
+              width: 32,
+              decoration: BoxDecoration(
+                color: isOpen
+                    ? AppTheme.primaryBlue.withValues(alpha: 0.10)
+                    : AppTheme.primaryBlue,
+                borderRadius: const BorderRadius.only(
+                  topRight: Radius.circular(14),
+                  bottomRight: Radius.circular(14),
+                ),
+                border: Border.all(
+                  color:
+                      isOpen ? const Color(0xFFBFDBFE) : AppTheme.primaryBlue,
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    isOpen
+                        ? Icons.chevron_left_rounded
+                        : Icons.chevron_right_rounded,
+                    color: isOpen ? AppTheme.primaryBlue : Colors.white,
+                  ),
+                  if (!isOpen) ...[
+                    const SizedBox(height: 8),
+                    RotatedBox(
+                      quarterTurns: 1,
+                      child: Text(
+                        'Notes',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0,
+                            ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+      ],
+    );
+  }
+}
+
+class _LessonNotesPanel extends StatelessWidget {
+  final LessonDefinition lesson;
+
+  const _LessonNotesPanel({required this.lesson});
+
+  @override
+  Widget build(BuildContext context) {
+    final video = lesson.conceptVideo;
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceWhite,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.borderLight),
+      ),
+      padding: const EdgeInsets.all(18),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Lesson Notes',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            if (video.summary.isNotEmpty)
+              Text(
+                video.summary,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppTheme.textPrimary,
+                      height: 1.45,
+                    ),
+              ),
+            if (video.highlights.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              ...video.highlights.map(
+                (highlight) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6),
+                        child: Icon(
+                          Icons.circle,
+                          size: 7,
+                          color: AppTheme.primaryBlue,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          highlight,
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: AppTheme.textPrimary,
+                                    height: 1.4,
+                                  ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            if (video.takeawayLine.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text(
+                video.takeawayLine,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.w700,
+                      height: 1.4,
+                    ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

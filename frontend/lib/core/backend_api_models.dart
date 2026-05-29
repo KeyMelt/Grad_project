@@ -762,6 +762,16 @@ class LearningAnalyticsExport {
   });
 }
 
+class ALEIComponentsExport {
+  final String fileName;
+  final List<int> bytes;
+
+  const ALEIComponentsExport({
+    required this.fileName,
+    required this.bytes,
+  });
+}
+
 class LearningTelemetryEvent {
   final String lessonId;
   final String? conceptId;

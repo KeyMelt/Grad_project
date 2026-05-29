@@ -1,0 +1,136 @@
+{
+  "scene": "PoliciesValuesBellmanConcept",
+  "total_duration_seconds": 1290.0,
+  "phases": [
+    {
+      "phase": 1,
+      "name": "S1-P1_recap_thumbnail",
+      "start_seconds": 0.0
+    },
+    {
+      "phase": 2,
+      "name": "S1-P2_return_recursion",
+      "start_seconds": 30.0
+    },
+    {
+      "phase": 3,
+      "name": "S2-P3_policy_definition",
+      "start_seconds": 60.733
+    },
+    {
+      "phase": 4,
+      "name": "S2-P4_policy_contrast",
+      "start_seconds": 119.933
+    },
+    {
+      "phase": 5,
+      "name": "S2-P5_policy_normalization",
+      "start_seconds": 200.533
+    },
+    {
+      "phase": 6,
+      "name": "S3-P6_value_definition",
+      "start_seconds": 270.8
+    },
+    {
+      "phase": 7,
+      "name": "S3-P7_heatmap_reveal",
+      "start_seconds": 330.0
+    },
+    {
+      "phase": 8,
+      "name": "S3-P8_state14_value_not_reward",
+      "start_seconds": 410.533
+    },
+    {
+      "phase": 9,
+      "name": "S3-P9_goal_reward_value_split",
+      "start_seconds": 460.6
+    },
+    {
+      "phase": 10,
+      "name": "S4-P10_q_definition",
+      "start_seconds": 510.8
+    },
+    {
+      "phase": 11,
+      "name": "S4-P11_q_bars",
+      "start_seconds": 550.0
+    },
+    {
+      "phase": 12,
+      "name": "S4-P12_v_from_q",
+      "start_seconds": 599.933
+    },
+    {
+      "phase": 13,
+      "name": "S5-P13_backup_entry",
+      "start_seconds": 630.733
+    },
+    {
+      "phase": 14,
+      "name": "S5-P14_derivation_definition",
+      "start_seconds": 669.933
+    },
+    {
+      "phase": 15,
+      "name": "S5-P15_return_recursion_in_expectation",
+      "start_seconds": 719.933
+    },
+    {
+      "phase": 16,
+      "name": "S5-P16_outer_action_sum",
+      "start_seconds": 769.933
+    },
+    {
+      "phase": 17,
+      "name": "S5-P17_inner_transition_sum",
+      "start_seconds": 819.933
+    },
+    {
+      "phase": 18,
+      "name": "S5-P18_recursive_value_label",
+      "start_seconds": 869.933
+    },
+    {
+      "phase": 19,
+      "name": "S5-P19_boxed_bellman",
+      "start_seconds": 920.0
+    },
+    {
+      "phase": 20,
+      "name": "S6-P20_numeric_consistency",
+      "start_seconds": 959.933
+    },
+    {
+      "phase": 21,
+      "name": "S7-P21_code_entry",
+      "start_seconds": 1019.967
+    },
+    {
+      "phase": 22,
+      "name": "S7-P22_code_equation_heatmap_sync",
+      "start_seconds": 1059.933
+    },
+    {
+      "phase": 23,
+      "name": "S7-P23_zero_output_handoff",
+      "start_seconds": 1170.0
+    },
+    {
+      "phase": 24,
+      "name": "S8-P24_boxed_recentering",
+      "start_seconds": 1200.0
+    },
+    {
+      "phase": 25,
+      "name": "S8-P25_assignment_tease",
+      "start_seconds": 1230.0
+    },
+    {
+      "phase": 26,
+      "name": "S8-P26_takeaway",
+      "start_seconds": 1260.0
+    }
+  ]
+}

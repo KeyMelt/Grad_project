@@ -28,6 +28,7 @@ from backend.api_gateway.routes import (
 )
 from backend.persistence import Database
 from backend.services.alei_export_service import ALEIExportService
+from backend.services.authored_lesson_service import AuthoredLessonService
 from backend.services.auth_service import AuthService
 from backend.services.evaluation_session_service import EvaluationSessionService
 from backend.services.prediction_probe_service import PredictionProbeService
@@ -77,6 +78,7 @@ class ServiceContainer:
     prediction_probe: PredictionProbeService | None = None
     study_session_survey: StudySessionSurveyService | None = None
     alei_export: ALEIExportService | None = None
+    authored_lessons: AuthoredLessonService | None = None
 
 
 def _build_services() -> ServiceContainer:
@@ -118,6 +120,7 @@ def _build_services() -> ServiceContainer:
     prediction_probe_svc = PredictionProbeService(database=database)
     study_session_survey_svc = StudySessionSurveyService(database=database)
     alei_export_svc = ALEIExportService(database=database)
+    authored_lesson_svc = AuthoredLessonService(database=database)
     execution, workspace = _build_execution_services(
         settings,
         local_progress_service,
@@ -142,6 +145,7 @@ def _build_services() -> ServiceContainer:
         prediction_probe=prediction_probe_svc,
         study_session_survey=study_session_survey_svc,
         alei_export=alei_export_svc,
+        authored_lessons=authored_lesson_svc,
     )
 
 
