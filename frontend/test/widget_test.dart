@@ -12,6 +12,8 @@ class FakeBackendApi extends BackendApi {
   QuizPhase? _latestPhase;
   String _workspaceContent = 'print("workspace")\n';
   String? _token;
+  List<int>? submittedSusResponses;
+  int? submittedTlxMentalDemand;
 
   @override
   String? get accessToken => _token;
@@ -169,6 +171,29 @@ class FakeBackendApi extends BackendApi {
     return const SubmittedExecutionTask(
       taskId: 'task-123',
       status: ExecutionTaskStatus.queued,
+    );
+  }
+
+  @override
+  Future<StudySessionSurveyResult> submitStudySessionSurvey({
+    required String studySessionId,
+    required String condition,
+    required List<int> susResponses,
+    required int tlxMentalDemand,
+    required int tlxPhysicalDemand,
+    required int tlxTemporalDemand,
+    required int tlxPerformance,
+    required int tlxEffort,
+    required int tlxFrustration,
+    String? feedbackHelpful,
+    String? feedbackConfusing,
+    String? feedbackImprovement,
+  }) async {
+    submittedSusResponses = susResponses;
+    submittedTlxMentalDemand = tlxMentalDemand;
+    return const StudySessionSurveyResult(
+      susScore: 75,
+      tlxOverall: 40,
     );
   }
 
@@ -348,7 +373,8 @@ void main() {
     WidgetTester tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
-    final cubit = RLWorkbenchCubit(api: FakeBackendApi());
+    final api = FakeBackendApi();
+    final cubit = RLWorkbenchCubit(api: api);
 
     await tester.pumpWidget(
       RLSimulationIDE(
@@ -383,7 +409,8 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    final cubit = RLWorkbenchCubit(api: FakeBackendApi());
+    final api = FakeBackendApi();
+    final cubit = RLWorkbenchCubit(api: api);
 
     await tester.pumpWidget(
       RLSimulationIDE(
@@ -425,7 +452,8 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    final cubit = RLWorkbenchCubit(api: FakeBackendApi());
+    final api = FakeBackendApi();
+    final cubit = RLWorkbenchCubit(api: api);
 
     await tester.pumpWidget(
       RLSimulationIDE(
@@ -485,6 +513,15 @@ void main() {
 
     expect(find.text('1.000'), findsWidgets);
     expect(find.text('100.0%'), findsWidgets);
+    expect(find.text('Post-study workload survey'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Submit Survey'));
+    await tester.tap(find.text('Submit Survey'));
+    await tester.pumpAndSettle();
+
+    expect(api.submittedSusResponses, List<int>.filled(10, 3));
+    expect(api.submittedTlxMentalDemand, 50);
+    expect(find.textContaining('Survey recorded.'), findsOneWidget);
 
     await tester.tap(find.text('Home'));
     await tester.pumpAndSettle();

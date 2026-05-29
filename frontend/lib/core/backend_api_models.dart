@@ -772,6 +772,23 @@ class ALEIComponentsExport {
   });
 }
 
+class StudySessionSurveyResult {
+  final double susScore;
+  final double tlxOverall;
+
+  const StudySessionSurveyResult({
+    required this.susScore,
+    required this.tlxOverall,
+  });
+
+  factory StudySessionSurveyResult.fromJson(Map<String, dynamic> json) {
+    return StudySessionSurveyResult(
+      susScore: (json['sus_score'] as num? ?? 0).toDouble(),
+      tlxOverall: (json['tlx_overall'] as num? ?? 0).toDouble(),
+    );
+  }
+}
+
 class LearningTelemetryEvent {
   final String lessonId;
   final String? conceptId;

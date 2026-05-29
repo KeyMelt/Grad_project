@@ -141,6 +141,9 @@ def build_evaluation_router(services: Any) -> APIRouter:
                 feedback_confusing=request.feedback_confusing,
                 feedback_improvement=request.feedback_improvement,
             )
+            services.evaluation_session.mark_survey_complete(
+                request.study_session_id
+            )
         except ValueError as exc:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
