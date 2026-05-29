@@ -1,23 +1,7 @@
 from __future__ import annotations
 
-import pytest
-
-import backend.lesson_registry as _lr
 from backend.lesson_registry import get_lesson_definition
-from backend.persistence import Database
-from backend.services.lesson_registry_service import LessonRegistryService
 from backend.services.student_feedback_service import StudentFeedbackService
-
-
-@pytest.fixture(autouse=True)
-def _seed_registry(tmp_path):
-    """Initialise an in-memory lesson registry for the duration of each test."""
-    db = Database(database_url=f"sqlite:///{tmp_path / 'test.db'}")
-    db.create_schema()
-    registry = LessonRegistryService(database=db)
-    _lr.set_registry(registry)
-    yield
-    _lr.set_registry(None)  # type: ignore[arg-type]
 
 
 def test_feedback_service_uses_fallback_when_disabled():

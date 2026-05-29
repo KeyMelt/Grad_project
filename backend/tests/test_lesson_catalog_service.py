@@ -1,8 +1,12 @@
+import backend.lesson_registry as _lr
 from backend.services.lesson_catalog_service import LessonCatalogService
 
 
-def test_lesson_catalog_sections_include_frontend_fields():
-    sections = LessonCatalogService().list_lesson_sections()
+def test_lesson_catalog_sections_include_frontend_fields(_lesson_registry):
+    """Catalog service reads from the DB registry (seeded by conftest fixture)."""
+    registry = _lr._registry
+    assert registry is not None
+    sections = LessonCatalogService(registry=registry).list_lesson_sections()
 
     assert [section["title"] for section in sections] == [
         "Dynamic Programming",
