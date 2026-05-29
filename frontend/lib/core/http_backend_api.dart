@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'backend_api.dart';
+// ignore: unnecessary_import — explicit import required on Linux Dart (macOS resolves via export chain but Linux does not)
+import 'backend_api_models.dart';
 import 'constants.dart';
 import 'lesson_models.dart';
 
