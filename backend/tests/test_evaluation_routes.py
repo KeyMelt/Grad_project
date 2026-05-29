@@ -9,6 +9,7 @@ from backend.persistence import Database
 from backend.services.alei_export_service import ALEIExportService
 from backend.services.authored_lesson_service import AuthoredLessonService
 from backend.services.evaluation_session_service import EvaluationSessionService
+from backend.services.lesson_registry_service import LessonRegistryService
 from backend.services.prediction_probe_service import PredictionProbeService
 from backend.services.study_session_survey_service import StudySessionSurveyService
 
@@ -43,8 +44,14 @@ def _admin_headers() -> dict[str, str]:
 # ── Shared fixture ────────────────────────────────────────────────────────────
 
 @pytest.fixture()
-def client():
-    db = Database("sqlite://")
+def client(tmp_path):
+    db = Database(f"sqlite:///{tmp_path}/test.db")
+    db.create_schema()
+    registry = LessonRegistryService(database=db)
+
+    import backend.lesson_registry as _lr
+    _lr.set_registry(registry)
+
     svc = ServiceContainer(
         lesson_catalog=None,
         user_evaluation=None,
@@ -57,9 +64,11 @@ def client():
         study_session_survey=StudySessionSurveyService(database=db),
         alei_export=ALEIExportService(database=db),
         authored_lessons=AuthoredLessonService(database=db),
+        lesson_registry=registry,
     )
     app = create_app(services=svc)
-    return TestClient(app)
+    yield TestClient(app)
+    _lr.set_registry(None)  # type: ignore[arg-type]
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -239,7 +248,7 @@ def test_admin_can_persist_and_delete_authored_lesson(client):
     }
 
     save_response = client.put(
-        "/admin/lessons/authored/draft_cloud_lesson",
+        "/admin/lessons/draft_cloud_lesson",
         json={"lesson": lesson},
         headers=_admin_headers(),
     )
@@ -247,20 +256,19 @@ def test_admin_can_persist_and_delete_authored_lesson(client):
     assert save_response.json()["lesson"]["title"] == "Cloud Draft"
 
     list_response = client.get(
-        "/admin/lessons/authored",
+        "/admin/lessons",
         headers=_admin_headers(),
     )
     assert list_response.status_code == 200
-    assert list_response.json()["lessons"][0]["id"] == "draft_cloud_lesson"
+    lesson_ids = [l["id"] for l in list_response.json()["lessons"]]
+    assert "draft_cloud_lesson" in lesson_ids
 
     delete_response = client.delete(
-        "/admin/lessons/authored/draft_cloud_lesson",
+        "/admin/lessons/draft_cloud_lesson",
         headers=_admin_headers(),
     )
     assert delete_response.status_code == 204
 
-    empty_response = client.get(
-        "/admin/lessons/authored",
-        headers=_admin_headers(),
-    )
-    assert empty_response.json()["lessons"] == []
+    list_after = client.get("/admin/lessons", headers=_admin_headers())
+    lesson_ids_after = [l["id"] for l in list_after.json()["lessons"]]
+    assert "draft_cloud_lesson" not in lesson_ids_after

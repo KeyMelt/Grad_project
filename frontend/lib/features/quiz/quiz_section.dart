@@ -11,10 +11,25 @@ class QuizSection extends StatelessWidget {
   final Map<String, int> quizAnswers;
   final QuizAttemptSummary? lastQuizSummary;
   final bool isLoading;
+  final bool isPostStudySurveySubmitting;
+  final bool postStudySurveyCompleted;
+  final String postStudySurveyMessage;
   final String statusMessage;
   final ValueChanged<QuizPhase> onStartQuiz;
   final void Function(String questionId, int selectedIndex) onAnswerQuestion;
   final VoidCallback onSubmitQuiz;
+  final void Function({
+    required List<int> susResponses,
+    required int tlxMentalDemand,
+    required int tlxPhysicalDemand,
+    required int tlxTemporalDemand,
+    required int tlxPerformance,
+    required int tlxEffort,
+    required int tlxFrustration,
+    String? feedbackHelpful,
+    String? feedbackConfusing,
+    String? feedbackImprovement,
+  }) onSubmitPostStudySurvey;
 
   const QuizSection({
     super.key,
@@ -24,10 +39,14 @@ class QuizSection extends StatelessWidget {
     required this.quizAnswers,
     required this.lastQuizSummary,
     required this.isLoading,
+    required this.isPostStudySurveySubmitting,
+    required this.postStudySurveyCompleted,
+    required this.postStudySurveyMessage,
     required this.statusMessage,
     required this.onStartQuiz,
     required this.onAnswerQuestion,
     required this.onSubmitQuiz,
+    required this.onSubmitPostStudySurvey,
   });
 
   @override
@@ -51,6 +70,15 @@ class QuizSection extends StatelessWidget {
           if (lastQuizSummary != null) ...[
             const SizedBox(height: AppConstants.defaultPadding),
             _buildLatestResult(lastQuizSummary!),
+            if (lastQuizSummary!.phase == QuizPhase.posttest) ...[
+              const SizedBox(height: AppConstants.defaultPadding),
+              PostStudySurveyCard(
+                isSubmitting: isPostStudySurveySubmitting,
+                isComplete: postStudySurveyCompleted,
+                message: postStudySurveyMessage,
+                onSubmit: onSubmitPostStudySurvey,
+              ),
+            ],
           ],
         ],
       ),
@@ -249,6 +277,328 @@ class QuizSection extends StatelessWidget {
       return 'Pending';
     }
     return '${value.toStringAsFixed(1)}%';
+  }
+}
+
+class PostStudySurveyCard extends StatefulWidget {
+  final bool isSubmitting;
+  final bool isComplete;
+  final String message;
+  final void Function({
+    required List<int> susResponses,
+    required int tlxMentalDemand,
+    required int tlxPhysicalDemand,
+    required int tlxTemporalDemand,
+    required int tlxPerformance,
+    required int tlxEffort,
+    required int tlxFrustration,
+    String? feedbackHelpful,
+    String? feedbackConfusing,
+    String? feedbackImprovement,
+  }) onSubmit;
+
+  const PostStudySurveyCard({
+    super.key,
+    required this.isSubmitting,
+    required this.isComplete,
+    required this.message,
+    required this.onSubmit,
+  });
+
+  @override
+  State<PostStudySurveyCard> createState() => _PostStudySurveyCardState();
+}
+
+class _PostStudySurveyCardState extends State<PostStudySurveyCard> {
+  final List<int> _susResponses = List<int>.filled(10, 3);
+  final _helpfulController = TextEditingController();
+  final _confusingController = TextEditingController();
+  final _improvementController = TextEditingController();
+  int _mentalDemand = 50;
+  int _physicalDemand = 10;
+  int _temporalDemand = 40;
+  int _performance = 50;
+  int _effort = 50;
+  int _frustration = 30;
+
+  static const _susPrompts = [
+    'I would like to use this system frequently.',
+    'I found the system unnecessarily complex.',
+    'I thought the system was easy to use.',
+    'I would need support to use this system.',
+    'The functions in this system were well integrated.',
+    'There was too much inconsistency in this system.',
+    'Most people would learn to use this system quickly.',
+    'I found the system cumbersome to use.',
+    'I felt confident using this system.',
+    'I needed to learn a lot before I could get going.',
+  ];
+
+  @override
+  void dispose() {
+    _helpfulController.dispose();
+    _confusingController.dispose();
+    _improvementController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppConstants.cardRadius),
+        side: const BorderSide(color: AppTheme.borderLight),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.fact_check_outlined,
+                  color: AppTheme.primaryBlue,
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Post-study workload survey',
+                        style: TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      SizedBox(height: 6),
+                      Text(
+                        'Rate usability and workload for this study session.',
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          height: 1.45,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              widget.message,
+              style: TextStyle(
+                color: widget.isComplete
+                    ? AppTheme.successGreen
+                    : AppTheme.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (!widget.isComplete) ...[
+              const SizedBox(height: 18),
+              _buildSectionTitle('System usability'),
+              const SizedBox(height: 8),
+              ..._susPrompts.asMap().entries.map(
+                    (entry) => _buildSusQuestion(entry.key, entry.value),
+                  ),
+              const SizedBox(height: 18),
+              _buildSectionTitle('NASA-TLX workload'),
+              const SizedBox(height: 8),
+              _buildTlxSlider(
+                label: 'Mental demand',
+                value: _mentalDemand,
+                onChanged: (value) => setState(() => _mentalDemand = value),
+              ),
+              _buildTlxSlider(
+                label: 'Physical demand',
+                value: _physicalDemand,
+                onChanged: (value) => setState(() => _physicalDemand = value),
+              ),
+              _buildTlxSlider(
+                label: 'Temporal demand',
+                value: _temporalDemand,
+                onChanged: (value) => setState(() => _temporalDemand = value),
+              ),
+              _buildTlxSlider(
+                label: 'Performance',
+                value: _performance,
+                onChanged: (value) => setState(() => _performance = value),
+              ),
+              _buildTlxSlider(
+                label: 'Effort',
+                value: _effort,
+                onChanged: (value) => setState(() => _effort = value),
+              ),
+              _buildTlxSlider(
+                label: 'Frustration',
+                value: _frustration,
+                onChanged: (value) => setState(() => _frustration = value),
+              ),
+              const SizedBox(height: 18),
+              _buildSectionTitle('Optional feedback'),
+              const SizedBox(height: 8),
+              _buildFeedbackField(
+                controller: _helpfulController,
+                label: 'What helped most?',
+              ),
+              _buildFeedbackField(
+                controller: _confusingController,
+                label: 'What was confusing?',
+              ),
+              _buildFeedbackField(
+                controller: _improvementController,
+                label: 'What should improve?',
+              ),
+              const SizedBox(height: 18),
+              Align(
+                alignment: Alignment.centerRight,
+                child: ElevatedButton.icon(
+                  onPressed: widget.isSubmitting ? null : _submit,
+                  icon: widget.isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.send_outlined),
+                  label: Text(
+                    widget.isSubmitting ? 'Submitting...' : 'Submit Survey',
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        color: AppTheme.textPrimary,
+        fontSize: 18,
+        fontWeight: FontWeight.w700,
+      ),
+    );
+  }
+
+  Widget _buildSusQuestion(int index, String prompt) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '${index + 1}. $prompt',
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                height: 1.35,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          DropdownButton<int>(
+            value: _susResponses[index],
+            items: const [
+              DropdownMenuItem(value: 1, child: Text('1')),
+              DropdownMenuItem(value: 2, child: Text('2')),
+              DropdownMenuItem(value: 3, child: Text('3')),
+              DropdownMenuItem(value: 4, child: Text('4')),
+              DropdownMenuItem(value: 5, child: Text('5')),
+            ],
+            onChanged: widget.isSubmitting
+                ? null
+                : (value) {
+                    if (value != null) {
+                      setState(() => _susResponses[index] = value);
+                    }
+                  },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTlxSlider({
+    required String label,
+    required int value,
+    required ValueChanged<int> onChanged,
+  }) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 160,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Slider(
+            value: value.toDouble(),
+            min: 0,
+            max: 100,
+            divisions: 20,
+            label: '$value',
+            onChanged:
+                widget.isSubmitting ? null : (next) => onChanged(next.round()),
+          ),
+        ),
+        SizedBox(
+          width: 36,
+          child: Text(
+            '$value',
+            textAlign: TextAlign.right,
+            style: const TextStyle(color: AppTheme.textSecondary),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFeedbackField({
+    required TextEditingController controller,
+    required String label,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextField(
+        controller: controller,
+        minLines: 1,
+        maxLines: 2,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+    );
+  }
+
+  void _submit() {
+    widget.onSubmit(
+      susResponses: List<int>.unmodifiable(_susResponses),
+      tlxMentalDemand: _mentalDemand,
+      tlxPhysicalDemand: _physicalDemand,
+      tlxTemporalDemand: _temporalDemand,
+      tlxPerformance: _performance,
+      tlxEffort: _effort,
+      tlxFrustration: _frustration,
+      feedbackHelpful: _helpfulController.text,
+      feedbackConfusing: _confusingController.text,
+      feedbackImprovement: _improvementController.text,
+    );
   }
 }
 
@@ -480,23 +830,15 @@ class _QuizOptionTile extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: selected
-                  ? AppTheme.primaryBlue
-                  : AppTheme.borderLight,
+              color: selected ? AppTheme.primaryBlue : AppTheme.borderLight,
             ),
-            color: selected
-                ? const Color(0xFFE8F0FE)
-                : Colors.transparent,
+            color: selected ? const Color(0xFFE8F0FE) : Colors.transparent,
           ),
           child: Row(
             children: [
               Icon(
-                selected
-                    ? Icons.radio_button_checked
-                    : Icons.radio_button_off,
-                color: selected
-                    ? AppTheme.primaryBlue
-                    : AppTheme.textSecondary,
+                selected ? Icons.radio_button_checked : Icons.radio_button_off,
+                color: selected ? AppTheme.primaryBlue : AppTheme.textSecondary,
                 size: 20,
               ),
               const SizedBox(width: 10),

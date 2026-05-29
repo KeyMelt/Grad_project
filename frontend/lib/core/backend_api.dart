@@ -5,7 +5,6 @@ import 'lesson_models.dart';
 
 export 'backend_api_models.dart';
 export 'backend_connection_manager.dart';
-export 'http_backend_api.dart';
 
 abstract class BackendApi {
   Future<List<LessonSection>> fetchLessonSections();
