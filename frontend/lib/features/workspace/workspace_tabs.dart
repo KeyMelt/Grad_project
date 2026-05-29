@@ -5,6 +5,7 @@ import '../../core/theme.dart';
 import '../../core/workbench_state.dart';
 import 'code_editor.dart';
 import 'exercise_brief_panel.dart';
+import 'lesson_notes_panel.dart';
 import 'trace_replay_panel.dart';
 import 'video_player.dart';
 
@@ -437,7 +438,7 @@ class _LessonNotesDrawer extends StatelessWidget {
             alignment: Alignment.centerRight,
             child: SizedBox(
               width: panelWidth,
-              child: _LessonNotesPanel(lesson: lesson),
+              child: LessonNotesPanel(lesson: lesson),
             ),
           ),
         ),
@@ -499,90 +500,6 @@ class _LessonNotesDrawer extends StatelessWidget {
         ),
         const SizedBox(width: 10),
       ],
-    );
-  }
-}
-
-class _LessonNotesPanel extends StatelessWidget {
-  final LessonDefinition lesson;
-
-  const _LessonNotesPanel({required this.lesson});
-
-  @override
-  Widget build(BuildContext context) {
-    final video = lesson.conceptVideo;
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppTheme.borderLight),
-      ),
-      padding: const EdgeInsets.all(18),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Lesson Notes',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-            const SizedBox(height: 12),
-            if (video.summary.isNotEmpty)
-              Text(
-                video.summary,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.textPrimary,
-                      height: 1.45,
-                    ),
-              ),
-            if (video.highlights.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              ...video.highlights.map(
-                (highlight) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.only(top: 6),
-                        child: Icon(
-                          Icons.circle,
-                          size: 7,
-                          color: AppTheme.primaryBlue,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          highlight,
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: AppTheme.textPrimary,
-                                    height: 1.4,
-                                  ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-            if (video.takeawayLine.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Text(
-                video.takeawayLine,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.textPrimary,
-                      fontWeight: FontWeight.w700,
-                      height: 1.4,
-                    ),
-              ),
-            ],
-          ],
-        ),
-      ),
     );
   }
 }

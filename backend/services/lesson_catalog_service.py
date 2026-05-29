@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Optional
 
 from backend.lessons import (
@@ -7,6 +8,22 @@ from backend.lessons import (
     serialize_lesson,
 )
 from backend.concept_videos.specs import LESSON_VIDEO_SPECS
+
+LECTURE_NOTES_DIR = (
+    Path(__file__).resolve().parents[2]
+    / "manim_service"
+    / "concept_videos"
+)
+
+
+def _load_lecture_notes(lesson_id: str) -> str:
+    path = LECTURE_NOTES_DIR / f"{lesson_id}_lecture_notes.md"
+    if not path.is_file():
+        return ""
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
 
 LESSON_SECTION_ORDER = (
     "Dynamic Programming",
@@ -177,6 +194,7 @@ def _serialize_lesson_for_client(lesson: LessonDefinition) -> dict:
         )
     )
     concept_video = _with_backend_video_path(concept_video, lesson.id)
+    concept_video["lecture_notes"] = _load_lecture_notes(lesson.id)
     if video_spec is not None:
         concept_video.update(
             {

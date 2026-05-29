@@ -57,6 +57,7 @@ class LessonConceptVideo {
   final String workedExample;
   final String misconceptionToPrevent;
   final String takeawayLine;
+  final String lectureNotes;
   final List<LessonTheoryVerification> theoryVerification;
 
   const LessonConceptVideo({
@@ -69,6 +70,7 @@ class LessonConceptVideo {
     this.workedExample = '',
     this.misconceptionToPrevent = '',
     this.takeawayLine = '',
+    this.lectureNotes = '',
     this.theoryVerification = const [],
   });
 
@@ -86,6 +88,7 @@ class LessonConceptVideo {
       workedExample: json['worked_example'] as String? ?? '',
       misconceptionToPrevent: json['misconception_to_prevent'] as String? ?? '',
       takeawayLine: json['takeaway_line'] as String? ?? '',
+      lectureNotes: json['lecture_notes'] as String? ?? '',
       theoryVerification: theoryVerification is List
           ? theoryVerification
               .whereType<Map<String, dynamic>>()
@@ -106,6 +109,7 @@ class LessonConceptVideo {
       'worked_example': workedExample,
       'misconception_to_prevent': misconceptionToPrevent,
       'takeaway_line': takeawayLine,
+      'lecture_notes': lectureNotes,
       'theory_verification':
           theoryVerification.map((item) => item.toJson()).toList(),
     };
@@ -121,6 +125,7 @@ class LessonConceptVideo {
     String? workedExample,
     String? misconceptionToPrevent,
     String? takeawayLine,
+    String? lectureNotes,
     List<LessonTheoryVerification>? theoryVerification,
   }) {
     return LessonConceptVideo(
@@ -134,6 +139,7 @@ class LessonConceptVideo {
       misconceptionToPrevent:
           misconceptionToPrevent ?? this.misconceptionToPrevent,
       takeawayLine: takeawayLine ?? this.takeawayLine,
+      lectureNotes: lectureNotes ?? this.lectureNotes,
       theoryVerification: theoryVerification ?? this.theoryVerification,
     );
   }
