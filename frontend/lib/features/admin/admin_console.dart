@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart' show FilePicker, FileType;
 import 'package:flutter/material.dart';
 
 import '../../core/backend_api.dart';
@@ -41,6 +42,16 @@ class AdminConsole extends StatefulWidget {
     required bool backendEnabled,
   }) onSaveLesson;
 
+  /// Called when the instructor picks a .md file to upload as lecture notes.
+  final Future<void> Function({
+    required String lessonId,
+    required List<int> bytes,
+    required String filename,
+  }) onUploadLectureNotes;
+
+  /// Called when the instructor removes uploaded lecture notes for a lesson.
+  final Future<void> Function(String lessonId) onDeleteLectureNotes;
+
   const AdminConsole({
     super.key,
     required this.sections,
@@ -61,6 +72,8 @@ class AdminConsole extends StatefulWidget {
     required this.onExportLearningAnalytics,
     required this.onExportALEIComponents,
     required this.onSaveLesson,
+    required this.onUploadLectureNotes,
+    required this.onDeleteLectureNotes,
   });
 
   @override
@@ -86,6 +99,8 @@ class _AdminConsoleState extends State<AdminConsole> {
   bool _backendEnabled = true;
   String? _loadedLessonId;
   _AdminSection _activeSection = _AdminSection.lessonStudio;
+  bool _notesUploading = false;
+  String? _notesStatusMessage;
 
   @override
   void initState() {
@@ -720,6 +735,8 @@ class _AdminConsoleState extends State<AdminConsole> {
               monospace: true,
             ),
             const SizedBox(height: 24),
+            _buildLectureNotesSection(context, lesson),
+            const SizedBox(height: 24),
             Row(
               children: [
                 OutlinedButton.icon(
@@ -758,6 +775,184 @@ class _AdminConsoleState extends State<AdminConsole> {
         ),
       ),
     );
+  }
+
+  Widget _buildLectureNotesSection(
+      BuildContext context, LessonDefinition lesson) {
+    final hasNotes = lesson.conceptVideo.lectureNotes.trim().isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundLight,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Lecture Notes',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Upload a Markdown (.md) file to accompany this lesson\'s concept video. '
+                      'Admin-uploaded notes override built-in generated notes.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppTheme.textSecondary,
+                            height: 1.4,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Chip(
+                label: Text(hasNotes ? 'Notes present' : 'No notes'),
+                avatar: Icon(
+                  hasNotes
+                      ? Icons.check_circle_outline
+                      : Icons.radio_button_unchecked,
+                  size: 16,
+                  color: hasNotes
+                      ? const Color(0xFF16A34A)
+                      : AppTheme.textSecondary,
+                ),
+                backgroundColor: hasNotes
+                    ? const Color(0xFFDCFCE7)
+                    : const Color(0xFFF1F5F9),
+                side: BorderSide(
+                  color: hasNotes
+                      ? const Color(0xFF86EFAC)
+                      : AppTheme.borderLight,
+                ),
+                labelStyle: TextStyle(
+                  color: hasNotes
+                      ? const Color(0xFF166534)
+                      : AppTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (_notesStatusMessage != null) ...[
+            Text(
+              _notesStatusMessage!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppTheme.textSecondary,
+                  ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          Row(
+            children: [
+              FilledButton.icon(
+                onPressed: _notesUploading
+                    ? null
+                    : () => _pickAndUploadNotes(lesson.id),
+                icon: _notesUploading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.upload_file_outlined),
+                label:
+                    Text(_notesUploading ? 'Uploading…' : 'Upload notes (.md)'),
+              ),
+              if (hasNotes) ...[
+                const SizedBox(width: 10),
+                OutlinedButton.icon(
+                  onPressed: _notesUploading
+                      ? null
+                      : () => _confirmDeleteNotes(context, lesson.id),
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: const Text('Remove notes'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red.shade700,
+                    side: BorderSide(color: Colors.red.shade200),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickAndUploadNotes(String lessonId) async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['md'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    final bytes = file.bytes;
+    if (bytes == null) return;
+    setState(() {
+      _notesUploading = true;
+      _notesStatusMessage = null;
+    });
+    try {
+      await widget.onUploadLectureNotes(
+        lessonId: lessonId,
+        bytes: bytes,
+        filename: file.name,
+      );
+      setState(() => _notesStatusMessage = 'Notes uploaded: ${file.name}');
+    } catch (e) {
+      setState(() => _notesStatusMessage = 'Upload failed: $e');
+    } finally {
+      setState(() => _notesUploading = false);
+    }
+  }
+
+  Future<void> _confirmDeleteNotes(
+      BuildContext context, String lessonId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove lecture notes?'),
+        content: const Text(
+          'This removes the uploaded notes file. Built-in generated notes '
+          'will be shown instead if they exist.',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Remove')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() {
+      _notesUploading = true;
+      _notesStatusMessage = null;
+    });
+    try {
+      await widget.onDeleteLectureNotes(lessonId);
+      setState(() => _notesStatusMessage = 'Lecture notes removed.');
+    } catch (e) {
+      setState(() => _notesStatusMessage = 'Remove failed: $e');
+    } finally {
+      setState(() => _notesUploading = false);
+    }
   }
 
   Widget _emptyState(BuildContext context) {

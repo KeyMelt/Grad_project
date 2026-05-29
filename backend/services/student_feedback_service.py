@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from backend.lessons import LessonDefinition
+from backend.models.lesson import LessonDefinition
 from backend.services.env_loader import load_local_env
 
 FailureKind = Literal[

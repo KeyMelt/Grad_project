@@ -15,7 +15,7 @@ from typing import Any, Optional
 from uuid import uuid4
 
 from backend.exercise_templates import build_blank_diagnostics
-from backend.lessons import get_lesson_definition
+from backend.lesson_registry import get_lesson_definition
 from backend.workspace_store_sqlite import SqliteWorkspaceStore
 
 

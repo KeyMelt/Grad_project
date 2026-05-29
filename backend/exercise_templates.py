@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from backend.lessons import LessonDefinition, TemplateBlank
+from backend.models.lesson import LessonDefinition, TemplateBlank
 
 EXPRESSION_PLACEHOLDER_PATTERN = re.compile(r"__BLANK_([A-Za-z0-9_]+)__")
 BLOCK_PLACEHOLDER_PATTERN = re.compile(r'raise\s+NotImplementedError\("TODO:\s*([A-Za-z0-9_]+)"\)')

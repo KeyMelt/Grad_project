@@ -12,7 +12,7 @@ import os
 import uuid
 from typing import Any
 
-from backend.lessons import get_lesson_definition
+from backend.lesson_registry import get_lesson_definition
 from backend.logger.event_logger import EventLogger, NpEncoder
 from backend.rl_engine.engine import EnvironmentAdapter, RLEngine
 from backend.services.student_feedback_service import StudentFeedbackService

@@ -22,6 +22,16 @@ abstract class BackendApi {
 
   Future<void> deleteAuthoredLesson(String lessonId) async {}
 
+  /// Upload a Markdown file as lecture notes for [lessonId].
+  Future<void> uploadLectureNotes({
+    required String lessonId,
+    required List<int> bytes,
+    required String filename,
+  }) async {}
+
+  /// Remove the admin-uploaded lecture notes for [lessonId].
+  Future<void> deleteLectureNotes(String lessonId) async {}
+
   Future<LearnerDashboard> signIn({
     required String displayName,
     required String password,
@@ -95,6 +105,23 @@ abstract class BackendApi {
   }
 
   Future<ALEIComponentsExport> exportALEIComponents() {
+    throw UnimplementedError();
+  }
+
+  Future<StudySessionSurveyResult> submitStudySessionSurvey({
+    required String studySessionId,
+    required String condition,
+    required List<int> susResponses,
+    required int tlxMentalDemand,
+    required int tlxPhysicalDemand,
+    required int tlxTemporalDemand,
+    required int tlxPerformance,
+    required int tlxEffort,
+    required int tlxFrustration,
+    String? feedbackHelpful,
+    String? feedbackConfusing,
+    String? feedbackImprovement,
+  }) {
     throw UnimplementedError();
   }
 

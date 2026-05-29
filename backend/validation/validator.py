@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from backend.exercise_templates import find_unresolved_blanks
-from backend.lessons import get_lesson_definition
+from backend.lesson_registry import get_lesson_definition
 from backend.lesson_tests import run_lesson_tests
 from backend.user_code import load_user_function
 

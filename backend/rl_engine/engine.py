@@ -4,7 +4,7 @@ from typing import Any, Dict
 import gymnasium as gym
 from PIL import Image
 
-from backend.lessons import get_lesson_definition
+from backend.lesson_registry import get_lesson_definition
 from backend.user_code import load_user_function
 
 

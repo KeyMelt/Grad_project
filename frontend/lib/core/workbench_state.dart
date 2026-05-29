@@ -87,6 +87,9 @@ class RLWorkbenchState {
   final List<StudyBuddyChatMessage> studyBuddyChatMessages;
   final bool studyBuddyChatLoading;
   final String? studyBuddyChatError;
+  final bool isPostStudySurveySubmitting;
+  final bool postStudySurveyCompleted;
+  final String postStudySurveyMessage;
 
   const RLWorkbenchState({
     required this.sections,
@@ -143,6 +146,9 @@ class RLWorkbenchState {
     required this.studyBuddyChatMessages,
     required this.studyBuddyChatLoading,
     required this.studyBuddyChatError,
+    required this.isPostStudySurveySubmitting,
+    required this.postStudySurveyCompleted,
+    required this.postStudySurveyMessage,
   });
 
   factory RLWorkbenchState.initial() {
@@ -203,6 +209,10 @@ class RLWorkbenchState {
       studyBuddyChatMessages: const [],
       studyBuddyChatLoading: false,
       studyBuddyChatError: null,
+      isPostStudySurveySubmitting: false,
+      postStudySurveyCompleted: false,
+      postStudySurveyMessage:
+          'Complete the post-study survey to record workload and usability.',
     );
   }
 
@@ -276,6 +286,9 @@ class RLWorkbenchState {
     List<StudyBuddyChatMessage>? studyBuddyChatMessages,
     bool? studyBuddyChatLoading,
     Object? studyBuddyChatError = _sentinel,
+    bool? isPostStudySurveySubmitting,
+    bool? postStudySurveyCompleted,
+    String? postStudySurveyMessage,
   }) {
     return RLWorkbenchState(
       sections: sections ?? this.sections,
@@ -365,6 +378,12 @@ class RLWorkbenchState {
       studyBuddyChatError: identical(studyBuddyChatError, _sentinel)
           ? this.studyBuddyChatError
           : studyBuddyChatError as String?,
+      isPostStudySurveySubmitting:
+          isPostStudySurveySubmitting ?? this.isPostStudySurveySubmitting,
+      postStudySurveyCompleted:
+          postStudySurveyCompleted ?? this.postStudySurveyCompleted,
+      postStudySurveyMessage:
+          postStudySurveyMessage ?? this.postStudySurveyMessage,
     );
   }
 
@@ -763,6 +782,10 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         studyBuddyChatMessages: const [],
         studyBuddyChatLoading: false,
         studyBuddyChatError: null,
+        isPostStudySurveySubmitting: false,
+        postStudySurveyCompleted: false,
+        postStudySurveyMessage:
+            'Complete the post-study survey to record workload and usability.',
       ),
     );
   }
@@ -1017,6 +1040,12 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         studyBuddyChatMessages: const [],
         studyBuddyChatLoading: false,
         studyBuddyChatError: null,
+        isPostStudySurveySubmitting: false,
+        postStudySurveyCompleted:
+            preserveWorkspace ? state.postStudySurveyCompleted : false,
+        postStudySurveyMessage: preserveWorkspace
+            ? state.postStudySurveyMessage
+            : 'Complete the post-study survey to record workload and usability.',
         statusMessage: preserveWorkspace
             ? state.statusMessage
             : !state.isAuthenticated
@@ -1077,6 +1106,15 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         activeQuiz: null,
         lastQuizSummary: null,
         quizAnswers: const {},
+        isPostStudySurveySubmitting: phase == QuizPhase.posttest
+            ? false
+            : state.isPostStudySurveySubmitting,
+        postStudySurveyCompleted: phase == QuizPhase.posttest
+            ? false
+            : state.postStudySurveyCompleted,
+        postStudySurveyMessage: phase == QuizPhase.posttest
+            ? 'Complete the post-study survey to record workload and usability.'
+            : state.postStudySurveyMessage,
         quizStatusMessage:
             'Preparing ${quizPhaseLabel(phase).toLowerCase()}...',
       ),
@@ -1169,6 +1207,71 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         state.copyWith(
           isQuizLoading: false,
           quizStatusMessage: 'Could not submit quiz. Try again shortly.',
+        ),
+      );
+    }
+  }
+
+  Future<void> submitPostStudySurvey({
+    required List<int> susResponses,
+    required int tlxMentalDemand,
+    required int tlxPhysicalDemand,
+    required int tlxTemporalDemand,
+    required int tlxPerformance,
+    required int tlxEffort,
+    required int tlxFrustration,
+    String? feedbackHelpful,
+    String? feedbackConfusing,
+    String? feedbackImprovement,
+  }) async {
+    if (state.learner == null || state.postStudySurveyCompleted) {
+      return;
+    }
+
+    emit(
+      state.copyWith(
+        isPostStudySurveySubmitting: true,
+        postStudySurveyMessage: 'Submitting post-study survey...',
+      ),
+    );
+
+    try {
+      final result = await _api.submitStudySessionSurvey(
+        studySessionId: state.studySessionId,
+        condition: 'adaptive',
+        susResponses: susResponses,
+        tlxMentalDemand: tlxMentalDemand,
+        tlxPhysicalDemand: tlxPhysicalDemand,
+        tlxTemporalDemand: tlxTemporalDemand,
+        tlxPerformance: tlxPerformance,
+        tlxEffort: tlxEffort,
+        tlxFrustration: tlxFrustration,
+        feedbackHelpful: feedbackHelpful,
+        feedbackConfusing: feedbackConfusing,
+        feedbackImprovement: feedbackImprovement,
+      );
+      emit(
+        state.copyWith(
+          isPostStudySurveySubmitting: false,
+          postStudySurveyCompleted: true,
+          postStudySurveyMessage:
+              'Survey recorded. SUS ${result.susScore.toStringAsFixed(1)}, '
+              'TLX ${result.tlxOverall.toStringAsFixed(1)}.',
+        ),
+      );
+    } on BackendApiException catch (error) {
+      emit(
+        state.copyWith(
+          isPostStudySurveySubmitting: false,
+          postStudySurveyMessage: error.message,
+        ),
+      );
+    } catch (_) {
+      emit(
+        state.copyWith(
+          isPostStudySurveySubmitting: false,
+          postStudySurveyMessage:
+              'Could not submit the survey. Try again shortly.',
         ),
       );
     }
@@ -1892,6 +1995,32 @@ def lesson_function(*args, **kwargs):
     );
     unawaited(_persistAuthoredLessonSections(updatedSections));
     unawaited(_deleteAuthoredLessonFromCloud(lessonId));
+  }
+
+  Future<void> uploadLectureNotes({
+    required String lessonId,
+    required List<int> bytes,
+    required String filename,
+  }) async {
+    if (!state.canAccessAuthoring) {
+      throw Exception('Authoring requires instructor or admin access.');
+    }
+    await _api.uploadLectureNotes(
+      lessonId: lessonId,
+      bytes: bytes,
+      filename: filename,
+    );
+    // Reload sections so the notes-present chip updates.
+    unawaited(loadBackendLessonCatalog());
+  }
+
+  Future<void> deleteLectureNotes(String lessonId) async {
+    if (!state.canAccessAuthoring) {
+      throw Exception('Authoring requires instructor or admin access.');
+    }
+    await _api.deleteLectureNotes(lessonId);
+    // Reload sections so the notes-present chip updates.
+    unawaited(loadBackendLessonCatalog());
   }
 
   Future<void> exportAdminNGainMetrics() async {

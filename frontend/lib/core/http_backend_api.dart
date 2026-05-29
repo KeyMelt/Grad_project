@@ -86,6 +86,31 @@ class HttpBackendApi extends BackendApi {
   }
 
   @override
+  Future<void> uploadLectureNotes({
+    required String lessonId,
+    required List<int> bytes,
+    required String filename,
+  }) async {
+    final uri = Uri.parse('$baseUrl/admin/lessons/${Uri.encodeComponent(lessonId)}/lecture-notes');
+    final request = http.MultipartRequest('PUT', uri)
+      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+    if (accessToken != null) {
+      request.headers['Authorization'] = 'Bearer $accessToken';
+    }
+    final streamed = await request.send();
+    if (streamed.statusCode >= 400) {
+      final body = await streamed.stream.bytesToString();
+      throw Exception('Upload failed (${streamed.statusCode}): $body');
+    }
+  }
+
+  @override
+  Future<void> deleteLectureNotes(String lessonId) async {
+    await _delete(
+        '/admin/lessons/${Uri.encodeComponent(lessonId)}/lecture-notes');
+  }
+
+  @override
   Future<LearnerDashboard> signIn({
     required String displayName,
     required String password,
@@ -186,6 +211,50 @@ class HttpBackendApi extends BackendApi {
       },
     );
     return SubmittedExecutionTask.fromJson(responseJson);
+  }
+
+  @override
+  Future<StudySessionSurveyResult> submitStudySessionSurvey({
+    required String studySessionId,
+    required String condition,
+    required List<int> susResponses,
+    required int tlxMentalDemand,
+    required int tlxPhysicalDemand,
+    required int tlxTemporalDemand,
+    required int tlxPerformance,
+    required int tlxEffort,
+    required int tlxFrustration,
+    String? feedbackHelpful,
+    String? feedbackConfusing,
+    String? feedbackImprovement,
+  }) async {
+    if (susResponses.length != 10) {
+      throw const BackendApiException('SUS requires exactly 10 responses.');
+    }
+
+    final responseJson = await _postJson(
+      '/evaluation/survey/submit',
+      {
+        'study_session_id': studySessionId,
+        'condition': condition,
+        for (var index = 0; index < susResponses.length; index += 1)
+          'sus_q${index + 1}': susResponses[index],
+        'tlx_mental_demand': tlxMentalDemand,
+        'tlx_physical_demand': tlxPhysicalDemand,
+        'tlx_temporal_demand': tlxTemporalDemand,
+        'tlx_performance': tlxPerformance,
+        'tlx_effort': tlxEffort,
+        'tlx_frustration': tlxFrustration,
+        if (feedbackHelpful != null && feedbackHelpful.trim().isNotEmpty)
+          'feedback_helpful': feedbackHelpful.trim(),
+        if (feedbackConfusing != null && feedbackConfusing.trim().isNotEmpty)
+          'feedback_confusing': feedbackConfusing.trim(),
+        if (feedbackImprovement != null &&
+            feedbackImprovement.trim().isNotEmpty)
+          'feedback_improvement': feedbackImprovement.trim(),
+      },
+    );
+    return StudySessionSurveyResult.fromJson(responseJson);
   }
 
   @override

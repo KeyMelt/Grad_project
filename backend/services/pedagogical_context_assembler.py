@@ -8,7 +8,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
-from backend.lessons import get_lesson_definition
+from backend.lesson_registry import get_lesson_definition
 from backend.models.concept_mastery_snapshot import ConceptMasterySnapshot
 from backend.models.learning_interaction_event import LearningInteractionEvent
 from backend.models.study_buddy_intervention_record import StudyBuddyInterventionRecord

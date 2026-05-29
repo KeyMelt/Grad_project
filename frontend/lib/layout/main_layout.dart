@@ -177,10 +177,14 @@ class _MainLayoutState extends State<MainLayout> {
           quizAnswers: state.quizAnswers,
           lastQuizSummary: state.lastQuizSummary,
           isLoading: state.isQuizLoading,
+          isPostStudySurveySubmitting: state.isPostStudySurveySubmitting,
+          postStudySurveyCompleted: state.postStudySurveyCompleted,
+          postStudySurveyMessage: state.postStudySurveyMessage,
           statusMessage: state.quizStatusMessage,
           onStartQuiz: _cubit.startQuiz,
           onAnswerQuestion: _cubit.answerQuizQuestion,
           onSubmitQuiz: _cubit.submitQuiz,
+          onSubmitPostStudySurvey: _cubit.submitPostStudySurvey,
         );
       case AppSection.admin:
         if (!state.canAccessAuthoring) {
@@ -225,6 +229,8 @@ class _MainLayoutState extends State<MainLayout> {
           onExportLearningAnalytics: _cubit.exportAdminLearningAnalytics,
           onExportALEIComponents: _cubit.exportAdminALEIComponents,
           onSaveLesson: _cubit.saveAdminLesson,
+          onUploadLectureNotes: _cubit.uploadLectureNotes,
+          onDeleteLectureNotes: _cubit.deleteLectureNotes,
         );
     }
   }

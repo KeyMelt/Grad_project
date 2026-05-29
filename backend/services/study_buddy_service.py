@@ -6,7 +6,7 @@ from typing import Any, Sequence
 
 from sqlmodel import select
 
-from backend.lessons import get_lesson_definition
+from backend.lesson_registry import get_lesson_definition
 from backend.models.learning_interaction_event import LearningInteractionEvent
 from backend.models.study_buddy_intervention_record import StudyBuddyInterventionRecord
 from backend.persistence import Database
