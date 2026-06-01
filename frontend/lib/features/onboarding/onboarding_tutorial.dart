@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme.dart';
 import '../../core/workbench_state.dart';
 
 Future<void> showOnboardingTutorial(
@@ -94,10 +95,10 @@ class _OnboardingTutorialDialogState extends State<_OnboardingTutorialDialog> {
                     width: 46,
                     height: 46,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE8F0FE),
+                      color: AppTheme.tealSurface,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(step.icon, color: const Color(0xFF1A73E8)),
+                    child: Icon(step.icon, color: AppTheme.primaryBlue),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -153,8 +154,8 @@ class _OnboardingTutorialDialogState extends State<_OnboardingTutorialDialog> {
                         height: 5,
                         decoration: BoxDecoration(
                           color: i <= _index
-                              ? const Color(0xFF1A73E8)
-                              : const Color(0xFFE5E7EB),
+                              ? AppTheme.primaryBlue
+                              : AppTheme.borderLight,
                           borderRadius: BorderRadius.circular(999),
                         ),
                       ),

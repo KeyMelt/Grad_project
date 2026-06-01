@@ -69,6 +69,8 @@ class RLWorkbenchState {
   final String videoPath;
   final List<ExecutionTestCaseResult> testResults;
   final List<ExecutionTraceStep> stepTrace;
+  final List<ExecutionTraceEpisode> traceEpisodes;
+  final List<ExecutionEpisodeSummary> episodeSummaries;
   final String? failureKind;
   final List<String> unresolvedBlanks;
   final ExecutionStudentFeedback? studentFeedback;
@@ -128,6 +130,8 @@ class RLWorkbenchState {
     required this.videoPath,
     required this.testResults,
     required this.stepTrace,
+    required this.traceEpisodes,
+    required this.episodeSummaries,
     required this.failureKind,
     required this.unresolvedBlanks,
     required this.studentFeedback,
@@ -191,6 +195,8 @@ class RLWorkbenchState {
       videoPath: '',
       testResults: const [],
       stepTrace: const [],
+      traceEpisodes: const [],
+      episodeSummaries: const [],
       failureKind: null,
       unresolvedBlanks: const [],
       studentFeedback: null,
@@ -268,6 +274,8 @@ class RLWorkbenchState {
     String? videoPath,
     List<ExecutionTestCaseResult>? testResults,
     List<ExecutionTraceStep>? stepTrace,
+    List<ExecutionTraceEpisode>? traceEpisodes,
+    List<ExecutionEpisodeSummary>? episodeSummaries,
     Object? failureKind = _sentinel,
     List<String>? unresolvedBlanks,
     Object? studentFeedback = _sentinel,
@@ -341,6 +349,8 @@ class RLWorkbenchState {
       videoPath: videoPath ?? this.videoPath,
       testResults: testResults ?? this.testResults,
       stepTrace: stepTrace ?? this.stepTrace,
+      traceEpisodes: traceEpisodes ?? this.traceEpisodes,
+      episodeSummaries: episodeSummaries ?? this.episodeSummaries,
       failureKind: identical(failureKind, _sentinel)
           ? this.failureKind
           : failureKind as String?,
@@ -1032,6 +1042,8 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         videoPath: '',
         testResults: const [],
         stepTrace: const [],
+        traceEpisodes: const [],
+        episodeSummaries: const [],
         failureKind: null,
         unresolvedBlanks: const [],
         studentFeedback: null,
@@ -1639,6 +1651,8 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         videoPath: '',
         testResults: const [],
         stepTrace: const [],
+        traceEpisodes: const [],
+        episodeSummaries: const [],
         failureKind: null,
         unresolvedBlanks: const [],
         studentFeedback: null,
@@ -1684,6 +1698,8 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
           videoPath: '',
           testResults: error.testResults,
           stepTrace: const [],
+          traceEpisodes: const [],
+          episodeSummaries: const [],
           failureKind: error.failureKind,
           unresolvedBlanks: error.unresolvedBlanks,
           studentFeedback: error.studentFeedback,
@@ -1712,6 +1728,8 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
           videoPath: '',
           testResults: const [],
           stepTrace: const [],
+          traceEpisodes: const [],
+          episodeSummaries: const [],
           failureKind: null,
           unresolvedBlanks: const [],
           studentFeedback: null,
@@ -1756,6 +1774,8 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         videoPath: '',
         testResults: const [],
         stepTrace: const [],
+        traceEpisodes: const [],
+        episodeSummaries: const [],
         failureKind: null,
         unresolvedBlanks: const [],
         studentFeedback: null,
@@ -2382,6 +2402,8 @@ def lesson_function(*args, **kwargs):
       videoPath: '',
       testResults: const [],
       stepTrace: const [],
+      traceEpisodes: const [],
+      episodeSummaries: const [],
       failureKind: null,
       unresolvedBlanks: const [],
       studentFeedback: null,
@@ -2432,6 +2454,8 @@ def lesson_function(*args, **kwargs):
               videoPath: result.videoPath,
               testResults: result.testResults,
               stepTrace: result.stepTrace,
+              traceEpisodes: result.traceEpisodes,
+              episodeSummaries: result.episodeSummaries,
               failureKind: null,
               unresolvedBlanks: const [],
               studentFeedback: null,
@@ -2465,6 +2489,8 @@ def lesson_function(*args, **kwargs):
               videoPath: '',
               testResults: snapshot.testResults,
               stepTrace: const [],
+              traceEpisodes: const [],
+              episodeSummaries: const [],
               failureKind: snapshot.failureKind,
               unresolvedBlanks: snapshot.unresolvedBlanks,
               studentFeedback: snapshot.studentFeedback,

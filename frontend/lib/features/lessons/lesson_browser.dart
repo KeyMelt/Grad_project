@@ -376,7 +376,7 @@ class _OutlineLessonTile extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFE8F0FE) : Colors.white,
+          color: isSelected ? AppTheme.tealSurface : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected ? AppTheme.primaryBlue : const Color(0xFFE2E8F0),

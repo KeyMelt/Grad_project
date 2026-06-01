@@ -8,6 +8,8 @@ Here is the bargain. Instead of asking "what return does $\pi$ expect from state
 
 We use FrozenLake-v1 again (`is_slippery=True`, $\gamma = 0.95$). The same heatmap that took ~70 sweeps under the uniform-random policy now converges to a *much brighter* heatmap, because the values are no longer dragged down by the silly random actions — every backup chooses the best action. The video pauses at one specific state and shows all four action backups one at a time so you can watch the $\max$ pick the winner.
 
+![FrozenLake-v1: value iteration converges to a much brighter heatmap than policy evaluation because every update picks the best possible action rather than averaging over all four.](https://gymnasium.farama.org/_images/frozen_lake.gif)
+
 ## Intuition first
 
 Stand on state $14$ in the FrozenLake grid, with the value table $V$ already partially computed (say, after a few sweeps). The question policy evaluation asks here is "what is the *average* return when I take each of the four actions with probability $1/4$?" The question value iteration asks is "what is the *best* of the four action values I could compute?"
@@ -38,7 +40,7 @@ $$
 v_{k+1}^\pi(s) \;=\; \sum_a \pi(a \mid s) \sum_{s', r} p(s', r \mid s, a)[r + \gamma v_k^\pi(s')].
 $$
 
-Value iteration iterates the Bellman *optimality* equation (S&B eq. 4.10, p. 83):
+Value iteration iterates the Bellman *optimality* equation:
 
 $$
 \boxed{\;V_{k+1}(s) \;\doteq\; \max_a \sum_{s', r} p(s', r \mid s, a)[r + \gamma V_k(s')].\;}
@@ -62,14 +64,14 @@ Same as policy evaluation: stop when $\Delta_k = \max_s |V_{k+1}(s) - V_k(s)| < 
 
 ### Symbol glossary
 
-| Symbol         | Meaning                                                          |
+| Symbol | Meaning |
 | -------------- | ---------------------------------------------------------------- |
-| $V_k(s)$       | Value table at iteration $k$                                     |
-| $v_*(s)$       | Optimal state-value function, the fixed point of $V_k$           |
-| $Q_k(s, a)$    | Action value backup — computed internally, not stored explicitly |
-| $p(s', r \mid s, a)$ | Environment dynamics                                       |
-| $\gamma$       | Discount factor (lesson default: $0.95$)                         |
-| $\theta$       | Convergence threshold (lesson default: $10^{-8}$)                |
+| $V_k(s)$ | Value table at iteration $k$ |
+| $v_*(s)$ | Optimal state-value function, the fixed point of $V_k$ |
+| $Q_k(s, a)$ | Action value backup — computed internally, not stored explicitly |
+| $p(s', r \mid s, a)$ | Environment dynamics |
+| $\gamma$ | Discount factor (lesson default: $0.95$) |
+| $\theta$ | Convergence threshold (lesson default: $10^{-8}$) |
 
 ### Worked numeric example
 
@@ -119,21 +121,21 @@ The starter code in `backend/lessons.py`:
 DISCOUNT_FACTOR = 0.95
 
 def value_iteration(V, env, gamma=DISCOUNT_FACTOR, theta=1e-8):
-    delta = float("inf")
-    action_count = env.action_space.n
-    while delta > theta:
-        delta = 0.0
-        for state in range(len(V)):
-            old_value = V[state]
-            action_values = []
-            for action in range(action_count):
-                action_value = 0.0
-                # TODO(student): back up one action value from transition branches.
-                raise NotImplementedError("TODO: value_iteration_backup")
-                action_values.append(action_value)
-            V[state] = __BLANK_value_iteration_best_action__
-            delta = max(delta, abs(old_value - V[state]))
-    return V
+ delta = float("inf")
+ action_count = env.action_space.n
+ while delta > theta:
+ delta = 0.0
+ for state in range(len(V)):
+ old_value = V[state]
+ action_values = []
+ for action in range(action_count):
+ action_value = 0.0
+ # TODO(student): back up one action value from transition branches.
+ raise NotImplementedError("TODO: value_iteration_backup")
+ action_values.append(action_value)
+ V[state] = __BLANK_value_iteration_best_action__
+ delta = max(delta, abs(old_value - V[state]))
+ return V
 ```
 
 The structure mirrors policy evaluation, but with one extra inner step and one different reduction at the end. Map each line to the optimality equation $V_{k+1}(s) = \max_a \sum_{s', r} p(s', r \mid s, a)[r + \gamma V_k(s')]$:
@@ -148,7 +150,7 @@ The structure mirrors policy evaluation, but with one extra inner step and one d
 
 ```python
 for transition_prob, next_state, reward, done in env.unwrapped.P[state][action]:
-    action_value += transition_prob * (reward + gamma * V[next_state])
+ action_value += transition_prob * (reward + gamma * V[next_state])
 ```
 
 Read this against the optimality equation: `transition_prob` is $p(s', r \mid s, a)$, `reward + gamma * V[next_state]` is $r + \gamma V_k(s')$. Multiplying and accumulating produces $\sum_{s', r} p(s', r \mid s, a)[r + \gamma V_k(s')]$ — one of the four numbers we need.
@@ -175,16 +177,16 @@ When the loop reaches state $s = 15$ (the goal, terminal) or any of the holes, `
 It does not. There is no policy in the update — only a $\max$. Confusing the value-iteration update with the policy-evaluation update is the most common error in this lesson, and it produces a value function that is much smaller than $v_*$ (because averaging is bounded above by the max). The spec calls this out explicitly as the misconception to prevent.
 
 **Pitfall 2: "Value iteration is always faster than policy iteration."**
-Sometimes, sometimes not. Policy iteration often converges in a startlingly small number of outer iterations — for the Jack's Car Rental problem in S&B p. 80, it converges in $5$. Value iteration takes more sweeps but each sweep is cheaper (no inner evaluation loop). The practical winner is usually *truncated policy iteration*, which is somewhere in between.
+Sometimes, sometimes not. Policy iteration often converges in a startlingly small number of outer iterations — for the Jack's Car Rental problem in, it converges in $5$. Value iteration takes more sweeps but each sweep is cheaper (no inner evaluation loop). The practical winner is usually *truncated policy iteration*, which is somewhere in between.
 
 **Pitfall 3: "Once $V$ converges, you can drop the policy step."**
 You can't *act* without a policy. $V$ tells you how good each state is, but to take an action you need a mapping from states to actions. After convergence, do one final greedy pass: $\pi_*(s) = \arg\max_a \sum_{s', r} p(s', r \mid s, a)[r + \gamma V(s')]$.
 
 **Pitfall 4: "The greedy policy stops changing exactly when $V$ converges."**
-The greedy policy with respect to $V_k$ can stop changing *before* $V_k$ itself fully converges. S&B Figure 4.1 makes this point: in the small gridworld example the greedy policy is already optimal after $k = 3$, but $V_k$ keeps moving for many more iterations. In practice some implementations terminate as soon as the greedy policy stops changing, even if $V$ is still drifting.
+The greedy policy with respect to $V_k$ can stop changing *before* $V_k$ itself fully converges. Research shows: in the small gridworld example the greedy policy is already optimal after $k = 3$, but $V_k$ keeps moving for many more iterations. In practice some implementations terminate as soon as the greedy policy stops changing, even if $V$ is still drifting.
 
 **Pitfall 5: "Sweeps must be synchronous."**
-Asynchronous DP (S&B §4.5) — updating one state at a time in any order — converges as long as every state is updated infinitely often. The starter code uses Gauss–Seidel-style in-place updates, which is a form of asynchronous DP and is usually faster than the strict Jacobi-style two-array version.
+Asynchronous DP — updating one state at a time in any order — converges as long as every state is updated infinitely often. The starter code uses Gauss–Seidel-style in-place updates, which is a form of asynchronous DP and is usually faster than the strict Jacobi-style two-array version.
 
 ## Connection to the bigger picture
 
@@ -195,7 +197,6 @@ Asynchronous DP (S&B §4.5) — updating one state at a time in any order — co
 
 **Backward links.** `dp_policy_eval` (same inner structure, different reduction). `mdp_foundations` (defines the Bellman optimality equation we are now iterating). `transition_prob` (the $p(s', r \mid s, a)$ table we sum over).
 
-In Sutton & Barto, this lesson is Chapter 4, Section 4.4 (pp. 82–84), eq. 4.10. The relation to truncated policy iteration is discussed on p. 83, last paragraph. Figure 4.1 (the small gridworld example) is essential viewing for the "greedy policy converges before $V$" point.
 
 ## Key takeaways
 

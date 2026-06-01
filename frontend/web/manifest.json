@@ -1,11 +1,11 @@
 {
-    "name": "rl_ide",
-    "short_name": "rl_ide",
+    "name": "Reinfource",
+    "short_name": "Reinfource",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#14223F",
+    "theme_color": "#00C9A7",
+    "description": "AI-powered reinforcement learning education platform.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

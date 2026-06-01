@@ -571,7 +571,7 @@ class _AdminConsoleState extends State<AdminConsole> {
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? const Color(0xFFE8F0FE)
+                          ? AppTheme.tealSurface
                           : AppTheme.backgroundLight,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
@@ -1159,7 +1159,7 @@ class _SectionButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFE8F0FE) : AppTheme.backgroundLight,
+          color: selected ? AppTheme.tealSurface : AppTheme.backgroundLight,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: selected ? AppTheme.primaryBlue : AppTheme.borderLight,

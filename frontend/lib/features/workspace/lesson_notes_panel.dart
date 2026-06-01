@@ -23,7 +23,10 @@ class LessonNotesPanel extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(18),
+          bottomLeft: Radius.circular(18),
+        ),
         border: Border.all(color: AppTheme.borderLight),
       ),
       padding: const EdgeInsets.all(18),

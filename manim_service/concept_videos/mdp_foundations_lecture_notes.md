@@ -8,9 +8,13 @@ The Markov decision process (MDP) is the mathematical formalism that lets us wri
 
 We stay inside FrozenLake-v1 (4×4, `is_slippery=True`) for the entire lesson, which keeps every abstract symbol grounded in a tile you can point at. State indices $0$–$15$ label the cells in row-major order; holes sit at $\{5, 7, 11, 12\}$; the goal is $15$. The slippery dynamics give every action three equally likely outcomes — the *perpendicular* directions to the intended one, each with probability $1/3$. That stochasticity is the whole reason we need an *expectation* in the Bellman equation rather than a single deterministic update.
 
+![FrozenLake-v1: 16 states labeled 0–15 in row-major order. S = start, G = goal, H = holes. The agent slips — every action has three equally likely outcomes.](https://gymnasium.farama.org/_images/frozen_lake.gif)
+
 ## Intuition first
 
 The video builds the MDP in six small segments, all on the same accreting grid. We will walk them in the same order so the notes match the video frame-for-frame.
+
+![A simple MDP: green circles are states, orange circles represent actions, and labeled arrows show transition probabilities and rewards. Every RL problem can be cast in this form.](https://upload.wikimedia.org/wikipedia/commons/thumb/a/ad/Markov_Decision_Process.svg/400px-Markov_Decision_Process.svg.png)
 
 **(a) States and the Markov property.** Label the 16 tiles with integers $0$–$15$. The Markov property says: *the future depends only on the present state, not on how the agent got there*. If two trajectories arrive at state $6$ via different routes, both face the same probabilistic future. This is what makes tabular RL possible — we can attach a single number to each state instead of conditioning on entire histories.
 
@@ -52,7 +56,7 @@ $$
 p(s', r \mid s, a) \;\doteq\; \Pr\{S_{t+1} = s',\; R_{t+1} = r \mid S_t = s,\; A_t = a\}.
 $$
 
-This is Sutton & Barto's equation 3.2 (p. 48). For FrozenLake state $6$, action RIGHT (Gymnasium's action index $2$), the Technical Validator confirmed via live `env.unwrapped.P[6][2]`:
+This is. For FrozenLake state $6$, action RIGHT (Gymnasium's action index $2$), the Technical Validator confirmed via live `env.unwrapped.P[6][2]`:
 
 $$
 p(s', r=0 \mid s=6, a=\text{RIGHT}) = \tfrac{1}{3} \text{ for } s' \in \{2, 7, 10\}, \quad \text{else } 0.
@@ -68,13 +72,13 @@ $$
 G_t \;\doteq\; R_{t+1} + \gamma R_{t+2} + \gamma^2 R_{t+3} + \cdots \;=\; \sum_{k=0}^{\infty} \gamma^k R_{t+k+1}.
 $$
 
-This is S&B eq. 3.8 (p. 54). Pull out the first term and notice that what remains is itself a return, just shifted by one step:
+Pull out the first term and notice that what remains is itself a return, just shifted by one step:
 
 $$
 \boxed{\;G_t \;=\; R_{t+1} + \gamma\, G_{t+1}\;}
 $$
 
-This is S&B eq. 3.9 (p. 55) — the **return recursion**. It is the single most important equation in this lesson, because every Bellman-style equation in the course is what you get when you take the expectation of this recursion under various conditions.
+This is the **return recursion**. It is the single most important equation in this lesson, because every Bellman-style equation in the course is what you get when you take the expectation of this recursion under various conditions.
 
 ### Move 3 — Value function
 
@@ -84,7 +88,7 @@ $$
 v_\pi(s) \;\doteq\; \mathbb{E}_\pi[G_t \mid S_t = s].
 $$
 
-This is S&B eq. 3.12 (p. 58). Read aloud: *the value of state $s$ under policy $\pi$ is the expected return when we start in $s$ and follow $\pi$ forever after*.
+Read aloud: *the value of state $s$ under policy $\pi$ is the expected return when we start in $s$ and follow $\pi$ forever after*.
 
 The subscript $\pi$ on the expectation matters: it means the actions $A_t, A_{t+1}, \ldots$ are *drawn from* $\pi$. The randomness inside the expectation comes from two sources: the policy's action distribution $\pi(a \mid s)$ and the environment's response distribution $p(s', r \mid s, a)$.
 
@@ -96,7 +100,7 @@ $$
 \boxed{\;v_\pi(s) \;=\; \sum_{a} \pi(a \mid s) \sum_{s', r} p(s', r \mid s, a)\,\bigl[\,r + \gamma\, v_\pi(s')\,\bigr]\;}
 $$
 
-This is S&B eq. 3.14 (p. 59) — the **Bellman expectation equation**. It is an *equality*, not an *update rule*. Every algorithm in the course will exploit it differently:
+This is the **Bellman expectation equation**. It is an *equality*, not an *update rule*. Every algorithm in the course will exploit it differently:
 
 - Treat it as an assignment to compute (`dp_policy_eval`).
 - Replace $\sum_a \pi(a\mid s)$ with $\max_a$ to get optimality (`dp_value_iteration`).
@@ -104,17 +108,17 @@ This is S&B eq. 3.14 (p. 59) — the **Bellman expectation equation**. It is an 
 
 ### Symbol glossary
 
-| Symbol                  | Meaning                                                                         |
+| Symbol | Meaning |
 | ----------------------- | ------------------------------------------------------------------------------- |
-| $\mathcal{S}$           | Set of states (here, $\{0, 1, \ldots, 15\}$)                                    |
-| $\mathcal{A}(s)$        | Actions available in $s$ (here, $\{\text{LEFT}, \text{DOWN}, \text{RIGHT}, \text{UP}\}$) |
-| $\pi(a \mid s)$         | Policy — probability of taking $a$ in $s$                                       |
-| $p(s', r \mid s, a)$    | Environment dynamics — probability of $(s', r)$ given $(s, a)$                  |
-| $R_{t+1}$               | Reward received *after* action $A_t$                                            |
-| $G_t$                   | Discounted return from time $t$                                                 |
-| $\gamma \in [0, 1]$     | Discount factor                                                                 |
-| $v_\pi(s)$              | State-value function under $\pi$                                                |
-| $q_\pi(s, a)$           | Action-value function under $\pi$ (introduced in next lessons)                  |
+| $\mathcal{S}$ | Set of states (here, $\{0, 1, \ldots, 15\}$) |
+| $\mathcal{A}(s)$ | Actions available in $s$ (here, $\{\text{LEFT}, \text{DOWN}, \text{RIGHT}, \text{UP}\}$) |
+| $\pi(a \mid s)$ | Policy — probability of taking $a$ in $s$ |
+| $p(s', r \mid s, a)$ | Environment dynamics — probability of $(s', r)$ given $(s, a)$ |
+| $R_{t+1}$ | Reward received *after* action $A_t$ |
+| $G_t$ | Discounted return from time $t$ |
+| $\gamma \in [0, 1]$ | Discount factor |
+| $v_\pi(s)$ | State-value function under $\pi$ |
+| $q_\pi(s, a)$ | Action-value function under $\pi$ (introduced in next lessons) |
 
 ### Worked numeric example
 
@@ -145,7 +149,7 @@ env = gym.make("FrozenLake-v1", is_slippery=True)
 # Inspect the environment's dynamics function p(s', r | s, a).
 # For state 6, action RIGHT (index 2):
 for prob, next_state, reward, done in env.unwrapped.P[6][2]:
-    print(prob, next_state, reward, done)
+ print(prob, next_state, reward, done)
 
 # Construct the uniform-random policy π(a|s) = 1/|A| for all (s, a).
 policy = np.ones((env.observation_space.n, env.action_space.n)) / env.action_space.n
@@ -186,7 +190,6 @@ This lesson is the formal core of the course. Everything downstream is an algori
 
 **Backward links.** The agent–environment loop from `rl_intro`. Basic probability (random variables, expectations, conditional distributions).
 
-In Sutton & Barto, this lesson covers Chapter 3 sections 3.1–3.5 (pp. 47–62): the agent–environment interface, dynamics function (eq. 3.2), return (eqs. 3.8, 3.9), value function (eq. 3.12), and Bellman expectation (eq. 3.14).
 
 ## Key takeaways
 

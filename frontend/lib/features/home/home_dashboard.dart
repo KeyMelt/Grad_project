@@ -157,8 +157,8 @@ class _HomeDashboardState extends State<HomeDashboard> {
         borderRadius: BorderRadius.circular(20),
         gradient: const LinearGradient(
           colors: [
-            Color(0xFF132238),
-            Color(0xFF1A73E8),
+            Color(0xFF0C1928),
+            Color(0xFF14223F),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -677,7 +677,7 @@ class _LessonSummaryCard extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE8F0FE),
+                    color: AppTheme.tealSurface,
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(

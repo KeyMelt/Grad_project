@@ -35,6 +35,8 @@ class WorkspaceTabs extends StatefulWidget {
   final String videoPath;
   final List<ExecutionTestCaseResult> testResults;
   final List<ExecutionTraceStep> stepTrace;
+  final List<ExecutionTraceEpisode> traceEpisodes;
+  final List<ExecutionEpisodeSummary> episodeSummaries;
   final ValueChanged<Map<String, dynamic>>? onConceptVideoSession;
   final void Function(String viewId, Duration duration)?
       onWorkspaceFocusSession;
@@ -68,6 +70,8 @@ class WorkspaceTabs extends StatefulWidget {
     required this.videoPath,
     required this.testResults,
     required this.stepTrace,
+    required this.traceEpisodes,
+    required this.episodeSummaries,
     this.onConceptVideoSession,
     this.onWorkspaceFocusSession,
     this.onRun,
@@ -162,6 +166,8 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
     final videoPath = widget.videoPath;
     final testResults = widget.testResults;
     final stepTrace = widget.stepTrace;
+    final traceEpisodes = widget.traceEpisodes;
+    final episodeSummaries = widget.episodeSummaries;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(6, 4, 6, 6),
@@ -221,6 +227,8 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
                         videoPath: videoPath,
                         testResults: testResults,
                         stepTrace: stepTrace,
+                        traceEpisodes: traceEpisodes,
+                        episodeSummaries: episodeSummaries,
                       ),
                     ],
                   ),
@@ -238,8 +246,8 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
             ),
             child: TabBar(
               controller: _tabController,
-              indicatorColor: const Color(0xFF1A73E8),
-              labelColor: const Color(0xFF1A73E8),
+              indicatorColor: AppTheme.primaryBlue,
+              labelColor: AppTheme.primaryBlue,
               unselectedLabelColor: const Color(0xFF6B7280),
               indicatorSize: TabBarIndicatorSize.tab,
               tabs: const [
@@ -466,8 +474,7 @@ class _LessonNotesDrawer extends StatelessWidget {
                   bottomRight: Radius.circular(14),
                 ),
                 border: Border.all(
-                  color:
-                      isOpen ? const Color(0xFFBFDBFE) : AppTheme.primaryBlue,
+                  color: isOpen ? AppTheme.tealBorder : AppTheme.primaryBlue,
                 ),
               ),
               child: Column(

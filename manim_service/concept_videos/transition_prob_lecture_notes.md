@@ -8,6 +8,8 @@ Why split it out into its own lesson? Because every later algorithm in the cours
 
 The example we hammer on is FrozenLake-v1 state $6$, action RIGHT. State $6$ is row $1$, column $2$ — one tile north of the hole at state $7$, two tiles east of the start. The slippery dynamics give RIGHT three equally likely outcomes. By the end of this lesson you should be able to write out the full $p(s', r \mid 6, \text{RIGHT})$ table from memory, sum it to $1$, and explain why none of those three probabilities is $0$ or $1$.
 
+![FrozenLake-v1: locate state 6 (row 1, col 2). Choosing RIGHT can land the agent on states 2 (skid up), 7 (intended — a hole), or 10 (skid down), each with probability 1/3.](https://gymnasium.farama.org/_images/frozen_lake.gif)
+
 ## Intuition first
 
 Stand on tile $6$. You announce your action: RIGHT. Now close your eyes. The ice underneath you decides what happens. Three things might happen, all equally likely:
@@ -31,7 +33,7 @@ These two constraints turn $p$ from a generic non-negative function into a *prob
 
 ### Definition
 
-The four-argument dynamics function is Sutton & Barto's equation 3.2 (p. 48):
+The four-argument dynamics function is :
 
 $$
 p(s', r \mid s, a) \;\doteq\; \Pr\{S_{t+1} = s',\; R_{t+1} = r \mid S_t = s,\; A_t = a\}.
@@ -65,14 +67,14 @@ For most toy environments — FrozenLake included — the reward for a given $(s
 
 ### Symbol glossary
 
-| Symbol                  | Meaning                                                                            |
+| Symbol | Meaning |
 | ----------------------- | ---------------------------------------------------------------------------------- |
-| $s, s' \in \mathcal{S}$ | Current and next state                                                             |
-| $a \in \mathcal{A}(s)$  | Action taken in $s$                                                                |
-| $r \in \mathcal{R}$     | Reward value (a number, not a distribution)                                        |
-| $p(s', r \mid s, a)$    | Joint probability of $(s', r)$ given $(s, a)$                                      |
-| $S_{t+1}, R_{t+1}$      | The random variables whose realised values are $s'$ and $r$                        |
-| done                    | Gymnasium flag indicating $s'$ is terminal — relevant for bootstrapping conventions |
+| $s, s' \in \mathcal{S}$ | Current and next state |
+| $a \in \mathcal{A}(s)$ | Action taken in $s$ |
+| $r \in \mathcal{R}$ | Reward value (a number, not a distribution) |
+| $p(s', r \mid s, a)$ | Joint probability of $(s', r)$ given $(s, a)$ |
+| $S_{t+1}, R_{t+1}$ | The random variables whose realised values are $s'$ and $r$ |
+| done | Gymnasium flag indicating $s'$ is terminal — relevant for bootstrapping conventions |
 
 ### Worked numeric example
 
@@ -80,9 +82,9 @@ Take FrozenLake-v1 with `is_slippery=True`, state $s = 6$, action $a = \text{RIG
 
 | Probability | $s'$ | $r$ | $done$ |
 | ----------- | ---- | --- | ------ |
-| $1/3$       | $10$ | $0$ | False  |
-| $1/3$       | $7$  | $0$ | True   |
-| $1/3$       | $2$  | $0$ | False  |
+| $1/3$ | $10$ | $0$ | False |
+| $1/3$ | $7$ | $0$ | True |
+| $1/3$ | $2$ | $0$ | False |
 
 Check normalisation:
 
@@ -90,8 +92,7 @@ $$
 \sum_{s', r} p(s', r \mid 6, \text{RIGHT}) \;=\; \tfrac{1}{3} + \tfrac{1}{3} + \tfrac{1}{3} \;=\; 1. \;\checkmark
 $$
 
-In summation form,
-
+In summation form
 $$
 p(s', r \mid 6, \text{RIGHT}) \;=\; \tfrac{1}{3}\,\mathbb{1}[s' = 10, r = 0] + \tfrac{1}{3}\,\mathbb{1}[s' = 7, r = 0] + \tfrac{1}{3}\,\mathbb{1}[s' = 2, r = 0].
 $$
@@ -107,7 +108,7 @@ For comparison, here is the same query on a *non-slippery* environment, `FrozenL
 
 | Probability | $s'$ | $r$ | $done$ |
 | ----------- | ---- | --- | ------ |
-| $1.0$       | $7$  | $0$ | True   |
+| $1.0$ | $7$ | $0$ | True |
 
 A single deterministic outcome. The four-argument form degenerates to a delta function. This is the structure CliffWalking uses, which is why CliffWalking transitions look so much tidier in the SARSA and Q-learning lessons.
 
@@ -120,9 +121,9 @@ import gymnasium as gym
 
 env = gym.make("FrozenLake-v1", is_slippery=True)
 
-state, action = 6, 2   # state 6, action RIGHT
+state, action = 6, 2 # state 6, action RIGHT
 for prob, next_state, reward, done in env.unwrapped.P[state][action]:
-    print(prob, next_state, reward, done)
+ print(prob, next_state, reward, done)
 ```
 
 Tie each piece back to the definition:
@@ -139,7 +140,7 @@ from collections import defaultdict
 
 marginal = defaultdict(float)
 for prob, next_state, reward, done in env.unwrapped.P[6][2]:
-    marginal[next_state] += prob
+ marginal[next_state] += prob
 
 # marginal == {10: 0.333..., 7: 0.333..., 2: 0.333...}
 ```
@@ -164,7 +165,7 @@ Correct for environments like CliffWalking. *Not* correct for FrozenLake-v1 with
 The marginal $p(s' \mid s, a) = \sum_r p(s', r \mid s, a)$ throws away reward information. For FrozenLake all rewards on non-terminal transitions are $0$, so the two carry the same content. But the four-argument form is the canonical one — when you formally write the Bellman equation, you sum over both $s'$ and $r$.
 
 **Pitfall 4: "You need to know $p$ to do RL."**
-Dynamic programming does. The whole point of model-free methods (Monte Carlo and TD) is to *avoid* needing $p$ — instead, they call `env.step()` and learn from the resulting (state, reward, next state) samples. That is the central conceptual leap from Chapter 4 to Chapter 5 in Sutton & Barto, and it is why we use the slippery FrozenLake for DP lessons and the model-opaque Blackjack for the first Monte Carlo lesson.
+Dynamic programming does. The whole point of model-free methods (Monte Carlo and TD) is to *avoid* needing $p$ — instead, they call `env.step()` and learn from the resulting (state, reward, next state) samples. That is the central conceptual leap from model-based to model-free RL, and it is why we use the slippery FrozenLake for DP lessons and the model-opaque Blackjack for the first Monte Carlo lesson.
 
 ## Connection to the bigger picture
 
@@ -175,7 +176,6 @@ Dynamic programming does. The whole point of model-free methods (Monte Carlo and
 
 **Backward links.** `rl_intro` (agent–environment loop). `mdp_foundations` (where $p$ was introduced as one of three MDP primitives).
 
-In Sutton & Barto, this lesson is Chapter 3, §3.1, eq. 3.2 (p. 48), expanded with the derived marginals on pp. 48–49. The slippery FrozenLake convention is documented in Gymnasium's `toy_text/frozen_lake` page.
 
 ## Key takeaways
 

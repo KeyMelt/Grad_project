@@ -761,7 +761,7 @@ class _QuestionCard extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE8F0FE),
+                    color: AppTheme.tealSurface,
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
@@ -832,7 +832,7 @@ class _QuizOptionTile extends StatelessWidget {
             border: Border.all(
               color: selected ? AppTheme.primaryBlue : AppTheme.borderLight,
             ),
-            color: selected ? const Color(0xFFE8F0FE) : Colors.transparent,
+            color: selected ? AppTheme.tealSurface : Colors.transparent,
           ),
           child: Row(
             children: [

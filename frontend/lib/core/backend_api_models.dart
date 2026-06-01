@@ -362,6 +362,11 @@ class ExecutionTraceStep {
   final String mathEquation;
   final List<String> mathLines;
   final Map<String, double> updatedValues;
+  final int traceSchemaVersion;
+  final TraceEquationUpdate? equationUpdate;
+  final TraceTableSnapshot? tableSnapshot;
+  final TraceGridMetadata? gridMetadata;
+  final TraceStepExplanation? explanation;
 
   const ExecutionTraceStep({
     required this.state,
@@ -377,11 +382,20 @@ class ExecutionTraceStep {
     required this.mathEquation,
     required this.mathLines,
     required this.updatedValues,
+    this.traceSchemaVersion = 1,
+    this.equationUpdate,
+    this.tableSnapshot,
+    this.gridMetadata,
+    this.explanation,
   });
 
   factory ExecutionTraceStep.fromJson(Map<String, dynamic> json) {
     final rawUpdatedValues =
         (json['updated_values'] as Map<String, dynamic>?) ?? const {};
+    final rawEquationUpdate = json['equation_update'];
+    final rawTableSnapshot = json['tables'];
+    final rawGridMetadata = json['grid_metadata'];
+    final rawExplanation = json['explanation'];
     return ExecutionTraceStep(
       state: (json['state'] as num?)?.toInt() ?? 0,
       action: (json['action'] as num?)?.toInt() ?? 0,
@@ -400,11 +414,627 @@ class ExecutionTraceStep {
       mathLines: (json['math_lines'] as List<dynamic>? ?? const [])
           .map((line) => line.toString())
           .toList(growable: false),
-      updatedValues: rawUpdatedValues.map(
-        (key, value) => MapEntry(key, (value as num).toDouble()),
-      ),
+      updatedValues: {
+        for (final entry in rawUpdatedValues.entries)
+          if (_jsonDouble(entry.value) != null)
+            entry.key: _jsonDouble(entry.value)!,
+      },
+      traceSchemaVersion: (json['trace_schema_version'] as num?)?.toInt() ?? 1,
+      equationUpdate: rawEquationUpdate is Map<String, dynamic>
+          ? TraceEquationUpdate.fromJson(rawEquationUpdate)
+          : null,
+      tableSnapshot: rawTableSnapshot is Map<String, dynamic>
+          ? TraceTableSnapshot.fromJson(rawTableSnapshot)
+          : null,
+      gridMetadata: rawGridMetadata is Map<String, dynamic>
+          ? TraceGridMetadata.fromJson(rawGridMetadata)
+          : null,
+      explanation: rawExplanation is Map<String, dynamic>
+          ? TraceStepExplanation.fromJson(rawExplanation)
+          : null,
     );
   }
+}
+
+class TraceStepExplanation {
+  final String summary;
+  final String whyCorrect;
+  final String codeFocus;
+  final String tableFocus;
+
+  const TraceStepExplanation({
+    required this.summary,
+    required this.whyCorrect,
+    required this.codeFocus,
+    required this.tableFocus,
+  });
+
+  factory TraceStepExplanation.fromJson(Map<String, dynamic> json) {
+    return TraceStepExplanation(
+      summary: json['summary'] as String? ?? '',
+      whyCorrect: json['why_correct'] as String? ?? '',
+      codeFocus: json['code_focus'] as String? ?? '',
+      tableFocus: json['table_focus'] as String? ?? '',
+    );
+  }
+}
+
+class TraceGridMetadata {
+  final String environment;
+  final int rows;
+  final int columns;
+  final List<TraceGridCell> cells;
+  final int state;
+  final int? nextState;
+  final TraceGridCoordinate? stateCoordinates;
+  final TraceGridCoordinate? nextStateCoordinates;
+  final int? action;
+  final String actionLabel;
+  final double? reward;
+  final bool terminated;
+  final bool truncated;
+
+  const TraceGridMetadata({
+    required this.environment,
+    required this.rows,
+    required this.columns,
+    required this.cells,
+    required this.state,
+    required this.nextState,
+    required this.stateCoordinates,
+    required this.nextStateCoordinates,
+    required this.action,
+    required this.actionLabel,
+    required this.reward,
+    required this.terminated,
+    required this.truncated,
+  });
+
+  factory TraceGridMetadata.fromJson(Map<String, dynamic> json) {
+    final rawCells = json['cells'] as List<dynamic>? ?? const [];
+    return TraceGridMetadata(
+      environment: json['environment'] as String? ?? '',
+      rows: (json['rows'] as num?)?.toInt() ?? 0,
+      columns: (json['columns'] as num?)?.toInt() ?? 0,
+      cells: rawCells
+          .whereType<Map<String, dynamic>>()
+          .map(TraceGridCell.fromJson)
+          .toList(growable: false),
+      state: (json['state'] as num?)?.toInt() ?? 0,
+      nextState: (json['next_state'] as num?)?.toInt(),
+      stateCoordinates:
+          TraceGridCoordinate.fromNullableJson(json['state_coordinates']),
+      nextStateCoordinates:
+          TraceGridCoordinate.fromNullableJson(json['next_state_coordinates']),
+      action: (json['action'] as num?)?.toInt(),
+      actionLabel: json['action_label'] as String? ?? '',
+      reward: _jsonDouble(json['reward']),
+      terminated: json['terminated'] as bool? ?? false,
+      truncated: json['truncated'] as bool? ?? false,
+    );
+  }
+
+  TraceGridCell? cellAtState(int state) {
+    for (final cell in cells) {
+      if (cell.state == state) {
+        return cell;
+      }
+    }
+    return null;
+  }
+}
+
+class TraceGridCell {
+  final int state;
+  final int row;
+  final int column;
+  final String tileType;
+  final bool terminal;
+
+  const TraceGridCell({
+    required this.state,
+    required this.row,
+    required this.column,
+    required this.tileType,
+    required this.terminal,
+  });
+
+  factory TraceGridCell.fromJson(Map<String, dynamic> json) {
+    return TraceGridCell(
+      state: (json['state'] as num?)?.toInt() ?? 0,
+      row: (json['row'] as num?)?.toInt() ?? 0,
+      column: (json['column'] as num?)?.toInt() ?? 0,
+      tileType: json['tile_type'] as String? ?? '',
+      terminal: json['terminal'] as bool? ?? false,
+    );
+  }
+}
+
+class TraceGridCoordinate {
+  final int row;
+  final int column;
+
+  const TraceGridCoordinate({
+    required this.row,
+    required this.column,
+  });
+
+  static TraceGridCoordinate? fromNullableJson(Object? json) {
+    if (json is! Map<String, dynamic>) {
+      return null;
+    }
+    final row = (json['row'] as num?)?.toInt();
+    final column = (json['column'] as num?)?.toInt();
+    if (row == null || column == null) {
+      return null;
+    }
+    return TraceGridCoordinate(row: row, column: column);
+  }
+}
+
+class TraceEquationUpdate {
+  final String kind;
+  final String lhs;
+  final Object? oldValue;
+  final double? reward;
+  final double? gamma;
+  final double? alpha;
+  final String bootstrapLabel;
+  final double? bootstrapValue;
+  final double? tdTarget;
+  final double? tdError;
+  final Object? newValue;
+  final String substitution;
+  final String codeFocus;
+  final TraceDpDetails? dpDetails;
+  final TraceMcDetails? mcDetails;
+
+  const TraceEquationUpdate({
+    required this.kind,
+    required this.lhs,
+    required this.oldValue,
+    required this.reward,
+    required this.gamma,
+    required this.alpha,
+    required this.bootstrapLabel,
+    required this.bootstrapValue,
+    required this.tdTarget,
+    required this.tdError,
+    required this.newValue,
+    required this.substitution,
+    required this.codeFocus,
+    required this.dpDetails,
+    required this.mcDetails,
+  });
+
+  bool get isTemporalDifference =>
+      kind == 'sarsa' || kind == 'q_learning' || kind == 'td_prediction';
+
+  bool get isDynamicProgramming =>
+      kind == 'policy_evaluation' ||
+      kind == 'value_iteration' ||
+      kind == 'policy_improvement';
+
+  bool get isMonteCarlo => kind == 'mc_sampling' || kind == 'mc_first_visit';
+
+  factory TraceEquationUpdate.fromJson(Map<String, dynamic> json) {
+    final rawDpDetails = json['dp_details'];
+    final rawMcDetails = json['mc_details'];
+    return TraceEquationUpdate(
+      kind: json['kind'] as String? ?? '',
+      lhs: json['lhs'] as String? ?? '',
+      oldValue: _jsonScalar(json['old_value']),
+      reward: _jsonDouble(json['reward']),
+      gamma: _jsonDouble(json['gamma']),
+      alpha: _jsonDouble(json['alpha']),
+      bootstrapLabel: json['bootstrap_label'] as String? ?? '',
+      bootstrapValue: _jsonDouble(json['bootstrap_value']),
+      tdTarget: _jsonDouble(json['td_target']),
+      tdError: _jsonDouble(json['td_error']),
+      newValue: _jsonScalar(json['new_value']),
+      substitution: json['substitution'] as String? ?? '',
+      codeFocus: json['code_focus'] as String? ?? '',
+      dpDetails: rawDpDetails is Map<String, dynamic>
+          ? TraceDpDetails.fromJson(rawDpDetails)
+          : null,
+      mcDetails: rawMcDetails is Map<String, dynamic>
+          ? TraceMcDetails.fromJson(rawMcDetails)
+          : null,
+    );
+  }
+}
+
+class TraceMcDetails {
+  final int episodeIndex;
+  final int episodeStep;
+  final String phase;
+  final BlackjackObservation? observation;
+  final BlackjackObservation? nextObservation;
+  final int? action;
+  final String actionLabel;
+  final double? reward;
+  final bool terminated;
+  final bool truncated;
+  final bool firstVisit;
+  final double? returnValue;
+  final List<TraceMcReturnTerm> returnTerms;
+  final List<double> returnsHistory;
+  final List<TraceMcEpisodeStep> episodeStrip;
+
+  const TraceMcDetails({
+    required this.episodeIndex,
+    required this.episodeStep,
+    required this.phase,
+    required this.observation,
+    required this.nextObservation,
+    required this.action,
+    required this.actionLabel,
+    required this.reward,
+    required this.terminated,
+    required this.truncated,
+    required this.firstVisit,
+    required this.returnValue,
+    required this.returnTerms,
+    required this.returnsHistory,
+    required this.episodeStrip,
+  });
+
+  factory TraceMcDetails.fromJson(Map<String, dynamic> json) {
+    final rawReturnTerms = json['return_terms'] as List<dynamic>? ?? const [];
+    final rawEpisodeStrip = json['episode_strip'] as List<dynamic>? ?? const [];
+    return TraceMcDetails(
+      episodeIndex: (json['episode_index'] as num?)?.toInt() ?? 0,
+      episodeStep: (json['episode_step'] as num?)?.toInt() ?? 0,
+      phase: json['phase'] as String? ?? '',
+      observation: BlackjackObservation.fromNullableJson(json['observation']),
+      nextObservation:
+          BlackjackObservation.fromNullableJson(json['next_observation']),
+      action: (json['action'] as num?)?.toInt(),
+      actionLabel: json['action_label'] as String? ?? '',
+      reward: _jsonDouble(json['reward']),
+      terminated: json['terminated'] as bool? ?? false,
+      truncated: json['truncated'] as bool? ?? false,
+      firstVisit: json['first_visit'] as bool? ?? false,
+      returnValue: _jsonDouble(json['return_value']),
+      returnTerms: rawReturnTerms
+          .whereType<Map<String, dynamic>>()
+          .map(TraceMcReturnTerm.fromJson)
+          .toList(growable: false),
+      returnsHistory: _jsonDoubleList(json['returns_history']),
+      episodeStrip: rawEpisodeStrip
+          .whereType<Map<String, dynamic>>()
+          .map(TraceMcEpisodeStep.fromJson)
+          .toList(growable: false),
+    );
+  }
+}
+
+class BlackjackObservation {
+  final int? playerSum;
+  final int? dealerCard;
+  final bool? usableAce;
+  final String raw;
+
+  const BlackjackObservation({
+    required this.playerSum,
+    required this.dealerCard,
+    required this.usableAce,
+    required this.raw,
+  });
+
+  static BlackjackObservation? fromNullableJson(Object? json) {
+    if (json is! Map<String, dynamic>) {
+      return null;
+    }
+    return BlackjackObservation(
+      playerSum: (json['player_sum'] as num?)?.toInt(),
+      dealerCard: (json['dealer_card'] as num?)?.toInt(),
+      usableAce: json['usable_ace'] as bool?,
+      raw: json['raw'] as String? ?? '',
+    );
+  }
+
+  String get label {
+    if (playerSum == null || dealerCard == null || usableAce == null) {
+      return raw.isEmpty ? 'Unknown observation' : raw;
+    }
+    return 'Player $playerSum | Dealer $dealerCard | Usable ace ${usableAce! ? 'yes' : 'no'}';
+  }
+}
+
+class TraceMcEpisodeStep {
+  final int stepIndex;
+  final String state;
+  final BlackjackObservation? observation;
+  final int action;
+  final String actionLabel;
+  final double reward;
+  final String nextState;
+  final BlackjackObservation? nextObservation;
+  final bool terminated;
+  final bool truncated;
+
+  const TraceMcEpisodeStep({
+    required this.stepIndex,
+    required this.state,
+    required this.observation,
+    required this.action,
+    required this.actionLabel,
+    required this.reward,
+    required this.nextState,
+    required this.nextObservation,
+    required this.terminated,
+    required this.truncated,
+  });
+
+  factory TraceMcEpisodeStep.fromJson(Map<String, dynamic> json) {
+    return TraceMcEpisodeStep(
+      stepIndex: (json['step_index'] as num?)?.toInt() ?? 0,
+      state: json['state'] as String? ?? '',
+      observation: BlackjackObservation.fromNullableJson(json['observation']),
+      action: (json['action'] as num?)?.toInt() ?? 0,
+      actionLabel: json['action_label'] as String? ?? '',
+      reward: _jsonDouble(json['reward']) ?? 0.0,
+      nextState: json['next_state'] as String? ?? '',
+      nextObservation:
+          BlackjackObservation.fromNullableJson(json['next_observation']),
+      terminated: json['terminated'] as bool? ?? false,
+      truncated: json['truncated'] as bool? ?? false,
+    );
+  }
+}
+
+class TraceMcReturnTerm {
+  final int episodeStep;
+  final double discount;
+  final double reward;
+  final double discountedReward;
+  final double runningReturn;
+
+  const TraceMcReturnTerm({
+    required this.episodeStep,
+    required this.discount,
+    required this.reward,
+    required this.discountedReward,
+    required this.runningReturn,
+  });
+
+  factory TraceMcReturnTerm.fromJson(Map<String, dynamic> json) {
+    return TraceMcReturnTerm(
+      episodeStep: (json['episode_step'] as num?)?.toInt() ?? 0,
+      discount: _jsonDouble(json['discount']) ?? 0.0,
+      reward: _jsonDouble(json['reward']) ?? 0.0,
+      discountedReward: _jsonDouble(json['discounted_reward']) ?? 0.0,
+      runningReturn: _jsonDouble(json['running_return']) ?? 0.0,
+    );
+  }
+}
+
+class TraceDpDetails {
+  final List<TraceDpActionBackup> actionBackups;
+  final int? selectedAction;
+  final String selectedActionLabel;
+  final double? backupValue;
+  final double? delta;
+  final List<double> policyRowBefore;
+  final List<double> policyRowAfter;
+  final List<List<double>> valueSource;
+
+  const TraceDpDetails({
+    required this.actionBackups,
+    required this.selectedAction,
+    required this.selectedActionLabel,
+    required this.backupValue,
+    required this.delta,
+    required this.policyRowBefore,
+    required this.policyRowAfter,
+    required this.valueSource,
+  });
+
+  factory TraceDpDetails.fromJson(Map<String, dynamic> json) {
+    final rawBackups = json['action_backups'] as List<dynamic>? ?? const [];
+    return TraceDpDetails(
+      actionBackups: rawBackups
+          .whereType<Map<String, dynamic>>()
+          .map(TraceDpActionBackup.fromJson)
+          .toList(growable: false),
+      selectedAction: (json['selected_action'] as num?)?.toInt(),
+      selectedActionLabel: json['selected_action_label'] as String? ?? '',
+      backupValue: _jsonDouble(json['backup_value']),
+      delta: _jsonDouble(json['delta']),
+      policyRowBefore: _jsonDoubleList(json['policy_row_before']),
+      policyRowAfter: _jsonDoubleList(json['policy_row_after']),
+      valueSource: _jsonDoubleMatrix(json['value_source']),
+    );
+  }
+}
+
+class TraceDpActionBackup {
+  final int action;
+  final String actionLabel;
+  final double? policyProbability;
+  final double expectedReturn;
+  final double weightedContribution;
+  final List<TraceDpTransitionTerm> transitionTerms;
+
+  const TraceDpActionBackup({
+    required this.action,
+    required this.actionLabel,
+    required this.policyProbability,
+    required this.expectedReturn,
+    required this.weightedContribution,
+    required this.transitionTerms,
+  });
+
+  factory TraceDpActionBackup.fromJson(Map<String, dynamic> json) {
+    final rawTerms = json['transition_terms'] as List<dynamic>? ?? const [];
+    return TraceDpActionBackup(
+      action: (json['action'] as num?)?.toInt() ?? 0,
+      actionLabel: json['action_label'] as String? ?? '',
+      policyProbability: _jsonDouble(json['policy_probability']),
+      expectedReturn: _jsonDouble(json['expected_return']) ?? 0.0,
+      weightedContribution: _jsonDouble(json['weighted_contribution']) ?? 0.0,
+      transitionTerms: rawTerms
+          .whereType<Map<String, dynamic>>()
+          .map(TraceDpTransitionTerm.fromJson)
+          .toList(growable: false),
+    );
+  }
+}
+
+class TraceDpTransitionTerm {
+  final double probability;
+  final int nextState;
+  final double reward;
+  final bool done;
+  final double futureValue;
+  final double contribution;
+
+  const TraceDpTransitionTerm({
+    required this.probability,
+    required this.nextState,
+    required this.reward,
+    required this.done,
+    required this.futureValue,
+    required this.contribution,
+  });
+
+  factory TraceDpTransitionTerm.fromJson(Map<String, dynamic> json) {
+    return TraceDpTransitionTerm(
+      probability: _jsonDouble(json['probability']) ?? 0.0,
+      nextState: (json['next_state'] as num?)?.toInt() ?? 0,
+      reward: _jsonDouble(json['reward']) ?? 0.0,
+      done: json['done'] as bool? ?? false,
+      futureValue: _jsonDouble(json['future_value']) ?? 0.0,
+      contribution: _jsonDouble(json['contribution']) ?? 0.0,
+    );
+  }
+}
+
+class TraceTableSnapshot {
+  final String kind;
+  final List<List<double>> before;
+  final List<List<double>> after;
+  final TraceTableCell? activeCell;
+  final TraceTableCell? bootstrapCell;
+  final List<TraceTableCell> changedCells;
+  final List<String> actionLabels;
+
+  const TraceTableSnapshot({
+    required this.kind,
+    required this.before,
+    required this.after,
+    required this.activeCell,
+    required this.bootstrapCell,
+    required this.changedCells,
+    required this.actionLabels,
+  });
+
+  factory TraceTableSnapshot.fromJson(Map<String, dynamic> json) {
+    final rawChangedCells = json['changed_cells'] as List<dynamic>? ?? const [];
+    return TraceTableSnapshot(
+      kind: json['kind'] as String? ?? '',
+      before: _jsonDoubleMatrix(json['before']),
+      after: _jsonDoubleMatrix(json['after']),
+      activeCell: TraceTableCell.fromNullableJson(json['active_cell']),
+      bootstrapCell: TraceTableCell.fromNullableJson(json['bootstrap_cell']),
+      changedCells: rawChangedCells
+          .map(TraceTableCell.fromNullableJson)
+          .whereType<TraceTableCell>()
+          .toList(growable: false),
+      actionLabels: (json['action_labels'] as List<dynamic>? ?? const [])
+          .map((label) => label.toString())
+          .toList(growable: false),
+    );
+  }
+
+  double? valueAfter(TraceTableCell? cell) => _matrixValue(after, cell);
+
+  double? valueBefore(TraceTableCell? cell) => _matrixValue(before, cell);
+
+  bool isChanged(int row, int column) {
+    return changedCells.any((cell) => cell.row == row && cell.column == column);
+  }
+
+  bool isActive(int row, int column) {
+    final cell = activeCell;
+    return cell != null && cell.row == row && cell.column == column;
+  }
+
+  bool isBootstrap(int row, int column) {
+    final cell = bootstrapCell;
+    return cell != null && cell.row == row && cell.column == column;
+  }
+}
+
+class TraceTableCell {
+  final int row;
+  final int column;
+
+  const TraceTableCell({
+    required this.row,
+    required this.column,
+  });
+
+  static TraceTableCell? fromNullableJson(Object? json) {
+    if (json is! Map<String, dynamic>) {
+      return null;
+    }
+    final row = (json['row'] as num?)?.toInt();
+    final column = (json['column'] as num?)?.toInt();
+    if (row == null || column == null) {
+      return null;
+    }
+    return TraceTableCell(row: row, column: column);
+  }
+}
+
+Object? _jsonScalar(Object? value) {
+  if (value == null || value is num || value is String || value is bool) {
+    return value;
+  }
+  return value.toString();
+}
+
+double? _jsonDouble(Object? value) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  if (value is String) {
+    return double.tryParse(value);
+  }
+  return null;
+}
+
+List<List<double>> _jsonDoubleMatrix(Object? value) {
+  if (value is! List<dynamic>) {
+    return const [];
+  }
+  return value
+      .whereType<List<dynamic>>()
+      .map(
+        (row) =>
+            row.map(_jsonDouble).whereType<double>().toList(growable: false),
+      )
+      .toList(growable: false);
+}
+
+List<double> _jsonDoubleList(Object? value) {
+  if (value is! List<dynamic>) {
+    return const [];
+  }
+  return value.map(_jsonDouble).whereType<double>().toList(growable: false);
+}
+
+double? _matrixValue(List<List<double>> matrix, TraceTableCell? cell) {
+  if (cell == null ||
+      cell.row < 0 ||
+      cell.column < 0 ||
+      cell.row >= matrix.length ||
+      cell.column >= matrix[cell.row].length) {
+    return null;
+  }
+  return matrix[cell.row][cell.column];
 }
 
 class ExecutionStudentFeedback {
@@ -449,6 +1079,8 @@ class ExecutionResult {
   final ExecutionMetrics metrics;
   final List<ExecutionTestCaseResult> testResults;
   final List<ExecutionTraceStep> stepTrace;
+  final List<ExecutionTraceEpisode> traceEpisodes;
+  final List<ExecutionEpisodeSummary> episodeSummaries;
 
   const ExecutionResult({
     required this.message,
@@ -458,6 +1090,8 @@ class ExecutionResult {
     required this.metrics,
     required this.testResults,
     required this.stepTrace,
+    this.traceEpisodes = const [],
+    this.episodeSummaries = const [],
   });
 
   factory ExecutionResult.fromJson(Map<String, dynamic> json) {
@@ -471,6 +1105,15 @@ class ExecutionResult {
         .whereType<Map<String, dynamic>>()
         .map(ExecutionTraceStep.fromJson)
         .toList(growable: false);
+    final traceEpisodes = (json['trace_episodes'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(ExecutionTraceEpisode.fromJson)
+        .toList(growable: false);
+    final episodeSummaries =
+        (json['episode_summaries'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(ExecutionEpisodeSummary.fromJson)
+            .toList(growable: false);
 
     return ExecutionResult(
       message: json['message'] as String? ?? 'Execution completed.',
@@ -480,6 +1123,54 @@ class ExecutionResult {
       metrics: ExecutionMetrics.fromJson(metrics),
       testResults: testResults,
       stepTrace: stepTrace,
+      traceEpisodes: traceEpisodes,
+      episodeSummaries: episodeSummaries,
+    );
+  }
+}
+
+class ExecutionTraceEpisode {
+  final int episodeIndex;
+  final List<ExecutionTraceStep> steps;
+
+  const ExecutionTraceEpisode({
+    required this.episodeIndex,
+    required this.steps,
+  });
+
+  factory ExecutionTraceEpisode.fromJson(Map<String, dynamic> json) {
+    return ExecutionTraceEpisode(
+      episodeIndex: (json['episode_index'] as num?)?.toInt() ?? 0,
+      steps: (json['steps'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(ExecutionTraceStep.fromJson)
+          .toList(growable: false),
+    );
+  }
+}
+
+class ExecutionEpisodeSummary {
+  final int episodeIndex;
+  final int stepCount;
+  final double totalReward;
+  final bool terminated;
+  final bool truncated;
+
+  const ExecutionEpisodeSummary({
+    required this.episodeIndex,
+    required this.stepCount,
+    required this.totalReward,
+    required this.terminated,
+    required this.truncated,
+  });
+
+  factory ExecutionEpisodeSummary.fromJson(Map<String, dynamic> json) {
+    return ExecutionEpisodeSummary(
+      episodeIndex: (json['episode_index'] as num?)?.toInt() ?? 0,
+      stepCount: (json['step_count'] as num?)?.toInt() ?? 0,
+      totalReward: (json['total_reward'] as num?)?.toDouble() ?? 0.0,
+      terminated: json['terminated'] as bool? ?? false,
+      truncated: json['truncated'] as bool? ?? false,
     );
   }
 }

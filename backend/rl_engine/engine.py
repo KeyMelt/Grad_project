@@ -98,6 +98,99 @@ class EnvironmentAdapter:
         }
         return mappings.get(self.env_name, {}).get(action, f"Action {action}")
 
+    def grid_metadata(
+        self,
+        state: int,
+        next_state: int | None = None,
+        action: int | None = None,
+        reward: float | None = None,
+        terminated: bool = False,
+        truncated: bool = False,
+    ) -> dict[str, Any] | None:
+        if self.env_name == "FrozenLake":
+            desc = getattr(self.env.unwrapped, "desc", None)
+            if desc is None:
+                return None
+            rows = len(desc)
+            columns = len(desc[0])
+            cells = []
+            for row in range(rows):
+                for column in range(columns):
+                    tile = desc[row][column].decode("utf-8")
+                    cells.append(
+                        {
+                            "state": row * columns + column,
+                            "row": row,
+                            "column": column,
+                            "tile_type": tile,
+                            "terminal": tile in {"H", "G"},
+                        }
+                    )
+            return {
+                "environment": self.env_name,
+                "rows": rows,
+                "columns": columns,
+                "cells": cells,
+                "state": int(state),
+                "next_state": None if next_state is None else int(next_state),
+                "state_coordinates": self._grid_coordinates(state, columns),
+                "next_state_coordinates": (
+                    None if next_state is None else self._grid_coordinates(next_state, columns)
+                ),
+                "action": action,
+                "action_label": None if action is None or action < 0 else self.action_label(action),
+                "reward": None if reward is None else round(float(reward), 4),
+                "terminated": bool(terminated),
+                "truncated": bool(truncated),
+            }
+
+        if self.env_name == "CliffWalking":
+            rows = 4
+            columns = 12
+            cells = []
+            start_state = (rows - 1) * columns
+            goal_state = rows * columns - 1
+            cliff_states = set(range(start_state + 1, goal_state))
+            for row in range(rows):
+                for column in range(columns):
+                    cell_state = row * columns + column
+                    tile = "C" if cell_state in cliff_states else "F"
+                    if cell_state == start_state:
+                        tile = "S"
+                    elif cell_state == goal_state:
+                        tile = "G"
+                    cells.append(
+                        {
+                            "state": cell_state,
+                            "row": row,
+                            "column": column,
+                            "tile_type": tile,
+                            "terminal": cell_state == goal_state,
+                        }
+                    )
+            return {
+                "environment": self.env_name,
+                "rows": rows,
+                "columns": columns,
+                "cells": cells,
+                "state": int(state),
+                "next_state": None if next_state is None else int(next_state),
+                "state_coordinates": self._grid_coordinates(state, columns),
+                "next_state_coordinates": (
+                    None if next_state is None else self._grid_coordinates(next_state, columns)
+                ),
+                "action": action,
+                "action_label": None if action is None or action < 0 else self.action_label(action),
+                "reward": None if reward is None else round(float(reward), 4),
+                "terminated": bool(terminated),
+                "truncated": bool(truncated),
+            }
+        return None
+
+    def _grid_coordinates(self, state: int, columns: int) -> dict[str, int]:
+        row, column = divmod(int(state), columns)
+        return {"row": row, "column": column}
+
     def set_render_state(self, state: int) -> None:
         if hasattr(self.env.unwrapped, "s"):
             self.env.unwrapped.s = state
@@ -220,6 +313,205 @@ class RLEngine:
             return int(raw_limit)
         return self.DEFAULT_MAX_STEPS_PER_EPISODE
 
+    def _rounded_table(self, table: list[list[float]]) -> list[list[float]]:
+        return [[round(float(value), 4) for value in row] for row in table]
+
+    def _rounded_vector_table(self, values: list[float]) -> list[list[float]]:
+        return [[round(float(value), 4)] for value in values]
+
+    def _grid_metadata_for_step(
+        self,
+        state: int,
+        next_state: int | None = None,
+        action: int | None = None,
+        reward: float | None = None,
+        terminated: bool = False,
+        truncated: bool = False,
+    ) -> dict[str, Any] | None:
+        metadata = getattr(self.adapter, "grid_metadata", None)
+        if not callable(metadata):
+            return None
+        return metadata(
+            state=state,
+            next_state=next_state,
+            action=action,
+            reward=reward,
+            terminated=terminated,
+            truncated=truncated,
+        )
+
+    def _log_trace_step(self, payload: dict[str, Any]) -> None:
+        if payload.get("trace_schema_version") == 2 and "explanation" not in payload:
+            payload = {
+                **payload,
+                "explanation": self._trace_explanation(payload),
+            }
+        self.logger.log_step(payload)
+
+    def _trace_explanation(self, payload: dict[str, Any]) -> dict[str, str]:
+        equation_update = payload.get("equation_update") or {}
+        kind = equation_update.get("kind", "")
+        lhs = equation_update.get("lhs", "")
+        new_value = equation_update.get("new_value", "")
+        code_focus = equation_update.get("code_focus", "")
+        summary = payload.get("agent_caption", "")
+        table_focus = self._table_focus_label(payload.get("tables") or {})
+
+        why_by_kind = {
+            "policy_evaluation": (
+                "The value is the policy-weighted Bellman expectation backup: each "
+                "transition branch contributes probability times reward plus discounted future value."
+            ),
+            "value_iteration": (
+                "The value is correct when it equals the largest Bellman backup across "
+                "available actions for this state."
+            ),
+            "policy_improvement": (
+                "The policy row changes because the action with the largest one-step "
+                "lookahead becomes the greedy action."
+            ),
+            "mc_sampling": (
+                "No value changes during sampling; the transition is stored so returns "
+                "can be computed after the full episode is known."
+            ),
+            "mc_first_visit": (
+                "First-visit Monte Carlo updates only the first occurrence of this state "
+                "using the discounted return observed from that point onward."
+            ),
+            "q_learning": (
+                "Q-learning uses the observed reward plus the discounted best next-state "
+                "Q value, with terminal bootstraps recorded as 0.0, then moves only the "
+                "visited Q cell by alpha times the TD error."
+            ),
+            "sarsa": (
+                "SARSA uses the observed reward plus the discounted Q value of the sampled "
+                "next action, so the update follows the same behavior policy that generated the step."
+            ),
+        }
+        why_correct = why_by_kind.get(
+            kind,
+            "The update follows the recorded equation terms and changes only the highlighted table cell.",
+        )
+        if lhs:
+            why_correct = f"{why_correct} The recorded result is {lhs} = {new_value}."
+
+        return {
+            "summary": str(summary),
+            "why_correct": why_correct,
+            "code_focus": str(code_focus),
+            "table_focus": table_focus,
+        }
+
+    def _table_focus_label(self, table: dict[str, Any]) -> str:
+        active_cell = table.get("active_cell") or {}
+        row = active_cell.get("row")
+        column = active_cell.get("column")
+        if row is None or column is None:
+            return ""
+        return f"row {row}, column {column}"
+
+    def _dp_action_backups(
+        self,
+        state: int,
+        values: list[float],
+        gamma: float,
+        policy_row: list[float] | None = None,
+    ) -> list[dict[str, Any]]:
+        action_count = self.adapter.env.action_space.n
+        backups: list[dict[str, Any]] = []
+        for action in range(action_count):
+            transitions = self.adapter.transition_details(state, action)
+            expected_return = 0.0
+            transition_terms = []
+            for transition in transitions:
+                future = 0.0 if transition["done"] else values[transition["next_state"]]
+                contribution = transition["probability"] * (transition["reward"] + gamma * future)
+                expected_return += contribution
+                transition_terms.append(
+                    {
+                        "probability": round(float(transition["probability"]), 4),
+                        "next_state": transition["next_state"],
+                        "reward": round(float(transition["reward"]), 4),
+                        "done": transition["done"],
+                        "future_value": round(float(future), 4),
+                        "contribution": round(float(contribution), 4),
+                    }
+                )
+
+            policy_probability = (
+                None
+                if policy_row is None or action >= len(policy_row)
+                else float(policy_row[action])
+            )
+            weighted_contribution = (
+                expected_return
+                if policy_probability is None
+                else policy_probability * expected_return
+            )
+            backups.append(
+                {
+                    "action": action,
+                    "action_label": self.adapter.action_label(action),
+                    "policy_probability": (
+                        None if policy_probability is None else round(policy_probability, 4)
+                    ),
+                    "expected_return": round(float(expected_return), 4),
+                    "weighted_contribution": round(float(weighted_contribution), 4),
+                    "transition_terms": transition_terms,
+                }
+            )
+        return backups
+
+    def _blackjack_observation(self, state: Any) -> dict[str, Any]:
+        if not isinstance(state, tuple) or len(state) < 3:
+            return {"raw": str(state)}
+        return {
+            "player_sum": int(state[0]),
+            "dealer_card": int(state[1]),
+            "usable_ace": bool(state[2]),
+        }
+
+    def _mc_episode_strip(self, episode_steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [
+            {
+                "step_index": step["step_index"],
+                "state": str(step["state"]),
+                "observation": self._blackjack_observation(step["state"]),
+                "action": step["action"],
+                "action_label": self.adapter.action_label(step["action"]),
+                "reward": round(float(step["reward"]), 4),
+                "next_state": str(step["next_state"]),
+                "next_observation": self._blackjack_observation(step["next_state"]),
+                "terminated": step["terminated"],
+                "truncated": step["truncated"],
+            }
+            for step in episode_steps
+        ]
+
+    def _mc_return_ladder(
+        self,
+        episode_trace: list[tuple[Any, int, float]],
+        start_index: int,
+        gamma: float,
+    ) -> tuple[float, list[dict[str, Any]]]:
+        discounted_return = 0.0
+        discount = 1.0
+        terms: list[dict[str, Any]] = []
+        for offset, (_next_state, _next_action, reward) in enumerate(episode_trace[start_index:]):
+            discounted_reward = discount * reward
+            discounted_return += discounted_reward
+            terms.append(
+                {
+                    "episode_step": start_index + offset,
+                    "discount": round(float(discount), 4),
+                    "reward": round(float(reward), 4),
+                    "discounted_reward": round(float(discounted_reward), 4),
+                    "running_return": round(float(discounted_return), 4),
+                }
+            )
+            discount *= gamma
+        return discounted_return, terms
+
     def _run_policy_evaluation(self, lesson_function, hyperparameters: Dict[str, float]):
         state_count = self.adapter.env.observation_space.n
         action_count = self.adapter.env.action_space.n
@@ -234,21 +526,23 @@ class RLEngine:
                 "Bellman expectation backup:",
                 "V(s) = sum_a pi(a|s) sum_s',r p(s',r|s,a) [r + gamma V(s')]",
             ]
-            action_summaries = []
-            for action, action_prob in enumerate(policy[state]):
-                transitions = self.adapter.transition_details(state, action)
-                expected_return = 0.0
-                for transition in transitions:
-                    future = 0.0 if transition["done"] else values[transition["next_state"]]
-                    expected_return += transition["probability"] * (
-                        transition["reward"] + hyperparameters["gamma"] * future
-                    )
-                action_summaries.append(
-                    f"a={action}, pi={round(action_prob, 2)}, expected={round(expected_return, 3)}"
+            action_backups = self._dp_action_backups(
+                state,
+                values,
+                hyperparameters["gamma"],
+                policy[state],
+            )
+            backup_value = sum(backup["weighted_contribution"] for backup in action_backups)
+            action_summaries = [
+                (
+                    f"a={backup['action']}, pi={backup['policy_probability']}, "
+                    f"expected={backup['expected_return']}"
                 )
+                for backup in action_backups
+            ]
 
             frame_path = self.adapter.capture_frame_png(state=state, prefix="policy_eval")
-            self.logger.log_step(
+            self._log_trace_step(
                 {
                     "state": state,
                     "action": -1,
@@ -256,6 +550,12 @@ class RLEngine:
                     "next_state": state,
                     "transition_probability": 1.0,
                     "frame_path": frame_path,
+                    "grid_metadata": self._grid_metadata_for_step(
+                        state=state,
+                        next_state=state,
+                        action=None,
+                        reward=0.0,
+                    ),
                     "agent_caption": f"Dynamic-programming sweep focuses on state {state}.",
                     "code_title": "Code Trace",
                     "code_lines": [
@@ -267,6 +567,28 @@ class RLEngine:
                     "math_equation": r"V^{\pi}(s)=\sum_a \pi(a|s)\sum_{s',r} p(s',r|s,a)\left[r+\gamma V^{\pi}(s')\right]",
                     "math_lines": reasoning_lines + action_summaries[:3],
                     "updated_values": {f"V({state})": round(values[state], 4)},
+                    "trace_schema_version": 2,
+                    "tables": {
+                        "kind": "value_table",
+                        "after": self._rounded_vector_table(values),
+                        "active_cell": {"row": state, "column": 0},
+                        "changed_cells": [{"row": state, "column": 0}],
+                        "action_labels": ["Value"],
+                    },
+                    "equation_update": {
+                        "kind": "policy_evaluation",
+                        "lhs": f"V({state})",
+                        "gamma": round(float(hyperparameters["gamma"]), 4),
+                        "td_target": round(float(backup_value), 4),
+                        "new_value": round(float(values[state]), 4),
+                        "td_error": round(float(values[state] - backup_value), 4),
+                        "code_focus": "new_value += action_prob * transition_prob * (reward + gamma * future)",
+                        "dp_details": {
+                            "action_backups": action_backups,
+                            "backup_value": round(float(backup_value), 4),
+                            "delta": round(float(abs(values[state] - backup_value)), 4),
+                        },
+                    },
                 }
             )
 
@@ -280,20 +602,18 @@ class RLEngine:
         self.adapter.reset(seed=11)
 
         for state in range(state_count):
-            action_values = []
-            for action in range(self.adapter.env.action_space.n):
-                transitions = self.adapter.transition_details(state, action)
-                action_value = 0.0
-                for transition in transitions:
-                    future = 0.0 if transition["done"] else values[transition["next_state"]]
-                    action_value += transition["probability"] * (
-                        transition["reward"] + hyperparameters["gamma"] * future
-                    )
-                action_values.append((action, action_value))
+            action_backups = self._dp_action_backups(
+                state,
+                values,
+                hyperparameters["gamma"],
+            )
+            action_values = [
+                (backup["action"], backup["expected_return"]) for backup in action_backups
+            ]
 
             best_action, best_value = max(action_values, key=lambda item: item[1])
             frame_path = self.adapter.capture_frame_png(state=state, prefix="value_iter")
-            self.logger.log_step(
+            self._log_trace_step(
                 {
                     "state": state,
                     "action": best_action,
@@ -301,6 +621,12 @@ class RLEngine:
                     "next_state": state,
                     "transition_probability": 1.0,
                     "frame_path": frame_path,
+                    "grid_metadata": self._grid_metadata_for_step(
+                        state=state,
+                        next_state=state,
+                        action=best_action,
+                        reward=0.0,
+                    ),
                     "agent_caption": f"Value iteration backs up state {state} and keeps best action {self.adapter.action_label(best_action)}.",
                     "code_title": "Code Trace",
                     "code_lines": [
@@ -319,6 +645,31 @@ class RLEngine:
                     "updated_values": {
                         f"V({state})": round(values[state], 4),
                         "backup": round(best_value, 4),
+                    },
+                    "trace_schema_version": 2,
+                    "tables": {
+                        "kind": "value_table",
+                        "after": self._rounded_vector_table(values),
+                        "active_cell": {"row": state, "column": 0},
+                        "changed_cells": [{"row": state, "column": 0}],
+                        "action_labels": ["Value"],
+                    },
+                    "equation_update": {
+                        "kind": "value_iteration",
+                        "lhs": f"V({state})",
+                        "gamma": round(float(hyperparameters["gamma"]), 4),
+                        "bootstrap_label": f"max action {self.adapter.action_label(best_action)}",
+                        "td_target": round(float(best_value), 4),
+                        "new_value": round(float(values[state]), 4),
+                        "td_error": round(float(values[state] - best_value), 4),
+                        "code_focus": "V[state] = max(action_values)",
+                        "dp_details": {
+                            "action_backups": action_backups,
+                            "selected_action": best_action,
+                            "selected_action_label": self.adapter.action_label(best_action),
+                            "backup_value": round(float(best_value), 4),
+                            "delta": round(float(abs(values[state] - best_value)), 4),
+                        },
                     },
                 }
             )
@@ -339,16 +690,14 @@ class RLEngine:
         self.adapter.reset(seed=13)
 
         for state in range(state_count):
-            action_values = []
-            for action in range(self.adapter.env.action_space.n):
-                transitions = self.adapter.transition_details(state, action)
-                action_value = 0.0
-                for transition in transitions:
-                    future = 0.0 if transition["done"] else values[transition["next_state"]]
-                    action_value += transition["probability"] * (
-                        transition["reward"] + hyperparameters["gamma"] * future
-                    )
-                action_values.append((action, action_value))
+            action_backups = self._dp_action_backups(
+                state,
+                values,
+                hyperparameters["gamma"],
+            )
+            action_values = [
+                (backup["action"], backup["expected_return"]) for backup in action_backups
+            ]
 
             best_action, best_value = max(action_values, key=lambda item: item[1])
             policy_row = policy[state] if state < len(policy) else []
@@ -357,11 +706,24 @@ class RLEngine:
                 if policy_row
                 else best_action
             )
+            policy_before = [
+                [
+                    1.0 / self.adapter.env.action_space.n
+                    for _ in range(self.adapter.env.action_space.n)
+                ]
+                for _ in range(state_count)
+            ]
+            changed_cells = [
+                {"row": state, "column": column}
+                for column, value in enumerate(policy_row)
+                if column < self.adapter.env.action_space.n
+                and round(float(value), 4) != round(float(policy_before[state][column]), 4)
+            ]
             frame_path = self.adapter.capture_frame_png(
                 state=state,
                 prefix="policy_improvement",
             )
-            self.logger.log_step(
+            self._log_trace_step(
                 {
                     "state": state,
                     "action": selected_action,
@@ -369,6 +731,12 @@ class RLEngine:
                     "next_state": state,
                     "transition_probability": 1.0,
                     "frame_path": frame_path,
+                    "grid_metadata": self._grid_metadata_for_step(
+                        state=state,
+                        next_state=state,
+                        action=selected_action,
+                        reward=0.0,
+                    ),
                     "agent_caption": (
                         f"Policy improvement backs up state {state} and chooses "
                         f"{self.adapter.action_label(selected_action)} as the greedy action."
@@ -390,12 +758,37 @@ class RLEngine:
                         f"pi({state})": self.adapter.action_label(selected_action),
                         "backup": round(best_value, 4),
                     },
+                    "trace_schema_version": 2,
+                    "tables": {
+                        "kind": "policy_table",
+                        "before": self._rounded_table(policy_before),
+                        "after": self._rounded_table(policy),
+                        "active_cell": {"row": state, "column": selected_action},
+                        "changed_cells": changed_cells,
+                        "action_labels": [
+                            self.adapter.action_label(action_index)
+                            for action_index in range(self.adapter.env.action_space.n)
+                        ],
+                    },
                     "equation_update": {
                         "kind": "policy_improvement",
                         "lhs": f"pi({state})",
                         "old_value": "old_pi",
                         "new_value": self.adapter.action_label(selected_action),
+                        "bootstrap_label": f"V source for state {state}",
+                        "td_target": round(float(best_value), 4),
                         "code_focus": "policy[state][best_action] = 1.0",
+                        "dp_details": {
+                            "action_backups": action_backups,
+                            "selected_action": selected_action,
+                            "selected_action_label": self.adapter.action_label(selected_action),
+                            "backup_value": round(float(best_value), 4),
+                            "policy_row_before": [
+                                round(float(value), 4) for value in policy_before[state]
+                            ],
+                            "policy_row_after": [round(float(value), 4) for value in policy_row],
+                            "value_source": self._rounded_vector_table(values),
+                        },
                     },
                 }
             )
@@ -412,13 +805,26 @@ class RLEngine:
             state, _ = self.adapter.reset(seed=episode_index)
             done = False
             episode_trace = []
+            episode_steps: list[dict[str, Any]] = []
+            step_index = 0
 
             while not done:
                 action = self.adapter.env.action_space.sample()
                 next_state, reward, terminated, truncated, info = self.adapter.step(action)
                 episode_trace.append((state, action, reward))
+                episode_steps.append(
+                    {
+                        "step_index": step_index,
+                        "state": state,
+                        "action": action,
+                        "reward": reward,
+                        "next_state": next_state,
+                        "terminated": bool(terminated),
+                        "truncated": bool(truncated),
+                    }
+                )
                 frame_path = self.adapter.capture_frame_png(prefix="mc")
-                self.logger.log_step(
+                self._log_trace_step(
                     {
                         "state": state,
                         "action": action,
@@ -440,10 +846,32 @@ class RLEngine:
                             f"Observed transition probability p = {round(float(info.get('p', 1.0)), 4)}",
                         ],
                         "updated_values": {f"V({state})": round(values.get(state, 0.0), 4)},
+                        "trace_schema_version": 2,
+                        "equation_update": {
+                            "kind": "mc_sampling",
+                            "lhs": f"episode[{episode_index}][{step_index}]",
+                            "reward": round(float(reward), 4),
+                            "new_value": str(next_state),
+                            "code_focus": "episode_trace.append((state, action, reward))",
+                            "mc_details": {
+                                "episode_index": episode_index,
+                                "episode_step": step_index,
+                                "phase": "sampling",
+                                "observation": self._blackjack_observation(state),
+                                "next_observation": self._blackjack_observation(next_state),
+                                "action": action,
+                                "action_label": self.adapter.action_label(action),
+                                "reward": round(float(reward), 4),
+                                "terminated": bool(terminated),
+                                "truncated": bool(truncated),
+                                "episode_strip": self._mc_episode_strip(episode_steps),
+                            },
+                        },
                     }
                 )
                 state = next_state
                 done = terminated or truncated
+                step_index += 1
 
             lesson_function(episode_trace, values, returns, hyperparameters["gamma"])
 
@@ -452,17 +880,17 @@ class RLEngine:
                 if visited_state in visited_states:
                     continue
                 visited_states.add(visited_state)
-                discounted_return = 0.0
-                discount = 1.0
-                for _next_state, _next_action, reward in episode_trace[index:]:
-                    discounted_return += discount * reward
-                    discount *= hyperparameters["gamma"]
+                discounted_return, return_terms = self._mc_return_ladder(
+                    episode_trace,
+                    index,
+                    hyperparameters["gamma"],
+                )
 
                 frame_path = self.adapter.capture_frame_png(
                     state=visited_state,
                     prefix="mc_return",
                 )
-                self.logger.log_step(
+                self._log_trace_step(
                     {
                         "state": visited_state,
                         "action": action,
@@ -488,6 +916,38 @@ class RLEngine:
                             f"V({visited_state}) becomes the mean of observed first-visit returns.",
                         ],
                         "updated_values": {f"V({visited_state})": round(values[visited_state], 4)},
+                        "trace_schema_version": 2,
+                        "tables": {
+                            "kind": "returns_table",
+                            "after": [[round(float(values[visited_state]), 4)]],
+                            "active_cell": {"row": 0, "column": 0},
+                            "changed_cells": [{"row": 0, "column": 0}],
+                            "action_labels": ["V(s)"],
+                        },
+                        "equation_update": {
+                            "kind": "mc_first_visit",
+                            "lhs": f"V({visited_state})",
+                            "gamma": round(float(hyperparameters["gamma"]), 4),
+                            "td_target": round(float(discounted_return), 4),
+                            "new_value": round(float(values[visited_state]), 4),
+                            "code_focus": "V[state] = sum(returns[state]) / len(returns[state])",
+                            "mc_details": {
+                                "episode_index": episode_index,
+                                "episode_step": index,
+                                "phase": "first_visit_update",
+                                "observation": self._blackjack_observation(visited_state),
+                                "action": action,
+                                "action_label": self.adapter.action_label(action),
+                                "first_visit": True,
+                                "return_value": round(float(discounted_return), 4),
+                                "return_terms": return_terms,
+                                "returns_history": [
+                                    round(float(value), 4)
+                                    for value in returns.get(visited_state, [])
+                                ],
+                                "episode_strip": self._mc_episode_strip(episode_steps),
+                            },
+                        },
                     }
                 )
 
@@ -514,8 +974,15 @@ class RLEngine:
                 next_state, reward, terminated, truncated, info = self.adapter.step(action)
                 step_count += 1
                 old_value = q_table[state][action]
-                best_next_value = max(q_table[next_state])
+                terminal_transition = bool(terminated or truncated)
+                if terminal_transition:
+                    best_next_value = 0.0
+                    best_next_action = None
+                else:
+                    best_next_value = max(q_table[next_state])
+                    best_next_action = q_table[next_state].index(best_next_value)
                 td_target = reward + hyperparameters["gamma"] * best_next_value
+                q_table_before = self._rounded_table(q_table)
                 lesson_function(
                     q_table,
                     state,
@@ -527,7 +994,7 @@ class RLEngine:
                 )
                 new_value = q_table[state][action]
                 frame_path = self.adapter.capture_frame_png(prefix="q_learning")
-                self.logger.log_step(
+                self._log_trace_step(
                     {
                         "state": state,
                         "action": action,
@@ -535,6 +1002,14 @@ class RLEngine:
                         "next_state": next_state,
                         "transition_probability": round(float(info.get("p", 1.0)), 4),
                         "frame_path": frame_path,
+                        "grid_metadata": self._grid_metadata_for_step(
+                            state=state,
+                            next_state=next_state,
+                            action=action,
+                            reward=reward,
+                            terminated=terminated,
+                            truncated=truncated,
+                        ),
                         "agent_caption": (
                             "Agent selected "
                             f"{self.adapter.action_label(action)} from Q({state}, ·) "
@@ -556,17 +1031,43 @@ class RLEngine:
                             f"Q({state}, {action}) updates from {round(old_value, 4)} to {round(new_value, 4)}.",
                         ],
                         "updated_values": {f"Q({state}, {action})": round(new_value, 4)},
+                        "trace_schema_version": 2,
+                        "tables": {
+                            "kind": "q_table",
+                            "before": q_table_before,
+                            "after": self._rounded_table(q_table),
+                            "active_cell": {"row": state, "column": action},
+                            "bootstrap_cell": (
+                                None
+                                if best_next_action is None
+                                else {"row": next_state, "column": best_next_action}
+                            ),
+                            "changed_cells": [{"row": state, "column": action}],
+                            "action_labels": [
+                                self.adapter.action_label(action_index)
+                                for action_index in range(action_count)
+                            ],
+                        },
                         "equation_update": {
                             "kind": "q_learning",
                             "lhs": f"Q({state},{action})",
                             "old_value": round(old_value, 4),
                             "reward": round(float(reward), 4),
                             "gamma": round(float(hyperparameters["gamma"]), 4),
-                            "bootstrap_label": f"max_a Q({next_state},a)",
+                            "bootstrap_label": (
+                                "0 terminal" if terminal_transition else f"max_a Q({next_state},a)"
+                            ),
                             "bootstrap_value": round(float(best_next_value), 4),
                             "td_target": round(float(td_target), 4),
+                            "td_error": round(float(td_target - old_value), 4),
                             "alpha": round(float(hyperparameters["alpha"]), 4),
                             "new_value": round(float(new_value), 4),
+                            "substitution": (
+                                f"{round(old_value, 4)} + {round(float(hyperparameters['alpha']), 4)} "
+                                f"* ({round(float(reward), 4)} + "
+                                f"{round(float(hyperparameters['gamma']), 4)} * "
+                                f"{round(float(best_next_value), 4)} - {round(old_value, 4)})"
+                            ),
                             "code_focus": "Q[state][action] += alpha * (td_target - Q[state][action])",
                         },
                     }
@@ -604,6 +1105,7 @@ class RLEngine:
                 old_value = q_table[state][action]
                 bootstrap = 0.0 if next_action is None else q_table[next_state][next_action]
                 td_target = reward + hyperparameters["gamma"] * bootstrap
+                q_table_before = self._rounded_table(q_table)
                 lesson_function(
                     q_table,
                     state,
@@ -619,7 +1121,7 @@ class RLEngine:
                 sampled_next_action = (
                     "terminal" if next_action is None else self.adapter.action_label(next_action)
                 )
-                self.logger.log_step(
+                self._log_trace_step(
                     {
                         "state": state,
                         "action": action,
@@ -627,6 +1129,14 @@ class RLEngine:
                         "next_state": next_state,
                         "transition_probability": round(float(info.get("p", 1.0)), 4),
                         "frame_path": frame_path,
+                        "grid_metadata": self._grid_metadata_for_step(
+                            state=state,
+                            next_state=next_state,
+                            action=action,
+                            reward=reward,
+                            terminated=terminated,
+                            truncated=truncated,
+                        ),
                         "agent_caption": (
                             f"SARSA uses the sampled next action {sampled_next_action} "
                             f"after moving from state {state} to {next_state}."
@@ -645,6 +1155,23 @@ class RLEngine:
                             f"TD target = {round(td_target, 4)} updates Q({state}, {action}) from {round(old_value, 4)} to {round(new_value, 4)}.",
                         ],
                         "updated_values": {f"Q({state}, {action})": round(new_value, 4)},
+                        "trace_schema_version": 2,
+                        "tables": {
+                            "kind": "q_table",
+                            "before": q_table_before,
+                            "after": self._rounded_table(q_table),
+                            "active_cell": {"row": state, "column": action},
+                            "bootstrap_cell": (
+                                None
+                                if next_action is None
+                                else {"row": next_state, "column": next_action}
+                            ),
+                            "changed_cells": [{"row": state, "column": action}],
+                            "action_labels": [
+                                self.adapter.action_label(action_index)
+                                for action_index in range(action_count)
+                            ],
+                        },
                         "equation_update": {
                             "kind": "sarsa",
                             "lhs": f"Q({state},{action})",
@@ -658,8 +1185,15 @@ class RLEngine:
                             ),
                             "bootstrap_value": round(float(bootstrap), 4),
                             "td_target": round(float(td_target), 4),
+                            "td_error": round(float(td_target - old_value), 4),
                             "alpha": round(float(hyperparameters["alpha"]), 4),
                             "new_value": round(float(new_value), 4),
+                            "substitution": (
+                                f"{round(old_value, 4)} + {round(float(hyperparameters['alpha']), 4)} "
+                                f"* ({round(float(reward), 4)} + "
+                                f"{round(float(hyperparameters['gamma']), 4)} * "
+                                f"{round(float(bootstrap), 4)} - {round(old_value, 4)})"
+                            ),
                             "code_focus": "Q[state][action] += alpha * (td_target - Q[state][action])",
                         },
                     }

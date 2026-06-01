@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../core/brand_mark.dart';
 import '../core/constants.dart';
 import '../core/onboarding_prefs.dart';
 import '../core/theme.dart';
@@ -122,6 +123,8 @@ class _MainLayoutState extends State<MainLayout> {
               videoPath: state.videoPath,
               testResults: state.testResults,
               stepTrace: state.stepTrace,
+              traceEpisodes: state.traceEpisodes,
+              episodeSummaries: state.episodeSummaries,
               onConceptVideoSession: _cubit.recordConceptVideoSession,
               onWorkspaceFocusSession: _cubit.recordWorkspaceFocusSession,
               showExerciseBriefInCodePane: true,
@@ -340,10 +343,13 @@ class _MainLayoutState extends State<MainLayout> {
                     ),
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: Image.asset(
-                        'assets/branding/rl_logo_trimmed.png',
-                        height: 30,
-                        fit: BoxFit.contain,
+                      child: ReinfourceMark(
+                        size: 30,
+                        foreground:
+                            Theme.of(context).brightness == Brightness.dark
+                                ? AppTheme.light
+                                : AppTheme.navy,
+                        accent: AppTheme.primaryBlue,
                       ),
                     ),
                   ),
@@ -421,7 +427,7 @@ class _MainLayoutState extends State<MainLayout> {
             margin: const EdgeInsets.symmetric(vertical: 7),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: const Color(0xFFE8F0FE),
+              color: AppTheme.tealSurface,
               borderRadius: BorderRadius.circular(999),
             ),
             child: Row(
@@ -643,7 +649,7 @@ class _AuthModeButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? AppTheme.primaryBlue : const Color(0xFFE8F0FE),
+          color: selected ? AppTheme.primaryBlue : AppTheme.tealSurface,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Text(
@@ -789,7 +795,7 @@ class _StudyBuddyDrawerState extends State<_StudyBuddyDrawer>
                     ),
                     border: Border.all(
                       color: widget.isOpen
-                          ? const Color(0xFFBFDBFE)
+                          ? AppTheme.tealBorder
                           : AppTheme.primaryBlue,
                     ),
                     boxShadow: const [
@@ -843,7 +849,7 @@ class _StudyBuddyDrawerState extends State<_StudyBuddyDrawer>
                                 shape: BoxShape.circle,
                                 color: Color.lerp(
                                   AppTheme.primaryBlue,
-                                  const Color(0xFF93C5FD),
+                                  AppTheme.tealBorder,
                                   t,
                                 ),
                                 boxShadow: [
@@ -914,7 +920,7 @@ class _NavChip extends StatelessWidget {
           color: selected
               ? (isDark
                   ? AppTheme.primaryBlue.withValues(alpha: 0.18)
-                  : const Color(0xFFE8F0FE))
+                  : AppTheme.tealSurface)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(999),
         ),

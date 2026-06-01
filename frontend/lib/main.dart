@@ -67,7 +67,7 @@ class _RLSimulationIDEState extends State<RLSimulationIDE> {
     final providedHome = widget.home;
 
     return MaterialApp(
-      title: 'RL Learning Platform',
+      title: 'Reinfource',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,

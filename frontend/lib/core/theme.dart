@@ -1,36 +1,37 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  // Brand Colors
-  static const Color primaryBlue = Color(0xFF1A73E8);
-  static const Color backgroundLight = Color(0xFFF8F9FB);
+  // ── Brand palette ─────────────────────────────────────────────────────────
+  static const Color navyDeep = Color(0xFF14223F);   // primary dark background
+  static const Color navy = Color(0xFF1A2B4A);        // text / UI on dark
+  static const Color primaryBlue = Color(0xFF00C9A7); // teal accent (brand primary)
+  static const Color amber = Color(0xFFF5A623);       // alt accent
+  static const Color light = Color(0xFFF4F7FC);       // mark on dark / light bg
+  static const Color paper = Color(0xFFF5F3EE);       // warm off-white
+
+  // ── Semantic aliases ──────────────────────────────────────────────────────
+  static const Color backgroundLight = light;
   static const Color surfaceWhite = Color(0xFFFFFFFF);
-
-  // Text Colors
-  static const Color textPrimary = Color(0xFF1F2937); // Dark Slate
-  static const Color textSecondary = Color(0xFF6B7280); // Gray
-
-  // Border Colors
+  static const Color textPrimary = navy;
+  static const Color textSecondary = Color(0xFF6B7280);
   static const Color borderLight = Color(0xFFE5E7EB);
-
-  // Status Colors
   static const Color successGreen = Color(0xFF10B981);
 
-  static ThemeData get lightTheme {
-    return _buildTheme(Brightness.light);
-  }
+  // ── Teal-tinted surface/border tokens (replaces old blue-tinted E8F0FE) ──
+  static const Color tealSurface = Color(0xFFE0F7F3);
+  static const Color tealBorder = Color(0xFF7DDDD0);
 
-  static ThemeData get darkTheme {
-    return _buildTheme(Brightness.dark);
-  }
+  static ThemeData get lightTheme => _buildTheme(Brightness.light);
+  static ThemeData get darkTheme => _buildTheme(Brightness.dark);
 
   static ThemeData _buildTheme(Brightness brightness) {
     final isDark = brightness == Brightness.dark;
-    final background = isDark ? const Color(0xFF07111F) : backgroundLight;
-    final surface = isDark ? const Color(0xFF0F172A) : surfaceWhite;
-    final text = isDark ? const Color(0xFFE5E7EB) : textPrimary;
+    final background = isDark ? const Color(0xFF0A1320) : backgroundLight;
+    final surface = isDark ? navyDeep : surfaceWhite;
+    final text = isDark ? light : textPrimary;
     final secondary = isDark ? const Color(0xFF94A3B8) : textSecondary;
-    final border = isDark ? const Color(0xFF243044) : borderLight;
+    final border = isDark ? const Color(0xFF1E3050) : borderLight;
 
     return ThemeData(
       brightness: brightness,
@@ -53,7 +54,7 @@ class AppTheme {
         surfaceTintColor: surface,
         elevation: 0,
       ),
-      fontFamily: 'Roboto',
+      fontFamily: GoogleFonts.dmSans().fontFamily,
       textTheme: TextTheme(
         titleLarge: TextStyle(
           color: text,

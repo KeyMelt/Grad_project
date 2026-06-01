@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+import backend.execution_runtime as execution_runtime
+import backend.lesson_registry as lesson_registry
 from backend.execution_runtime import _run_execution_pipeline
 from backend.validation.validator import ValidationResult
 
@@ -58,6 +60,36 @@ class _FakeEngine:
         self.logger.end_episode()
 
 
+class _FakeMultiEpisodeEngine:
+    def __init__(self, adapter: _FakeAdapter, logger) -> None:
+        self.adapter = adapter
+        self.logger = logger
+
+    def run_episodes(self, lesson_id, code_module_str, num_episodes, hyperparameters):
+        del lesson_id, code_module_str, num_episodes, hyperparameters
+        self.logger.log_step(
+            {
+                "state": 0,
+                "action": 1,
+                "next_state": 1,
+                "reward": -1.0,
+                "updated_values": {"V(0)": 0.0},
+            }
+        )
+        self.logger.end_episode()
+        self.logger.log_step(
+            {
+                "state": 2,
+                "action": 0,
+                "next_state": 3,
+                "reward": 2.0,
+                "updated_values": {"V(2)": 1.0},
+                "grid_metadata": {"terminated": True, "truncated": False},
+            }
+        )
+        self.logger.end_episode()
+
+
 class _FakeVisualizationService:
     def __init__(self, output_dir: str) -> None:
         self.output_dir = output_dir
@@ -93,3 +125,68 @@ def test_execution_trace_frame_paths_are_absolute(monkeypatch, tmp_path):
     frame_path = result["step_trace"][0]["frame_path"]
     assert os.path.isabs(frame_path)
     assert os.path.exists(frame_path)
+
+
+def test_execution_response_includes_episode_summaries_and_traces(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "backend.execution_runtime.get_lesson_definition",
+        lambda lesson_id: _Lesson(id=lesson_id),
+    )
+    monkeypatch.setattr("backend.execution_runtime.CodeValidator", lambda: _FakeValidator())
+    monkeypatch.setattr("backend.execution_runtime.EnvironmentAdapter", _FakeAdapter)
+    monkeypatch.setattr("backend.execution_runtime.RLEngine", _FakeMultiEpisodeEngine)
+    monkeypatch.setattr(
+        "backend.execution_runtime.VisualizationService",
+        _FakeVisualizationService,
+    )
+    monkeypatch.setattr("backend.execution_runtime.load_user_context", lambda code: {})
+
+    result = _run_execution_pipeline(
+        {
+            "lesson_id": "demo_lesson",
+            "code": "def demo(): pass",
+            "episode_count": 2,
+        }
+    )
+
+    assert [episode["episode_index"] for episode in result["trace_episodes"]] == [0, 1]
+    assert result["trace_episodes"][0]["steps"][0]["state"] == 0
+    assert result["trace_episodes"][1]["steps"][0]["state"] == 2
+    assert result["step_trace"] == result["trace_episodes"][-1]["steps"]
+    assert result["episode_summaries"] == [
+        {
+            "episode_index": 0,
+            "step_count": 1,
+            "total_reward": -1.0,
+            "terminated": False,
+            "truncated": False,
+        },
+        {
+            "episode_index": 1,
+            "step_count": 1,
+            "total_reward": 2.0,
+            "terminated": True,
+            "truncated": False,
+        },
+    ]
+
+
+def test_execution_runtime_initializes_registry_for_spawned_process(monkeypatch, tmp_path):
+    database_path = tmp_path / "spawn_registry.db"
+    monkeypatch.setenv("RL_IDE_DB_URL", f"sqlite:///{database_path}")
+    lesson_registry.set_registry(None)  # type: ignore[arg-type]
+
+    previous_database = execution_runtime._PROCESS_REGISTRY_DATABASE
+    execution_runtime._PROCESS_REGISTRY_DATABASE = None
+    try:
+        execution_runtime._ensure_process_lesson_registry()
+
+        lesson = lesson_registry.get_lesson_definition("td_sarsa")
+        assert lesson is not None
+        assert lesson.required_function == "sarsa_update"
+    finally:
+        database = execution_runtime._PROCESS_REGISTRY_DATABASE
+        if database is not None:
+            database.close()
+        execution_runtime._PROCESS_REGISTRY_DATABASE = previous_database

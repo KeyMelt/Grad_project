@@ -8,6 +8,8 @@ This is the first lesson of the course because every later equation — Bellman 
 
 The Gymnasium environment we use throughout the video is `FrozenLake-v1` (4×4, `is_slippery=True`). Holes sit at states $\{5, 7, 11, 12\}$; the goal is state $15$. Reward $1.0$ fires *on arrival* at state $15$ — every other transition pays $0$. That sparse reward is the entire teaching signal. The rest of the course is about extracting maximum information from that trickle.
 
+![FrozenLake-v1: a 4×4 grid where the agent navigates from Start (top-left) to Goal (bottom-right) while avoiding holes on slippery ice.](https://gymnasium.farama.org/_images/frozen_lake.gif)
+
 ## Intuition first
 
 Picture three short attempts.
@@ -32,13 +34,15 @@ What *was* present:
 
 That is the canonical RL loop: at each timestep $t$, the agent observes state $S_t$, picks action $A_t$, and the environment hands back the next state $S_{t+1}$ and reward $R_{t+1}$. Repeat. Learn from what you see. The video closes by drawing this loop as a circle — the **agent–environment interface** — the diagram every subsequent lesson will build on.
 
+![The agent–environment interaction loop: the agent observes state S_t, takes action A_t, and receives reward R_{t+1} and new state S_{t+1} from the environment.](https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Reinforcement_learning_diagram.svg/400px-Reinforcement_learning_diagram.svg.png)
+
 Contrast it with the other two paradigms in one diagram:
 
-| Paradigm        | Input                       | Feedback signal             | Goal                       |
+| Paradigm | Input | Feedback signal | Goal |
 | --------------- | --------------------------- | --------------------------- | -------------------------- |
-| Supervised      | (input, label) pairs        | "Correct answer was $y$."   | Predict labels for new $x$ |
-| Unsupervised    | Unlabelled $x$ only         | None                        | Find structure in $x$      |
-| **Reinforcement** | State stream from env       | Scalar reward $R_t$         | Maximize expected return   |
+| Supervised | (input, label) pairs | "Correct answer was $y$." | Predict labels for new $x$ |
+| Unsupervised | Unlabelled $x$ only | None | Find structure in $x$ |
+| **Reinforcement** | State stream from env | Scalar reward $R_t$ | Maximize expected return |
 
 RL is not "supervised learning with delayed labels." Nothing ever tells the elf what the right action *was* — only what happened *because of* the action it took.
 
@@ -64,18 +68,18 @@ $$
 S_0=0,\; A_0=\text{DOWN},\; R_1=0,\; S_1=4,\; A_1=\text{DOWN},\; R_2=0,\; \ldots,\; R_7=1,\; S_7=15.
 $$
 
-| Symbol     | Meaning                                                           |
+| Symbol | Meaning |
 | ---------- | ----------------------------------------------------------------- |
-| $S_t$      | State at time $t$ (an integer $0$–$15$ for FrozenLake)            |
-| $A_t$      | Action chosen at time $t$ (one of LEFT, DOWN, RIGHT, UP)          |
-| $R_{t+1}$  | Reward received after taking $A_t$ in $S_t$                       |
-| $T$        | Terminal time step (the episode ends here)                        |
-| Agent      | The decision-maker; in code, the policy that maps $S_t$ to $A_t$  |
+| $S_t$ | State at time $t$ (an integer $0$–$15$ for FrozenLake) |
+| $A_t$ | Action chosen at time $t$ (one of LEFT, DOWN, RIGHT, UP) |
+| $R_{t+1}$ | Reward received after taking $A_t$ in $S_t$ |
+| $T$ | Terminal time step (the episode ends here) |
+| Agent | The decision-maker; in code, the policy that maps $S_t$ to $A_t$ |
 | Environment | Everything else; here, the FrozenLake board and its slip dynamics |
 
 A few subtleties worth pinning down now, so that the next video can move quickly:
 
-- **Indexing convention.** $R_{t+1}$ is the reward that arrives *after* action $A_t$. The "+1" emphasises that reward is a consequence, not a property of the state alone. (Sutton & Barto eq. 3.1, p. 48.)
+- **Indexing convention.** $R_{t+1}$ is the reward that arrives *after* action $A_t$. The "+1" emphasises that reward is a consequence, not a property of the state alone.
 - **Sparse vs. dense.** FrozenLake's reward is *sparse*: zero on every transition except arrival at state $15$. Sparsity is what makes credit assignment hard — when the $+1$ finally arrives, *which* of the seven previous actions deserves credit?
 - **Stochasticity lives in the environment.** When the elf chooses RIGHT and slips to a different cell, the *agent's* action was still RIGHT. The randomness is the environment's response. We will formalise this as $p(s', r \mid s, a)$ in the very next video.
 
@@ -87,14 +91,14 @@ This lesson has no starter exercise — it is conceptual scaffolding. But you ca
 import gymnasium as gym
 
 env = gym.make("FrozenLake-v1", is_slippery=True)
-observation, info = env.reset(seed=42)   # S_0 and bookkeeping
+observation, info = env.reset(seed=42) # S_0 and bookkeeping
 terminated = truncated = False
 
 while not (terminated or truncated):
-    action = env.action_space.sample()                # random π for now
-    next_observation, reward, terminated, truncated, info = env.step(action)
-    # (observation, action, reward, next_observation) = (S_t, A_t, R_{t+1}, S_{t+1})
-    observation = next_observation
+ action = env.action_space.sample() # random π for now
+ next_observation, reward, terminated, truncated, info = env.step(action)
+ # (observation, action, reward, next_observation) = (S_t, A_t, R_{t+1}, S_{t+1})
+ observation = next_observation
 
 env.close()
 ```
@@ -137,7 +141,7 @@ Backward, this lesson has no prerequisites within the course. Outside the course
 - Python and NumPy fluency — needed for every exercise.
 - The Gymnasium API — covered in the snippet above.
 
-In the Sutton & Barto narrative, this lesson sits squarely in Chapter 1, §1.1–§1.3: the definition of RL, its distinction from other paradigms, and the agent–environment loop. Chapter 3 begins the formalisation we will adopt in the very next lesson.
+This lesson covers the definition of RL, its distinction from other learning paradigms, and the agent–environment loop. The next lesson begins the formal MDP formalisation.
 
 ## Key takeaways
 

@@ -21,6 +21,8 @@ from backend.settings import ExecutionSettings
 from backend.user_code import load_user_context
 from backend.validation.validator import CodeValidator
 
+_PROCESS_REGISTRY_DATABASE = None
+
 
 class ExecutionPipelineError(Exception):
     def __init__(self, status_code: int, detail: Any):
@@ -34,6 +36,7 @@ def run_submission_with_timeout(
     timeout_seconds: int | None = None,
 ) -> dict[str, Any]:
     """Run one lesson submission in a spawned process with a hard timeout."""
+    _ensure_process_lesson_registry()
     effective_timeout = timeout_seconds or _derive_timeout_seconds(submission_payload)
     lesson = get_lesson_definition(submission_payload["lesson_id"])
     feedback_service = StudentFeedbackService()
@@ -88,6 +91,7 @@ def run_submission_with_timeout(
 
 
 def _execution_worker(submission_payload: dict[str, Any], queue: multiprocessing.Queue) -> None:
+    _ensure_process_lesson_registry()
     lesson = get_lesson_definition(submission_payload["lesson_id"])
     feedback_service = StudentFeedbackService()
     try:
@@ -122,6 +126,28 @@ def _execution_worker(submission_payload: dict[str, Any], queue: multiprocessing
         )
 
 
+def _ensure_process_lesson_registry() -> None:
+    """Initialise the DB-backed lesson registry inside spawned processes."""
+    global _PROCESS_REGISTRY_DATABASE
+
+    import backend.lesson_registry as _lr
+
+    try:
+        _lr.list_lesson_definitions()
+        return
+    except RuntimeError:
+        pass
+
+    from backend.persistence import Database
+    from backend.services.lesson_registry_service import LessonRegistryService
+
+    database = Database()
+    database.create_schema()
+    registry = LessonRegistryService(database=database)
+    _lr.set_registry(registry)
+    _PROCESS_REGISTRY_DATABASE = database
+
+
 def _run_execution_pipeline(submission_payload: dict[str, Any]) -> dict[str, Any]:
     """Validate code, execute the lesson environment, and package replay output."""
     validator, feedback_service, lesson, logger, visualizer, adapter = _validate_and_prepare(
@@ -154,7 +180,14 @@ def _run_execution_pipeline(submission_payload: dict[str, Any]) -> dict[str, Any
 
 def _validate_and_prepare(
     submission_payload: dict[str, Any],
-) -> tuple[CodeValidator, StudentFeedbackService, Any, EventLogger, VisualizationService, EnvironmentAdapter]:
+) -> tuple[
+    CodeValidator,
+    StudentFeedbackService,
+    Any,
+    EventLogger,
+    VisualizationService,
+    EnvironmentAdapter,
+]:
     validator = CodeValidator()
     feedback_service = StudentFeedbackService()
     settings = ExecutionSettings.from_env()
@@ -287,6 +320,22 @@ def _build_success_response(
 ) -> dict[str, Any]:
     episode_rewards = [sum(step.get("reward", 0) for step in episode) for episode in log_data]
     latest_episode = json.loads(json.dumps(log_data[-1], cls=NpEncoder)) if log_data else []
+    trace_episodes = json.loads(
+        json.dumps(
+            [
+                {
+                    "episode_index": index,
+                    "steps": episode,
+                }
+                for index, episode in enumerate(log_data)
+            ],
+            cls=NpEncoder,
+        )
+    )
+    episode_summaries = [
+        _episode_summary(index, episode, episode_rewards[index])
+        for index, episode in enumerate(log_data)
+    ]
     return {
         "status": "success",
         "message": "Execution pipeline completed.",
@@ -295,6 +344,8 @@ def _build_success_response(
         "visualization_ready": bool(video_path),
         "test_results": validation_result.test_results,
         "step_trace": latest_episode,
+        "trace_episodes": trace_episodes,
+        "episode_summaries": episode_summaries,
         "metrics": {
             "episodes_completed": len(log_data),
             "steps_recorded": sum(len(episode) for episode in log_data),
@@ -304,6 +355,25 @@ def _build_success_response(
             ),
             "best_episode_reward": max(episode_rewards, default=0),
         },
+    }
+
+
+def _episode_summary(
+    episode_index: int,
+    episode: list[dict[str, Any]],
+    total_reward: float,
+) -> dict[str, Any]:
+    last_step = episode[-1] if episode else {}
+    grid_metadata = last_step.get("grid_metadata") or {}
+    mc_details = (last_step.get("equation_update") or {}).get("mc_details") or {}
+    terminated = bool(grid_metadata.get("terminated") or mc_details.get("terminated"))
+    truncated = bool(grid_metadata.get("truncated") or mc_details.get("truncated"))
+    return {
+        "episode_index": episode_index,
+        "step_count": len(episode),
+        "total_reward": round(float(total_reward), 4),
+        "terminated": terminated,
+        "truncated": truncated,
     }
 
 

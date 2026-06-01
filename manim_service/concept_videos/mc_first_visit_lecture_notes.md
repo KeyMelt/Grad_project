@@ -6,7 +6,9 @@ Every algorithm so far has assumed we *know* the environment's dynamics function
 
 First-visit Monte Carlo is the first algorithm in this course that gives up on $p$. It is *model-free*: it never opens the environment's box. Instead, it does what every gambler does — plays an episode end-to-end, watches the final score, and uses that score to revise its estimate of how good each starting situation was. The Bellman expectation equation is still there, lurking underneath, but instead of summing over $(s', r)$ analytically, we *sample* — drawing the random successor by calling `env.step()` and reading the resulting reward — and average many samples over many episodes.
 
-We use Gymnasium's `Blackjack-v1`, which follows Sutton & Barto's setup verbatim. A state is the triple $(\text{player sum},\; \text{dealer showing card},\; \text{usable ace})$. Actions are HIT and STICK. Episodes are short — usually $1$ to $5$ steps — and terminate with reward $\{-1, 0, +1\}$ (lose, push, win). The discount $\gamma$ is conventionally $1$ for Blackjack because episodes are guaranteed-finite and short.
+We use Gymnasium's `Blackjack-v1`. A state is the triple $(\text{player sum},\; \text{dealer showing card},\; \text{usable ace})$. Actions are HIT and STICK. Episodes are short — usually $1$ to $5$ steps — and terminate with reward $\{-1, 0, +1\}$ (lose, push, win). The discount $\gamma$ is conventionally $1$ for Blackjack because episodes are guaranteed-finite and short.
+
+![Blackjack-v1: the agent sees its current sum, the dealer's face-up card, and whether it holds a usable ace. Episodes end with reward −1 (lose), 0 (push), or +1 (win).](https://gymnasium.farama.org/_images/blackjack.gif)
 
 ## Intuition first
 
@@ -44,7 +46,7 @@ $$
 G_t \;=\; R_{t+1} + \gamma R_{t+2} + \gamma^2 R_{t+3} + \cdots + \gamma^{T-t-1} R_T \;=\; \sum_{k=0}^{T-t-1} \gamma^k R_{t+k+1}.
 $$
 
-This is the standard discounted return (S&B eq. 3.8). For Blackjack with $\gamma = 1$, the return from any timestep is just the terminal reward (because all intermediate rewards are $0$). But in general we have to roll the discount forward.
+This is the standard discounted return. For Blackjack with $\gamma = 1$, the return from any timestep is just the terminal reward (because all intermediate rewards are $0$). But in general we have to roll the discount forward.
 
 The efficient computation is **backward**: start from $G = 0$ at the terminal step and walk back, accumulating
 
@@ -52,7 +54,7 @@ $$
 G \;\leftarrow\; R_{t+1} + \gamma \cdot G.
 $$
 
-That is the same return recursion from `mdp_foundations` (S&B eq. 3.9), used as a *computation* rather than an *equation*.
+That is the same return recursion from `mdp_foundations`, used as a *computation* rather than an *equation*.
 
 ### First-visit update
 
@@ -68,19 +70,19 @@ $$
 \boxed{\;V(s) \;\leftarrow\; \text{mean}(\text{Returns}(s)).\;}
 $$
 
-This is S&B's algorithm box on p. 92. Repeated many times across many episodes, $V(s) \to v_\pi(s)$ as the number of first-visit returns at $s$ grows (law of large numbers).
+92. Repeated many times across many episodes, $V(s) \to v_\pi(s)$ as the number of first-visit returns at $s$ grows (law of large numbers).
 
 ### Symbol glossary
 
-| Symbol               | Meaning                                                                  |
+| Symbol | Meaning |
 | -------------------- | ------------------------------------------------------------------------ |
-| Episode              | A finite sequence $(S_0, A_0, R_1, S_1, A_1, R_2, \ldots, R_T)$          |
-| $T$                  | Terminal timestep — episode ends here                                    |
-| $G_t$                | Discounted return from time $t$                                          |
-| $\text{Returns}(s)$  | Running list of first-visit returns for state $s$ across all episodes    |
-| $V(s)$               | Running estimate — the mean of $\text{Returns}(s)$                       |
-| $\gamma$             | Discount (Blackjack convention: $1$; lesson default in code: $0.95$)     |
-| visited_states       | Per-episode set tracking which states have already had their first visit |
+| Episode | A finite sequence $(S_0, A_0, R_1, S_1, A_1, R_2, \ldots, R_T)$ |
+| $T$ | Terminal timestep — episode ends here |
+| $G_t$ | Discounted return from time $t$ |
+| $\text{Returns}(s)$ | Running list of first-visit returns for state $s$ across all episodes |
+| $V(s)$ | Running estimate — the mean of $\text{Returns}(s)$ |
+| $\gamma$ | Discount (Blackjack convention: $1$; lesson default in code: $0.95$) |
+| visited_states | Per-episode set tracking which states have already had their first visit |
 
 ### Worked numeric example
 
@@ -121,18 +123,18 @@ DISCOUNT_FACTOR = 0.95
 EPISODE_COUNT = 6
 
 def mc_first_visit_prediction(episode, V, returns, gamma=DISCOUNT_FACTOR):
-    visited_states = set()
-    for index, (state, _action, _reward) in enumerate(episode):
-        if __BLANK_mc_first_visit_seen_state__:
-            continue
-        visited_states.add(state)
-        G = 0.0
-        discount = 1.0
-        # TODO(student): roll the discounted return forward from the first visit.
-        raise NotImplementedError("TODO: mc_first_visit_return")
-        returns.setdefault(state, []).append(G)
-        V[state] = sum(returns[state]) / len(returns[state])
-    return V
+ visited_states = set()
+ for index, (state, _action, _reward) in enumerate(episode):
+ if __BLANK_mc_first_visit_seen_state__:
+ continue
+ visited_states.add(state)
+ G = 0.0
+ discount = 1.0
+ # TODO(student): roll the discounted return forward from the first visit.
+ raise NotImplementedError("TODO: mc_first_visit_return")
+ returns.setdefault(state, []).append(G)
+ V[state] = sum(returns[state]) / len(returns[state])
+ return V
 ```
 
 The function processes **one episode** at a time. `episode` is a list of triples $(s, a, r)$ in time order. `V` and `returns` accumulate across episodes — they are the running estimate and the running list of returns per state.
@@ -156,9 +158,9 @@ If True, `continue` skips this index and we do not append a return. If False, we
 
 ```python
 for future_index in range(index, len(episode)):
-    _future_state, _future_action, future_reward = episode[future_index]
-    G += discount * future_reward
-    discount *= gamma
+ _future_state, _future_action, future_reward = episode[future_index]
+ G += discount * future_reward
+ discount *= gamma
 ```
 
 Read the loop: starting from the first-visit index, walk forward to the end of the episode, accumulating `discount * reward` at each step, then multiplying `discount` by $\gamma$ for the next step. This computes $G_t = R_{t+1} + \gamma R_{t+2} + \gamma^2 R_{t+3} + \cdots$ as a forward sum. Equivalent to the backward recursion, just the other direction.
@@ -171,15 +173,15 @@ After the TODO, the code appends $G$ to `returns[state]` and updates $V[state]$ 
 
 ### Why forward instead of backward?
 
-The pseudocode in S&B is backward. The starter is forward. Both produce the same numbers. The forward formulation is easier to read for students who have not internalised the backward recursion yet, but it costs $O(T^2)$ instead of $O(T)$ per episode (we re-scan the future at each timestep). For Blackjack with $T \leq 5$ this does not matter; for long episodes it would.
+The pseudocode in research is backward. The starter is forward. Both produce the same numbers. The forward formulation is easier to read for students who have not internalised the backward recursion yet, but it costs $O(T^2)$ instead of $O(T)$ per episode (we re-scan the future at each timestep). For Blackjack with $T \leq 5$ this does not matter; for long episodes it would.
 
 ## Common pitfalls and misconceptions
 
 **Pitfall 1: "MC bootstraps like DP."**
-It does not. The estimate of one state's value never uses the estimate of another state's value during the update — the update is purely the sample mean of *actual* (not estimated) returns. This is the fundamental contrast with both DP and TD. S&B p. 95 calls this out explicitly: MC "does not bootstrap."
+It does not. The estimate of one state's value never uses the estimate of another state's value during the update — the update is purely the sample mean of *actual* (not estimated) returns. This is the fundamental contrast with both DP and TD. calls this out explicitly: MC "does not bootstrap."
 
 **Pitfall 2: "MC works for any task."**
-S&B defines MC methods only for *episodic* tasks (p. 91) — a well-defined return $G$ requires the episode to terminate. On continuing (non-terminating) tasks you need TD methods or a discounting trick.
+Monte Carlo methods are only defined for *episodic* tasks — a well-defined return $G$ requires the episode to terminate. On continuing (non-terminating) tasks you need TD methods or a discounting trick.
 
 **Pitfall 3: "First-visit and every-visit MC give different limits."**
 Both converge to $v_\pi$. First-visit's samples are i.i.d. (cleaner analysis); every-visit's are not (returns from later visits in the same episode are correlated with returns from earlier visits). Both work; first-visit is the default in introductory treatments because its convergence proof is simpler.
@@ -188,17 +190,16 @@ Both converge to $v_\pi$. First-visit's samples are i.i.d. (cleaner analysis); e
 MC is *incremental between episodes* but *not online within an episode*. You cannot update $V(S_3)$ until the episode reaches its terminal step $T$ and the return $G_3$ is known. This is the central difference between MC and TD: TD updates after every transition, MC waits for the episode to end.
 
 **Pitfall 5: "Returns are computed forward."**
-S&B's canonical implementation (p. 92) computes them backward, accumulating $G \leftarrow \gamma G + R_{t+1}$ from $t = T-1$ down to $t = 0$. This is $O(T)$ per episode. The starter code uses a forward $O(T^2)$ implementation for readability; both produce the same numbers. (This is the spec's `misconception_to_prevent`: "Monte Carlo waits for the full episode and does not bootstrap from a next-state estimate.")
+The canonical implementation computes returns backward, accumulating $G \leftarrow \gamma G + R_{t+1}$ from $t = T-1$ down to $t = 0$. This is $O(T)$ per episode. The starter code uses a forward $O(T^2)$ implementation for readability; both produce the same numbers. (This is the spec's `misconception_to_prevent`: "Monte Carlo waits for the full episode and does not bootstrap from a next-state estimate.")
 
 ## Connection to the bigger picture
 
 **Forward links.**
 - `td_sarsa`, `td_q_learning`: TD methods are the "best of both worlds" between DP and MC. Like MC, they sample. Like DP, they bootstrap from a value estimate at the next step. This means they update *online*, after every transition, not after every episode.
-- Monte Carlo *control* (S&B §5.3–5.6): extends prediction to learning $Q$ and improving $\pi$ with $\epsilon$-soft policies. We do not cover MC control in this course because TD control supersedes it for online settings.
+- Monte Carlo *control*: extends prediction to learning $Q$ and improving $\pi$ with $\epsilon$-soft policies. We do not cover MC control in this course because TD control supersedes it for online settings.
 
 **Backward links.** `mdp_foundations` (defines $G_t$ and $v_\pi$ — MC just estimates $v_\pi$ by sampling). `dp_policy_eval` (the model-based counterpart that MC replaces with sample averaging — the *target* $v_\pi$ is the same).
 
-In Sutton & Barto, this lesson is Chapter 5, Section 5.1 (pp. 91–94). The algorithm box on p. 92 is the canonical pseudocode; the Blackjack example is Example 5.1 on p. 93 with the famous policy plot on p. 94.
 
 ## Key takeaways
 

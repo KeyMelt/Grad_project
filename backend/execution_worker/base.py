@@ -13,7 +13,9 @@ from backend.execution_worker.routes import (
     build_workspace_router,
 )
 from backend.job_store_sqlite import SqliteExecutionJobStore
+from backend.persistence import Database
 from backend.services.execution_service import ExecutionService
+from backend.services.lesson_registry_service import LessonRegistryService
 from backend.services.workspace_service import WorkspaceSessionService
 from backend.settings import WorkerSettings, require_configured_secret
 from backend.workspace_store_sqlite import SqliteWorkspaceStore
@@ -23,10 +25,19 @@ from backend.workspace_store_sqlite import SqliteWorkspaceStore
 class WorkerServiceContainer:
     execution: ExecutionService
     workspace: WorkspaceSessionService
+    database: Database | None = None
+    lesson_registry: LessonRegistryService | None = None
 
 
 def _build_services() -> WorkerServiceContainer:
     settings = WorkerSettings.from_env()
+    database = Database()
+    database.create_schema()
+    lesson_registry = LessonRegistryService(database=database)
+
+    import backend.lesson_registry as _lr
+
+    _lr.set_registry(lesson_registry)
 
     return WorkerServiceContainer(
         execution=ExecutionService(
@@ -39,6 +50,8 @@ def _build_services() -> WorkerServiceContainer:
             use_docker=settings.workspace_use_docker,
             store=SqliteWorkspaceStore(str(settings.workspace_store_path)),
         ),
+        database=database,
+        lesson_registry=lesson_registry,
     )
 
 
@@ -63,6 +76,7 @@ def create_app(services: WorkerServiceContainer | None = None) -> FastAPI:
         finally:
             _close_if_present(svc.workspace)
             _close_if_present(svc.execution)
+            _close_if_present(svc.database)
 
     app = FastAPI(
         title="RL IDE Execution Worker",

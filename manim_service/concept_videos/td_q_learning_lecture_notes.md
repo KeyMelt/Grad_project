@@ -6,7 +6,9 @@ Q-learning is SARSA with one symbol changed — and that single change makes it 
 
 This decoupling is why Q-learning is everywhere: experience replay (DQN), demonstrations, hindsight relabeling — none of these work for on-policy SARSA, all of them work for Q-learning. Watkins's 1989 thesis was the breakthrough; the entire deep-RL revolution is, structurally, Q-learning with a neural network in place of the tabular $Q$.
 
-We stay on CliffWalking-v0 — same $4 \times 12$ grid, same start/goal/cliff layout, same step reward $-1$ and cliff reward $-100$, same $\gamma = 1$ in convention (lesson default in the starter is $\gamma = 0.95$). The point of using the same environment as SARSA is to make the comparison surgical: one symbol changes in the code, and the learned policy changes from "walk safely around the cliff" to "walk along the cliff edge, accepting occasional $\epsilon$-greedy disasters." That contrast is S&B's Example 6.6, and it is the canonical illustration of on-policy vs. off-policy.
+We stay on CliffWalking-v0 — same $4 \times 12$ grid, same start/goal/cliff layout, same step reward $-1$ and cliff reward $-100$, same $\gamma = 1$ in convention (lesson default in the starter is $\gamma = 0.95$). The point of using the same environment as SARSA is to make the comparison surgical: one symbol changes in the code, and the learned policy changes from "walk safely around the cliff" to "walk along the cliff edge, accepting occasional $\epsilon$-greedy disasters." That contrast is the canonical illustration of on-policy vs. off-policy.
+
+![CliffWalking-v0: SARSA learns the safer upper route (orange); Q-learning learns the optimal cliff-edge route (red). One symbol changes in the code — the $\max$ vs. the sampled next action — and the learned policy changes completely.](https://gymnasium.farama.org/_images/cliff_walking.gif)
 
 ## Intuition first
 
@@ -34,7 +36,7 @@ On CliffWalking, watching both algorithms train side by side is illuminating. Q-
 
 ### The Q-learning update
 
-The Q-learning update rule (S&B eq. 6.8, p. 131):
+The Q-learning update rule:
 
 $$
 \boxed{\;Q(S_t, A_t) \;\leftarrow\; Q(S_t, A_t) + \alpha\,\Bigl[R_{t+1} + \gamma \max_a Q(S_{t+1}, a) - Q(S_t, A_t)\Bigr].\;}
@@ -54,22 +56,24 @@ In code: `bootstrap = 0.0 if done else max(Q[next_state])`.
 
 ### Why off-policy?
 
+![Q-table: initially all zeros (left). After training (right), each entry Q(s,a) estimates the optimal expected return for taking action a in state s. The greedy policy reads off the argmax of each row.](https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Q-Learning_Matrix_Initialized_and_After_Training.png/500px-Q-Learning_Matrix_Initialized_and_After_Training.png)
+
 The target $\max_a Q(S_{t+1}, a)$ is what $q_*$ satisfies in the Bellman *optimality* equation. So Q-learning's update is a *sampled* version of the Bellman optimality backup — the same equation value iteration iterates analytically. Where value iteration sums over $p(s', r \mid s, a)$ explicitly, Q-learning samples one $(s', r)$ from the environment.
 
 Because the target equation $q_*$ does not depend on the policy, Q-learning's bootstrap does not depend on which policy collected the data. Whence "off-policy."
 
 ### Symbol glossary
 
-| Symbol              | Meaning                                                                |
+| Symbol | Meaning |
 | ------------------- | ---------------------------------------------------------------------- |
-| $Q(s, a)$           | Action-value table                                                     |
-| $S_t, A_t$          | Current state and action — the cell of $Q$ being updated               |
-| $R_{t+1}$           | Immediate reward                                                       |
-| $S_{t+1}$           | Next state                                                             |
-| $\max_a Q(S_{t+1}, a)$ | Greedy bootstrap — max across the next-state row of $Q$             |
-| $\alpha$            | Learning rate (lesson default: $0.10$)                                 |
-| $\gamma$            | Discount factor (lesson default: $0.95$)                               |
-| $\epsilon$          | Behavior policy exploration rate (lesson default: $0.20$)              |
+| $Q(s, a)$ | Action-value table |
+| $S_t, A_t$ | Current state and action — the cell of $Q$ being updated |
+| $R_{t+1}$ | Immediate reward |
+| $S_{t+1}$ | Next state |
+| $\max_a Q(S_{t+1}, a)$ | Greedy bootstrap — max across the next-state row of $Q$ |
+| $\alpha$ | Learning rate (lesson default: $0.10$) |
+| $\gamma$ | Discount factor (lesson default: $0.95$) |
+| $\epsilon$ | Behavior policy exploration rate (lesson default: $0.20$) |
 
 ### Worked numeric example
 
@@ -78,7 +82,7 @@ Same setup as the SARSA example. The agent is at $S_t = 36$ (start), takes $A_t 
 Suppose the current $Q$ table has the next-state row:
 
 $$
-Q(24, \text{LEFT}) = -4.5, \quad Q(24, \text{DOWN}) = -6.0, \quad Q(24, \text{RIGHT}) = -3.0, \quad Q(24, \text{UP}) = -3.8,
+Q(24, \text{LEFT}) = -4.5, \quad Q(24, \text{DOWN}) = -6.0, \quad Q(24, \text{RIGHT}) = -3.0, \quad Q(24, \text{UP}) = -3.8
 $$
 
 and $Q(36, \text{UP}) = -5.0$ (same as before). With $\alpha = 0.10$, $\gamma = 1.0$:
@@ -112,11 +116,11 @@ EXPLORATION_RATE = 0.20
 EPISODE_COUNT = 6
 
 def q_learning_update(Q, state, action, reward, next_state, alpha=LEARNING_RATE, gamma=DISCOUNT_FACTOR):
-    best_next_value = __BLANK_q_learning_best_next__
-    td_target = reward + gamma * best_next_value
-    # TODO(student): apply the one-step TD update to the chosen Q-value.
-    raise NotImplementedError("TODO: q_learning_update_rule")
-    return Q
+ best_next_value = __BLANK_q_learning_best_next__
+ td_target = reward + gamma * best_next_value
+ # TODO(student): apply the one-step TD update to the chosen Q-value.
+ raise NotImplementedError("TODO: q_learning_update_rule")
+ return Q
 ```
 
 Compare this signature to `sarsa_update`: there is **no `next_action` parameter**. That is the structural sign that Q-learning is off-policy — the target does not need to know what action the agent will take next. The driver loop is simpler too: only one $\epsilon$-greedy sample per step, not two.
@@ -141,9 +145,9 @@ For terminal handling, the driver should make sure to either skip the update whe
 
 ```python
 if done:
-    Q[state][action] += alpha * (reward - Q[state][action])
+ Q[state][action] += alpha * (reward - Q[state][action])
 else:
-    Q[state][action] += alpha * (reward + gamma * max(Q[next_state]) - Q[state][action])
+ Q[state][action] += alpha * (reward + gamma * max(Q[next_state]) - Q[state][action])
 ```
 
 The starter pushes terminal handling out of the function — the success criteria assume the caller passes the correct `next_state` and that the `Q[next_state]` row is zero for terminal states (which is the typical initialisation). For a strict implementation, you would add a `done` flag to the signature and zero out the bootstrap when `done` is True.
@@ -164,23 +168,23 @@ Identical in structure to SARSA's update — the only difference between the two
 state, info = env.reset()
 done = False
 while not done:
-    action = epsilon_greedy(Q, state, epsilon)
-    next_state, reward, terminated, truncated, info = env.step(action)
-    done = terminated or truncated
-    q_learning_update(Q, state, action, reward, next_state)
-    state = next_state
+ action = epsilon_greedy(Q, state, epsilon)
+ next_state, reward, terminated, truncated, info = env.step(action)
+ done = terminated or truncated
+ q_learning_update(Q, state, action, reward, next_state)
+ state = next_state
 ```
 
 Compare to the SARSA driver: only one `epsilon_greedy` call, no `next_action` variable, no need to carry the next action into the next iteration. The update is fired and the agent moves on.
 
 ### A note on maximisation bias
 
-`max(Q[next_state])` is biased when the $Q$ values are noisy. Specifically, $\mathbb{E}[\max_a Q(s', a)] \geq \max_a \mathbb{E}[Q(s', a)]$ — the expected max overestimates the max of the expected values. This is the "maximisation bias" S&B discusses in §6.7 (p. 134), and it is the motivation for *double Q-learning* (van Hasselt 2010), which uses two $Q$ tables and decouples the action selection from the value estimation in the bootstrap. For CliffWalking, with its deterministic transitions, the bias surfaces only through stochastic exploration and is small. For noisy environments (Atari, robotics), it matters and double Q-learning fixes it.
+`max(Q[next_state])` is biased when the $Q$ values are noisy. Specifically, $\mathbb{E}[\max_a Q(s', a)] \geq \max_a \mathbb{E}[Q(s', a)]$ — the expected max overestimates the max of the expected values. This is the "maximisation bias," and it is the motivation for *double Q-learning* (van Hasselt 2010), which uses two $Q$ tables and decouples the action selection from the value estimation in the bootstrap. For CliffWalking, with its deterministic transitions, the bias surfaces only through stochastic exploration and is small. For noisy environments (Atari, robotics), it matters and double Q-learning fixes it.
 
 ## Common pitfalls and misconceptions
 
 **Pitfall 1: "Q-learning always outperforms SARSA."**
-*Asymptotically*, both converge to the same optimal greedy policy as $\epsilon \to 0$. *Online during training*, SARSA can collect higher cumulative reward because its learned $Q$ accounts for exploration cost. On CliffWalking with fixed $\epsilon = 0.1$, SARSA's average per-episode online return is around $-17$; Q-learning's hovers around $-25$ because exploration steps occasionally tip the cliff. S&B Example 6.6 plots both.
+*Asymptotically*, both converge to the same optimal greedy policy as $\epsilon \to 0$. *Online during training*, SARSA can collect higher cumulative reward because its learned $Q$ accounts for exploration cost. On CliffWalking with fixed $\epsilon = 0.1$, SARSA's average per-episode online return is around $-17$; Q-learning's hovers around $-25$ because exploration steps occasionally tip the cliff. This performance gap is the canonical illustration of on-policy vs. off-policy trade-offs.
 
 **Pitfall 2: "Off-policy means the behavior policy doesn't matter."**
 It matters in one way: the behavior policy must visit every (state, action) pair infinitely often. Otherwise $Q(s, a)$ for unvisited pairs never updates and the algorithm cannot converge. A purely greedy behavior policy ($\epsilon = 0$) can starve exploration and fail.
@@ -189,7 +193,7 @@ It matters in one way: the behavior policy must visit every (state, action) pair
 No — the max is over the *full* action set $\mathcal{A}(S_{t+1})$, ignoring the behavior policy. That is exactly what makes the target equivalent to one Bellman-optimality backup.
 
 **Pitfall 4: "Q-learning has no maximisation bias."**
-It does, especially when $Q$ values are noisy. Double Q-learning is the standard remedy (S&B §6.7).
+It does, especially when $Q$ values are noisy. Double Q-learning is the standard remedy.
 
 **Pitfall 5 (the misconception called out in the spec): "Q-learning uses the sampled next action in the target."**
 It does not. The target's bootstrap is $\max_a Q(S_{t+1}, a)$, not $Q(S_{t+1}, A_{t+1})$. That single replacement is what flips SARSA into Q-learning and on-policy into off-policy.
@@ -201,7 +205,7 @@ Structurally similar — both use a max-bearing Bellman update. The difference: 
 
 **Forward links.**
 - *Deep Q-Networks (DQN, Mnih et al. 2015)* — Q-learning with a neural network parameterising $Q$, experience replay, and a target network. The same update rule, scaled to Atari.
-- *Double Q-learning* — the maximisation-bias fix (S&B §6.7; van Hasselt 2010).
+- *Double Q-learning* — the maximisation-bias fix.
 - *$n$-step Q-learning, distributional Q-learning, soft Q-learning, IQN, Rainbow…* — the modern deep-RL extensions all build on the same core off-policy update.
 
 **Backward links.**
@@ -209,7 +213,6 @@ Structurally similar — both use a max-bearing Bellman update. The difference: 
 - `dp_value_iteration` — the model-based optimality update. Q-learning is the sample analogue.
 - `mdp_foundations` — the Bellman optimality equation for $q_*$ is the equality Q-learning's target estimates.
 
-In Sutton & Barto, this lesson is Chapter 6, Section 6.5 (pp. 131–132). Algorithm box on p. 131; convergence conditions on p. 131; CliffWalking comparison with SARSA in Example 6.6 (p. 132). Maximisation bias is §6.7 (p. 134).
 
 ## Key takeaways
 

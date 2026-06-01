@@ -40,10 +40,16 @@ class StudyBuddyPanel extends StatelessWidget {
       key: const ValueKey('study-buddy-panel'),
       elevation: 10,
       color: AppTheme.surfaceWhite,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: const BorderRadius.only(
+          topRight: Radius.circular(24),
+          bottomRight: Radius.circular(24),
+        ),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: const BorderRadius.only(
+          topRight: Radius.circular(24),
+          bottomRight: Radius.circular(24),
+        ),
           border: Border.all(color: AppTheme.borderLight),
         ),
         padding: const EdgeInsets.all(18),
@@ -278,7 +284,7 @@ class _StudyBuddyHeader extends StatelessWidget {
           width: 42,
           height: 42,
           decoration: BoxDecoration(
-            color: const Color(0xFFE8F0FE),
+            color: AppTheme.tealSurface,
             borderRadius: BorderRadius.circular(14),
           ),
           child: const Icon(

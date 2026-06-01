@@ -6,9 +6,11 @@ Monte Carlo updates wait for the episode to end. That works for Blackjack — fi
 
 SARSA's trick is one of the great ideas in RL: instead of waiting for the full return $G_t$, **bootstrap**. Use the agent's current estimate of $Q(S_{t+1}, A_{t+1})$ as a stand-in for the unobserved future return, and update $Q(S_t, A_t)$ toward that estimate plus the immediate reward. This is the same bootstrap trick as DP, but with the model-based $\sum$ over outcomes replaced by a single sampled transition. Every step, every transition, one tiny update — and over thousands of steps, $Q$ converges.
 
-SARSA is **on-policy**: the target uses the action $A_{t+1}$ that the agent *actually chose next*, sampled from the same policy that produced $A_t$. That distinguishes it from Q-learning (next lesson), which uses the *greedy* action in the target. We will use CliffWalking-v0 — Sutton & Barto's Example 6.6, the canonical environment for showing why this difference matters.
+SARSA is **on-policy**: the target uses the action $A_{t+1}$ that the agent *actually chose next*, sampled from the same policy that produced $A_t$. That distinguishes it from Q-learning (next lesson), which uses the *greedy* action in the target. We will use CliffWalking-v0 — the canonical environment for showing why this difference matters.
 
 In CliffWalking, the agent walks a $4 \times 12$ grid from start (bottom-left) to goal (bottom-right). The bottom row between the corners is a cliff: stepping onto it returns reward $-100$ and teleports the agent back to start. Every other step pays reward $-1$. Discount $\gamma = 1$; learning rate $\alpha = 0.10$; exploration rate $\epsilon = 0.20$ (the starter defaults).
+
+![CliffWalking-v0: a 4×12 grid. Start (S) is bottom-left, Goal (G) is bottom-right. The cliff tiles (C) yield −100 and reset to start; every other step costs −1.](https://gymnasium.farama.org/_images/cliff_walking.gif)
 
 ## Intuition first
 
@@ -44,7 +46,7 @@ The video pauses on the moment $A_{t+1}$ gets sampled — that is the on-policy 
 
 ### The SARSA update
 
-The SARSA update rule (S&B eq. 6.7, p. 130):
+The SARSA update rule:
 
 $$
 \boxed{\;Q(S_t, A_t) \;\leftarrow\; Q(S_t, A_t) + \alpha\,\bigl[R_{t+1} + \gamma Q(S_{t+1}, A_{t+1}) - Q(S_t, A_t)\bigr].\;}
@@ -74,16 +76,16 @@ The update is "move the estimate a fraction $\alpha$ of the way toward the targe
 
 ### Symbol glossary
 
-| Symbol             | Meaning                                                                |
+| Symbol | Meaning |
 | ------------------ | ---------------------------------------------------------------------- |
-| $Q(s, a)$          | Action-value table, indexed by (state, action)                         |
-| $S_t, A_t$         | Current state and action — the cell of $Q$ we are about to update      |
-| $R_{t+1}$          | Immediate reward                                                       |
-| $S_{t+1}, A_{t+1}$ | Next state and next sampled action                                     |
-| $\delta_t$         | TD error                                                               |
-| $\alpha$           | Learning rate (lesson default: $0.10$)                                 |
-| $\gamma$           | Discount factor (lesson default: $0.95$; for CliffWalking convention $1$) |
-| $\epsilon$         | $\epsilon$-greedy exploration rate (lesson default: $0.20$)            |
+| $Q(s, a)$ | Action-value table, indexed by (state, action) |
+| $S_t, A_t$ | Current state and action — the cell of $Q$ we are about to update |
+| $R_{t+1}$ | Immediate reward |
+| $S_{t+1}, A_{t+1}$ | Next state and next sampled action |
+| $\delta_t$ | TD error |
+| $\alpha$ | Learning rate (lesson default: $0.10$) |
+| $\gamma$ | Discount factor (lesson default: $0.95$; for CliffWalking convention $1$) |
+| $\epsilon$ | $\epsilon$-greedy exploration rate (lesson default: $0.20$) |
 
 ### Worked numeric example
 
@@ -122,20 +124,20 @@ EXPLORATION_RATE = 0.20
 EPISODE_COUNT = 6
 
 def sarsa_update(
-    Q,
-    state,
-    action,
-    reward,
-    next_state,
-    next_action,
-    alpha=LEARNING_RATE,
-    gamma=DISCOUNT_FACTOR,
+ Q
+ state
+ action
+ reward
+ next_state
+ next_action
+ alpha=LEARNING_RATE
+ gamma=DISCOUNT_FACTOR
 ):
-    bootstrap = __BLANK_sarsa_bootstrap__
-    td_target = reward + gamma * bootstrap
-    # TODO(student): apply the on-policy SARSA update to the selected Q-value.
-    raise NotImplementedError("TODO: sarsa_update_rule")
-    return Q
+ bootstrap = __BLANK_sarsa_bootstrap__
+ td_target = reward + gamma * bootstrap
+ # TODO(student): apply the on-policy SARSA update to the selected Q-value.
+ raise NotImplementedError("TODO: sarsa_update_rule")
+ return Q
 ```
 
 The function performs *one* update — one SARSA quintuple's worth of work. The outer training loop (in a driver elsewhere) is responsible for stepping the environment, sampling actions with $\epsilon$-greedy, and calling `sarsa_update` once per transition.
@@ -171,7 +173,7 @@ That is the whole update. One line. Read it back to the equation:
 
 - `td_target - Q[state][action]` is $\delta_t$, the TD error.
 - `alpha * delta_t` is the magnitude of the nudge.
-- `Q[state][action] += ...` writes the new estimate back.
+- `Q[state][action] +=...` writes the new estimate back.
 
 ### Why `next_action` is a parameter
 
@@ -182,11 +184,11 @@ state, info = env.reset()
 action = epsilon_greedy(Q, state, epsilon)
 done = False
 while not done:
-    next_state, reward, terminated, truncated, info = env.step(action)
-    done = terminated or truncated
-    next_action = None if done else epsilon_greedy(Q, next_state, epsilon)
-    sarsa_update(Q, state, action, reward, next_state, next_action)
-    state, action = next_state, next_action
+ next_state, reward, terminated, truncated, info = env.step(action)
+ done = terminated or truncated
+ next_action = None if done else epsilon_greedy(Q, next_state, epsilon)
+ sarsa_update(Q, state, action, reward, next_state, next_action)
+ state, action = next_state, next_action
 ```
 
 Notice the two `epsilon_greedy` calls per step — one for the current action, one for the next action. That second call is what makes the quintuple S-A-R-S-A. Q-learning will have only one `epsilon_greedy` call per step (because Q-learning's target uses $\max$, not a sampled $A_{t+1}$).
@@ -198,13 +200,13 @@ When `done` is True, `next_action` is set to `None`, which triggers the `bootstr
 ## Common pitfalls and misconceptions
 
 **Pitfall 1: "SARSA learns $q_*$."**
-Not directly. SARSA learns $q_\pi$ for the *behavior policy* $\pi$ it is following. To recover $q_*$, the behavior policy must converge to greedy — e.g., $\epsilon$-greedy with $\epsilon \to 0$ over time. S&B p. 129 (and the convergence theorem citation) makes this explicit.
+Not directly. SARSA learns $q_\pi$ for the *behavior policy* $\pi$ it is following. To recover $q_*$, the behavior policy must converge to greedy — e.g., $\epsilon$-greedy with $\epsilon \to 0$ over time. (and the convergence theorem citation) makes this explicit.
 
 **Pitfall 2: "On-policy means the policy doesn't change."**
 On-policy means the policy used to *generate behavior* is the same as the policy being *evaluated and improved*. The policy itself must change as $Q$ updates — that is the whole point. The contrast is with off-policy methods (Q-learning), where behavior and target policies are different.
 
 **Pitfall 3: "SARSA can't learn during the same episode the agent is acting in."**
-It can — every step. That is the whole advantage of TD over MC. S&B p. 124 emphasises this "online, fully incremental fashion."
+It can — every step. That is the whole advantage of TD over MC. emphasises this "online, fully incremental fashion."
 
 **Pitfall 4: "SARSA is always safer than Q-learning."**
 SARSA's safety on CliffWalking comes from a specific structural fact: the behavior policy used for action selection *is the policy being evaluated*, so the value function bakes in the cost of $\epsilon$-greedy exploration. With $\epsilon \to 0$ both SARSA and Q-learning converge to the same optimal greedy policy. With fixed $\epsilon > 0$, SARSA's $Q$ values reflect "the value of being here and continuing to explore $\epsilon$ of the time" — which on CliffWalking means avoiding the cliff edge because exploration steps there are catastrophic.
@@ -216,7 +218,7 @@ It does not. The target uses the action that the behavior policy *actually sampl
 
 **Forward links.**
 - `td_q_learning` — the off-policy cousin. Same structure, but replaces $Q(S_{t+1}, A_{t+1})$ with $\max_a Q(S_{t+1}, a)$. Learns $q_*$ directly, independent of behavior policy.
-- *Expected SARSA* (S&B §6.6) — uses the *expected* value of $Q(S_{t+1}, \cdot)$ under the policy, instead of the sampled action. Lower variance than SARSA, still on-policy. Not covered in this course.
+- *Expected SARSA* — uses the *expected* value of $Q(S_{t+1}, \cdot)$ under the policy, instead of the sampled action. Lower variance than SARSA, still on-policy. Not covered in this course.
 - $n$-step TD, TD($\lambda$), and eligibility traces — generalisations that interpolate between TD($0$) and Monte Carlo.
 
 **Backward links.**
@@ -224,7 +226,6 @@ It does not. The target uses the action that the behavior policy *actually sampl
 - `dp_value_iteration` — the model-based optimality update. SARSA's bootstrap is the sample analogue of DP's Bellman backup.
 - `mdp_foundations` — the Bellman equation for $q_\pi$ is the equality SARSA's target estimates.
 
-In Sutton & Barto, this lesson is Chapter 6, Section 6.4 (pp. 129–131). Algorithm box on p. 130; convergence conditions p. 129; CliffWalking comparison with Q-learning in Example 6.6 (p. 132).
 
 ## Key takeaways
 

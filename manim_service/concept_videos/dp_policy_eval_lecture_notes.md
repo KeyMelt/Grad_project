@@ -8,6 +8,8 @@ The promise is bigger than just "compute $v_\pi$." Policy evaluation is the firs
 
 The environment is again FrozenLake-v1 with `is_slippery=True`, and the policy we evaluate is the *uniform-random* one: $\pi(a \mid s) = 1/4$ for every state and action. The discount factor is $\gamma = 0.95$ (the default `DISCOUNT_FACTOR` in the starter code). Under this policy the elf wanders the lake aimlessly, occasionally stumbling onto the goal — so non-terminal cells get small positive values and the heatmap glows faintly. The optimal value function would be much brighter, but that comes in the next two lessons.
 
+![FrozenLake-v1: policy evaluation builds a value heatmap by spreading reward backward from the goal (G) one sweep at a time. Bright tiles = high expected return.](https://gymnasium.farama.org/_images/frozen_lake.gif)
+
 ## Intuition first
 
 Picture the FrozenLake grid with all 16 cells initialised to $v_0(s) = 0$. The terminal cells (holes $\{5, 7, 11, 12\}$ and goal $15$) are *fixed* at $0$ — they will never be touched by the algorithm. The other 11 cells will be updated repeatedly.
@@ -34,7 +36,7 @@ The video shows five snapshots of the value heatmap: $V_0$ (all zero), $V_1$ (ju
 
 ### The Bellman expectation, rewritten as an update
 
-The Bellman expectation equation for a fixed policy $\pi$ is (S&B eq. 3.14):
+The Bellman expectation equation for a fixed policy $\pi$ is:
 
 $$
 v_\pi(s) \;=\; \sum_{a} \pi(a \mid s) \sum_{s', r} p(s', r \mid s, a)\,[r + \gamma v_\pi(s')].
@@ -46,7 +48,7 @@ $$
 \boxed{\;v_{k+1}(s) \;\doteq\; \sum_{a} \pi(a \mid s) \sum_{s', r} p(s', r \mid s, a)\,[r + \gamma v_k(s')].\;}
 $$
 
-This is S&B eq. 4.5 (p. 75). The sequence $\{v_k\}$ converges to $v_\pi$ as $k \to \infty$ — guaranteed if either $\gamma < 1$ or the policy terminates with probability $1$ from every state.
+The sequence $\{v_k\}$ converges to $v_\pi$ as $k \to \infty$ — guaranteed if either $\gamma < 1$ or the policy terminates with probability $1$ from every state.
 
 In practice we cannot iterate forever, so we stop when the largest change across the sweep is below a small threshold $\theta$:
 
@@ -58,14 +60,14 @@ The starter code uses $\theta = 10^{-8}$, which is well past what you need for t
 
 ### Symbol glossary
 
-| Symbol             | Meaning                                                                                       |
+| Symbol | Meaning |
 | ------------------ | --------------------------------------------------------------------------------------------- |
-| $v_k(s)$           | Value table at iteration $k$ — one number per non-terminal state, terminal states fixed at 0  |
-| $\pi(a \mid s)$    | Policy weights (uniform random: $1/4$ for every $(s, a)$)                                     |
-| $p(s', r \mid s, a)$ | Environment dynamics from `env.unwrapped.P[s][a]`                                           |
-| $\gamma$           | Discount factor (lesson default: $0.95$)                                                      |
-| $\theta$           | Convergence threshold (lesson default: $10^{-8}$)                                             |
-| $\Delta_k$         | Maximum value change over a sweep — used to detect convergence                                |
+| $v_k(s)$ | Value table at iteration $k$ — one number per non-terminal state, terminal states fixed at 0 |
+| $\pi(a \mid s)$ | Policy weights (uniform random: $1/4$ for every $(s, a)$) |
+| $p(s', r \mid s, a)$ | Environment dynamics from `env.unwrapped.P[s][a]` |
+| $\gamma$ | Discount factor (lesson default: $0.95$) |
+| $\theta$ | Convergence threshold (lesson default: $10^{-8}$) |
+| $\Delta_k$ | Maximum value change over a sweep — used to detect convergence |
 
 ### Worked numeric example
 
@@ -77,12 +79,12 @@ The non-trivial updates happen at states whose transition tuples include the goa
 
 `env.unwrapped.P[14]` returns, for each action $a$:
 
-| Action $a$   | Slippery successors $(s', r, done)$ each w.p. $1/3$ |
+| Action $a$ | Slippery successors $(s', r, done)$ each w.p. $1/3$ |
 | ------------ | --------------------------------------------------- |
-| $0$ = LEFT   | $\{(10, 0, F), (13, 0, F), (14, 0, F)\}$            |
-| $1$ = DOWN   | $\{(13, 0, F), (14, 0, F), (15, 1, T)\}$            |
-| $2$ = RIGHT  | $\{(14, 0, F), (15, 1, T), (10, 0, F)\}$            |
-| $3$ = UP     | $\{(10, 0, F), (15, 1, T), (13, 0, F)\}$            |
+| $0$ = LEFT | $\{(10, 0, F), (13, 0, F), (14, 0, F)\}$ |
+| $1$ = DOWN | $\{(13, 0, F), (14, 0, F), (15, 1, T)\}$ |
+| $2$ = RIGHT | $\{(14, 0, F), (15, 1, T), (10, 0, F)\}$ |
+| $3$ = UP | $\{(10, 0, F), (15, 1, T), (13, 0, F)\}$ |
 
 (Note: slippery transitions from $14$ stay within $\{10, 13, 14, 15\}$; the algorithm does not need to know this — it just enumerates `P`.) Three of the four actions have one branch hitting the goal. Plugging into the Bellman update with $v_0 \equiv 0$:
 
@@ -104,18 +106,18 @@ Here is the starter code from `backend/lessons.py`, verbatim:
 DISCOUNT_FACTOR = 0.95
 
 def policy_evaluation(V, policy, env, gamma=DISCOUNT_FACTOR, theta=1e-8):
-    delta = float("inf")
-    while delta > theta:
-        delta = 0.0
-        for state in range(len(V)):
-            old_value = V[state]
-            new_value = 0.0
-            for action, action_prob in enumerate(policy[state]):
-                # TODO(student): combine model branches into the expectation for this action.
-                raise NotImplementedError("TODO: policy_eval_expectation")
-            V[state] = new_value
-            delta = max(delta, abs(old_value - __BLANK_policy_eval_delta__))
-    return V
+ delta = float("inf")
+ while delta > theta:
+ delta = 0.0
+ for state in range(len(V)):
+ old_value = V[state]
+ new_value = 0.0
+ for action, action_prob in enumerate(policy[state]):
+ # TODO(student): combine model branches into the expectation for this action.
+ raise NotImplementedError("TODO: policy_eval_expectation")
+ V[state] = new_value
+ delta = max(delta, abs(old_value - __BLANK_policy_eval_delta__))
+ return V
 ```
 
 The skeleton is the Bellman update with two missing pieces. Let us map every line onto the equation $v_{k+1}(s) = \sum_a \pi(a \mid s) \sum_{s', r} p(s', r \mid s, a)[r + \gamma v_k(s')]$:
@@ -131,10 +133,10 @@ The skeleton is the Bellman update with two missing pieces. Let us map every lin
 ```python
 # Inside the for-action loop, conceptually:
 for transition_prob, next_state, reward, done in env.unwrapped.P[state][action]:
-    new_value += action_prob * transition_prob * (reward + gamma * V[next_state])
+ new_value += action_prob * transition_prob * (reward + gamma * V[next_state])
 ```
 
-Read the multiplication left-to-right and you can see all three sums collapsing into one accumulator: `action_prob` is $\pi(a \mid s)$, `transition_prob` is $p(s', r \mid s, a)$, and `reward + gamma * V[next_state]` is $r + \gamma v_k(s')$. The TODO is just this loop. (A subtle point: `V[next_state]` here is read from the *same* array we are writing to — that is the in-place / Gauss–Seidel variant, which converges to the same answer but typically faster than the strict two-array form. S&B p. 75 endorses this.)
+Read the multiplication left-to-right and you can see all three sums collapsing into one accumulator: `action_prob` is $\pi(a \mid s)$, `transition_prob` is $p(s', r \mid s, a)$, and `reward + gamma * V[next_state]` is $r + \gamma v_k(s')$. The TODO is just this loop. (A subtle point: `V[next_state]` here is read from the *same* array we are writing to — that is the in-place / Gauss–Seidel variant, which converges to the same answer but typically faster than the strict two-array form. endorses this.)
 
 **TODO 2: `policy_eval_delta`.** The convergence check should compare the *new* value of $V[state]$ against the *old* one we snapshotted. After `V[state] = new_value` has run, the relevant expression is just `V[state]` (which now equals `new_value`). So the blank should be:
 
@@ -180,7 +182,6 @@ Policy evaluation updates *only the value table*. The policy $\pi$ is read-only 
 
 **Backward links.** `mdp_foundations` (defines the Bellman expectation equation we are now using as an update). `transition_prob` (the $p(s', r \mid s, a)$ table we sum over). `rl_intro` (the agent–environment loop the equation formalises).
 
-In Sutton & Barto, this lesson is Chapter 4, Section 4.1 (pp. 74–75), eq. 4.5. The Gauss–Seidel discussion is the second paragraph of p. 75; the convergence argument is sketched in the third paragraph.
 
 ## Key takeaways
 

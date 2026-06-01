@@ -24,6 +24,7 @@ dependencies:
   flutter_markdown_plus: ^1.0.7
   flutter_markdown_plus_latex: ^1.0.5
   file_picker: ^11.0.2
+  google_fonts: ^6.2.1
 
 dev_dependencies:
   flutter_test:
