@@ -27,6 +27,7 @@ def build_quiz_router(services: Any) -> APIRouter:
         principal: Principal = Depends(quiz_principal),
     ):
         try:
+            _ensure_student_record(services, principal)
             return services.user_evaluation.start_quiz(
                 student_id=principal.id,
                 phase=request.phase,
@@ -40,6 +41,7 @@ def build_quiz_router(services: Any) -> APIRouter:
         principal: Principal = Depends(quiz_principal),
     ):
         try:
+            _ensure_student_record(services, principal)
             result = services.user_evaluation.submit_quiz(
                 student_id=principal.id,
                 session_id=request.session_id,
@@ -61,3 +63,12 @@ def build_quiz_router(services: Any) -> APIRouter:
             raise HTTPException(status_code=400, detail=str(error)) from error
 
     return router
+
+
+def _ensure_student_record(services: Any, principal: Principal) -> None:
+    ensure_record = getattr(services.user_evaluation, "ensure_student_record", None)
+    if callable(ensure_record):
+        ensure_record(
+            student_id=principal.id,
+            display_name=principal.id,
+        )

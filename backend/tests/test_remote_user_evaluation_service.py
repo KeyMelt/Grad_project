@@ -51,6 +51,33 @@ def test_get_dashboard_returns_none_on_404(monkeypatch):
     assert service.get_dashboard("missing") is None
 
 
+def test_ensure_student_record_posts_to_internal_service(monkeypatch):
+    def _fake_request(**kwargs):
+        assert kwargs["method"] == "POST"
+        assert kwargs["url"].endswith("/internal/students/ensure")
+        assert kwargs["json"] == {
+            "student_id": "new-student",
+            "display_name": "New Student",
+        }
+        return _FakeResponse(
+            200,
+            {
+                "student": {"id": "new-student", "display_name": "New Student"},
+                "progress": {"completed_lesson_ids": []},
+            },
+        )
+
+    monkeypatch.setattr(requests, "request", _fake_request)
+    service = RemoteUserEvaluationService(user_service_base_url="http://127.0.0.1:8200")
+
+    payload = service.ensure_student_record(
+        student_id="new-student",
+        display_name="New Student",
+    )
+
+    assert payload["student"]["id"] == "new-student"
+
+
 def test_quiz_start_raises_value_error_on_bad_request(monkeypatch):
     monkeypatch.setattr(
         requests,

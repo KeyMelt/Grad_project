@@ -108,13 +108,13 @@ class _MainLayoutState extends State<MainLayout> {
               onSubmit: () => _cubit.submit(),
               onStop: _cubit.stop,
               onReset: _cubit.reset,
-              onRun: _cubit.run,
               onReconnectWorkspace: _cubit.refreshWorkspaceConnection,
               statusMessage: state.statusMessage,
               runStatusLabel: state.runStatusLabel,
               failureKind: state.failureKind,
               unresolvedBlanks: state.unresolvedBlanks,
               studentFeedback: state.studentFeedback,
+              feedbackDismissed: state.workspaceFeedbackDismissed,
               totalReward: state.totalReward,
               averageReward: state.averageReward,
               bestEpisodeReward: state.bestEpisodeReward,
@@ -127,6 +127,7 @@ class _MainLayoutState extends State<MainLayout> {
               episodeSummaries: state.episodeSummaries,
               onConceptVideoSession: _cubit.recordConceptVideoSession,
               onWorkspaceFocusSession: _cubit.recordWorkspaceFocusSession,
+              onDismissFeedback: _cubit.dismissWorkspaceFeedback,
               showExerciseBriefInCodePane: true,
             );
 
@@ -481,9 +482,11 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   Future<void> _showAuthDialog({required _AuthMode initialMode}) {
+    _cubit.clearAuthMessage();
     return showDialog<void>(
       context: context,
       builder: (context) => _AuthDialog(
+        cubit: _cubit,
         initialMode: initialMode,
         googleAvailable: true,
         onSignIn: _cubit.signIn,
@@ -499,6 +502,7 @@ class _MainLayoutState extends State<MainLayout> {
 enum _AuthMode { signIn, signUp }
 
 class _AuthDialog extends StatefulWidget {
+  final RLWorkbenchCubit cubit;
   final _AuthMode initialMode;
   final bool googleAvailable;
   final void Function(String email, String password) onSignIn;
@@ -506,6 +510,7 @@ class _AuthDialog extends StatefulWidget {
   final VoidCallback onGoogle;
 
   const _AuthDialog({
+    required this.cubit,
     required this.initialMode,
     required this.googleAvailable,
     required this.onSignIn,
@@ -539,92 +544,171 @@ class _AuthDialogState extends State<_AuthDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(_mode == _AuthMode.signUp ? 'Create account' : 'Sign in'),
-      content: SizedBox(
-        width: 380,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
+    return BlocConsumer<RLWorkbenchCubit, RLWorkbenchState>(
+      bloc: widget.cubit,
+      listenWhen: (previous, current) =>
+          !previous.isAuthenticated && current.isAuthenticated,
+      listener: (context, state) {
+        Navigator.of(context).pop();
+      },
+      builder: (context, state) {
+        final isBusy = state.isSigningIn;
+        final authMessage = state.authMessage.trim();
+        return AlertDialog(
+          title: Text(_mode == _AuthMode.signUp ? 'Create account' : 'Sign in'),
+          content: SizedBox(
+            width: 380,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  child: _AuthModeButton(
-                    label: 'Sign in',
-                    selected: _mode == _AuthMode.signIn,
-                    onTap: () {
-                      setState(() => _mode = _AuthMode.signIn);
-                    },
+                Row(
+                  children: [
+                    Expanded(
+                      child: _AuthModeButton(
+                        label: 'Sign in',
+                        selected: _mode == _AuthMode.signIn,
+                        onTap: isBusy
+                            ? () {}
+                            : () {
+                                widget.cubit.clearAuthMessage();
+                                setState(() => _mode = _AuthMode.signIn);
+                              },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _AuthModeButton(
+                        label: 'Sign up',
+                        selected: _mode == _AuthMode.signUp,
+                        onTap: isBusy
+                            ? () {}
+                            : () {
+                                widget.cubit.clearAuthMessage();
+                                setState(() => _mode = _AuthMode.signUp);
+                              },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                TextField(
+                  controller: _emailController,
+                  enabled: !isBusy,
+                  keyboardType: TextInputType.emailAddress,
+                  autofillHints: const [AutofillHints.email],
+                  decoration: const InputDecoration(
+                    labelText: 'Email address',
+                    border: OutlineInputBorder(),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _AuthModeButton(
-                    label: 'Sign up',
-                    selected: _mode == _AuthMode.signUp,
-                    onTap: () {
-                      setState(() => _mode = _AuthMode.signUp);
-                    },
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _passwordController,
+                  enabled: !isBusy,
+                  obscureText: true,
+                  autofillHints: _mode == _AuthMode.signUp
+                      ? const [AutofillHints.newPassword]
+                      : const [AutofillHints.password],
+                  decoration: InputDecoration(
+                    labelText: _mode == _AuthMode.signUp
+                        ? 'Create password'
+                        : 'Password',
+                    border: const OutlineInputBorder(),
                   ),
+                  onSubmitted: (_) {
+                    if (!isBusy) {
+                      _submit();
+                    }
+                  },
                 ),
+                if (authMessage.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _AuthMessage(message: authMessage),
+                ],
               ],
             ),
-            const SizedBox(height: 18),
-            TextField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              autofillHints: const [AutofillHints.email],
-              decoration: const InputDecoration(
-                labelText: 'Email address',
-                border: OutlineInputBorder(),
-              ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isBusy ? null : () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              autofillHints: _mode == _AuthMode.signUp
-                  ? const [AutofillHints.newPassword]
-                  : const [AutofillHints.password],
-              decoration: InputDecoration(
-                labelText:
-                    _mode == _AuthMode.signUp ? 'Create password' : 'Password',
-                border: const OutlineInputBorder(),
+            if (widget.googleAvailable)
+              TextButton.icon(
+                onPressed: isBusy
+                    ? null
+                    : () {
+                        widget.cubit.clearAuthMessage();
+                        widget.onGoogle();
+                      },
+                icon: const Icon(Icons.g_mobiledata_rounded),
+                label: const Text('Google'),
               ),
-              onSubmitted: (_) => _submit(),
+            FilledButton(
+              onPressed: isBusy ? null : _submit,
+              child: isBusy
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(
+                      _mode == _AuthMode.signUp ? 'Create account' : 'Sign in',
+                    ),
             ),
           ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        if (widget.googleAvailable)
-          TextButton.icon(
-            onPressed: () {
-              Navigator.of(context).pop();
-              widget.onGoogle();
-            },
-            icon: const Icon(Icons.g_mobiledata_rounded),
-            label: const Text('Google'),
-          ),
-        FilledButton(
-          onPressed: _submit,
-          child: Text(_mode == _AuthMode.signUp ? 'Create account' : 'Sign in'),
-        ),
-      ],
+        );
+      },
     );
   }
 
   void _submit() {
-    Navigator.of(context).pop();
+    widget.cubit.clearAuthMessage();
     if (_mode == _AuthMode.signUp) {
       widget.onSignUp(_emailController.text, _passwordController.text);
     } else {
       widget.onSignIn(_emailController.text, _passwordController.text);
     }
+  }
+}
+
+class _AuthMessage extends StatelessWidget {
+  final String message;
+
+  const _AuthMessage({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        border: Border.all(color: const Color(0xFFFDBA74)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.info_outline,
+            size: 18,
+            color: Color(0xFFC2410C),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: Color(0xFF7C2D12),
+                fontSize: 13,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

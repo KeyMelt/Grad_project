@@ -237,12 +237,12 @@ class ExecutionSettings:
                     "backend/visualization/animations",
                 )
             ),
-            timeout_base_seconds=env_int("RL_IDE_EXECUTION_TIMEOUT_BASE_SECONDS", 300),
+            timeout_base_seconds=env_int("RL_IDE_EXECUTION_TIMEOUT_BASE_SECONDS", 10),
             timeout_per_episode_seconds=env_int(
                 "RL_IDE_EXECUTION_TIMEOUT_PER_EPISODE_SECONDS",
-                5,
+                1,
             ),
-            timeout_max_seconds=env_int("RL_IDE_EXECUTION_TIMEOUT_MAX_SECONDS", 900),
+            timeout_max_seconds=env_int("RL_IDE_EXECUTION_TIMEOUT_MAX_SECONDS", 18),
         )
 
 

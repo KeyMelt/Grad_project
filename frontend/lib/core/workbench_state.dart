@@ -20,6 +20,7 @@ enum RunStatus { idle, running, success, failed, stopped }
 /// Top-level application destinations owned by [MainLayout].
 enum AppSection { home, workspace, flashcards, quiz, admin }
 
+const Duration _submissionUiTimeout = Duration(seconds: 18);
 const Object _sentinel = Object();
 const String _authoredLessonsPrefsKey = 'rl_ide_authored_lessons_v1';
 
@@ -44,6 +45,7 @@ class RLWorkbenchState {
   final bool isSigningIn;
   final bool isQuizLoading;
   final String homeMessage;
+  final String authMessage;
   final String quizStatusMessage;
   final QuizSessionData? activeQuiz;
   final Map<String, int> quizAnswers;
@@ -74,6 +76,7 @@ class RLWorkbenchState {
   final String? failureKind;
   final List<String> unresolvedBlanks;
   final ExecutionStudentFeedback? studentFeedback;
+  final bool workspaceFeedbackDismissed;
   final bool sidebarVisible;
   final String? adminSelectedLessonId;
   final String adminMessage;
@@ -105,6 +108,7 @@ class RLWorkbenchState {
     required this.isSigningIn,
     required this.isQuizLoading,
     required this.homeMessage,
+    required this.authMessage,
     required this.quizStatusMessage,
     required this.activeQuiz,
     required this.quizAnswers,
@@ -135,6 +139,7 @@ class RLWorkbenchState {
     required this.failureKind,
     required this.unresolvedBlanks,
     required this.studentFeedback,
+    required this.workspaceFeedbackDismissed,
     required this.sidebarVisible,
     required this.adminSelectedLessonId,
     required this.adminMessage,
@@ -169,6 +174,7 @@ class RLWorkbenchState {
       isSigningIn: false,
       isQuizLoading: false,
       homeMessage: 'Sign in to save quiz results and lesson progress.',
+      authMessage: '',
       quizStatusMessage:
           'Take a randomized pre-test before you begin the lessons.',
       activeQuiz: null,
@@ -200,6 +206,7 @@ class RLWorkbenchState {
       failureKind: null,
       unresolvedBlanks: const [],
       studentFeedback: null,
+      workspaceFeedbackDismissed: false,
       sidebarVisible: true,
       adminSelectedLessonId: selectedLesson.id,
       adminMessage: 'Edit lessons in this session.',
@@ -249,6 +256,7 @@ class RLWorkbenchState {
     bool? isSigningIn,
     bool? isQuizLoading,
     String? homeMessage,
+    String? authMessage,
     String? quizStatusMessage,
     Object? activeQuiz = _sentinel,
     Map<String, int>? quizAnswers,
@@ -279,6 +287,7 @@ class RLWorkbenchState {
     Object? failureKind = _sentinel,
     List<String>? unresolvedBlanks,
     Object? studentFeedback = _sentinel,
+    bool? workspaceFeedbackDismissed,
     bool? sidebarVisible,
     Object? adminSelectedLessonId = _sentinel,
     String? adminMessage,
@@ -312,6 +321,7 @@ class RLWorkbenchState {
       isSigningIn: isSigningIn ?? this.isSigningIn,
       isQuizLoading: isQuizLoading ?? this.isQuizLoading,
       homeMessage: homeMessage ?? this.homeMessage,
+      authMessage: authMessage ?? this.authMessage,
       quizStatusMessage: quizStatusMessage ?? this.quizStatusMessage,
       activeQuiz: identical(activeQuiz, _sentinel)
           ? this.activeQuiz
@@ -358,6 +368,8 @@ class RLWorkbenchState {
       studentFeedback: identical(studentFeedback, _sentinel)
           ? this.studentFeedback
           : studentFeedback as ExecutionStudentFeedback?,
+      workspaceFeedbackDismissed:
+          workspaceFeedbackDismissed ?? this.workspaceFeedbackDismissed,
       sidebarVisible: sidebarVisible ?? this.sidebarVisible,
       adminSelectedLessonId: identical(adminSelectedLessonId, _sentinel)
           ? this.adminSelectedLessonId
@@ -577,24 +589,38 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     emit(state.copyWith(sidebarVisible: !state.sidebarVisible));
   }
 
+  void clearAuthMessage() {
+    if (state.authMessage.isEmpty) {
+      return;
+    }
+    emit(state.copyWith(authMessage: ''));
+  }
+
+  void dismissWorkspaceFeedback() {
+    if (state.workspaceFeedbackDismissed) {
+      return;
+    }
+    emit(state.copyWith(workspaceFeedbackDismissed: true));
+  }
+
   Future<void> signIn(String displayName, String password) async {
     final normalizedEmail = displayName.trim();
     if (normalizedEmail.isEmpty) {
       emit(
         state.copyWith(
-          homeMessage: 'Enter your email address to continue.',
+          authMessage: 'Enter your email address to continue.',
         ),
       );
       return;
     }
     if (password.trim().isEmpty) {
-      emit(state.copyWith(homeMessage: 'Enter your password to continue.'));
+      emit(state.copyWith(authMessage: 'Enter your password to continue.'));
       return;
     }
 
     emit(state.copyWith(
       isSigningIn: true,
-      homeMessage: 'Signing in $normalizedEmail...',
+      authMessage: 'Signing in $normalizedEmail...',
     ));
 
     try {
@@ -605,19 +631,19 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     } on BackendApiException catch (error) {
       emit(state.copyWith(
         isSigningIn: false,
-        homeMessage: error.message,
+        authMessage: error.message,
       ));
     } on FirebaseAuthException catch (error) {
       emit(
         state.copyWith(
           isSigningIn: false,
-          homeMessage: _firebaseAuthMessage(error),
+          authMessage: _firebaseAuthMessage(error),
         ),
       );
     } catch (_) {
       emit(state.copyWith(
         isSigningIn: false,
-        homeMessage: 'Connection unavailable. Try again shortly.',
+        authMessage: 'Connection unavailable. Try again shortly.',
       ));
     }
   }
@@ -627,7 +653,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     if (normalizedEmail.isEmpty) {
       emit(
         state.copyWith(
-          homeMessage: 'Enter your email address to create an account.',
+          authMessage: 'Enter your email address to create an account.',
         ),
       );
       return;
@@ -635,7 +661,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     if (password.trim().length < 8) {
       emit(
         state.copyWith(
-          homeMessage: 'Use a password with at least 8 characters.',
+          authMessage: 'Use a password with at least 8 characters.',
         ),
       );
       return;
@@ -643,7 +669,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
 
     emit(state.copyWith(
       isSigningIn: true,
-      homeMessage: 'Creating account for $normalizedEmail...',
+      authMessage: 'Creating account for $normalizedEmail...',
     ));
 
     try {
@@ -669,19 +695,19 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     } on BackendApiException catch (error) {
       emit(state.copyWith(
         isSigningIn: false,
-        homeMessage: error.message,
+        authMessage: error.message,
       ));
     } on FirebaseAuthException catch (error) {
       emit(
         state.copyWith(
           isSigningIn: false,
-          homeMessage: _firebaseAuthMessage(error),
+          authMessage: _firebaseAuthMessage(error),
         ),
       );
     } catch (_) {
       emit(state.copyWith(
         isSigningIn: false,
-        homeMessage: 'Connection unavailable. Try again shortly.',
+        authMessage: 'Connection unavailable. Try again shortly.',
       ));
     }
   }
@@ -690,7 +716,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     if (kIsWeb && !_canUseGoogleSignInOnCurrentOrigin()) {
       emit(state.copyWith(
         isSigningIn: false,
-        homeMessage:
+        authMessage:
             'Google sign-in will be available after secure publishing.',
       ));
       return;
@@ -698,7 +724,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
 
     emit(state.copyWith(
       isSigningIn: true,
-      homeMessage: 'Opening Google sign-in...',
+      authMessage: 'Opening Google sign-in...',
     ));
 
     try {
@@ -732,19 +758,19 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     } on BackendApiException catch (error) {
       emit(state.copyWith(
         isSigningIn: false,
-        homeMessage: error.message,
+        authMessage: error.message,
       ));
     } on FirebaseAuthException catch (error) {
       emit(
         state.copyWith(
           isSigningIn: false,
-          homeMessage: _firebaseAuthMessage(error),
+          authMessage: _firebaseAuthMessage(error),
         ),
       );
     } catch (_) {
       emit(state.copyWith(
         isSigningIn: false,
-        homeMessage: 'Google sign-in failed. Try again.',
+        authMessage: 'Google sign-in failed. Try again.',
       ));
     }
   }
@@ -763,6 +789,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         currentRole: 'guest',
         isAuthenticated: false,
         progress: const LearnerProgress.empty(),
+        authMessage: '',
         activeQuiz: null,
         quizAnswers: const {},
         lastQuizSummary: null,
@@ -832,18 +859,11 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   }) async {
     String? firebaseIdToken;
     if (kIsWeb) {
-      try {
-        final credential =
-            await FirebaseAuth.instance.signInWithEmailAndPassword(
-          email: normalizedEmail,
-          password: password,
-        );
-        firebaseIdToken = await credential.user?.getIdToken(true);
-      } on FirebaseAuthException catch (error) {
-        if (!_shouldFallBackToBackendSignIn(error)) {
-          rethrow;
-        }
-      }
+      final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: normalizedEmail,
+        password: password,
+      );
+      firebaseIdToken = await credential.user?.getIdToken(true);
     }
 
     final dashboard = await _api.signIn(
@@ -855,12 +875,6 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       dashboard,
       successMessage: 'Signed in as ${dashboard.student.displayName}.',
     );
-  }
-
-  bool _shouldFallBackToBackendSignIn(FirebaseAuthException error) {
-    return error.code == 'user-not-found' ||
-        error.code == 'wrong-password' ||
-        error.code == 'invalid-credential';
   }
 
   Future<void> refreshDashboard({bool quiet = false}) async {
@@ -1047,6 +1061,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         failureKind: null,
         unresolvedBlanks: const [],
         studentFeedback: null,
+        workspaceFeedbackDismissed: false,
         studyBuddyIntervention: null,
         studyBuddyLoading: false,
         studyBuddyPanelDismissed: false,
@@ -1656,6 +1671,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         failureKind: null,
         unresolvedBlanks: const [],
         studentFeedback: null,
+        workspaceFeedbackDismissed: false,
         statusMessage:
             'Submitting ${state.selectedLesson.title} for grading...',
       ),
@@ -1703,6 +1719,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
           failureKind: error.failureKind,
           unresolvedBlanks: error.unresolvedBlanks,
           studentFeedback: error.studentFeedback,
+          workspaceFeedbackDismissed: false,
           statusMessage: error.message,
         ),
       );
@@ -2360,6 +2377,7 @@ def lesson_function(*args, **kwargs):
         isAuthenticated: true,
         progress: dashboard.progress,
         isSigningIn: false,
+        authMessage: '',
         homeMessage: successMessage,
         quizStatusMessage: _quizPromptForProgress(dashboard.progress),
         currentSection: AppSection.home,
@@ -2407,6 +2425,7 @@ def lesson_function(*args, **kwargs):
       failureKind: null,
       unresolvedBlanks: const [],
       studentFeedback: null,
+      workspaceFeedbackDismissed: false,
       statusMessage: message,
     );
   }
@@ -2416,7 +2435,44 @@ def lesson_function(*args, **kwargs):
   }
 
   Future<void> _pollUntilComplete(String taskId) async {
+    final startedAt = DateTime.now();
     while (_activeTaskId == taskId && state.runStatus == RunStatus.running) {
+      if (DateTime.now().difference(startedAt) >= _submissionUiTimeout) {
+        _activeTaskId = null;
+        emit(
+          state.copyWith(
+            runStatus: RunStatus.failed,
+            currentEpisode: 0,
+            currentStep: 0,
+            totalReward: 0.0,
+            averageReward: 0.0,
+            bestEpisodeReward: 0.0,
+            videoPath: '',
+            testResults: const [],
+            stepTrace: const [],
+            traceEpisodes: const [],
+            episodeSummaries: const [],
+            failureKind: 'runtime_error',
+            unresolvedBlanks: const [],
+            studentFeedback: null,
+            workspaceFeedbackDismissed: false,
+            statusMessage:
+                'Submission timed out after 18 seconds. Check for long loops or reduce episode counts before submitting again.',
+          ),
+        );
+        _recordTelemetry(
+          'submission_result',
+          {
+            'passed': false,
+            'task_id': taskId,
+            'failure_kind': 'submission_timeout',
+            'origin': 'frontend_submit',
+          },
+          flushAfter: true,
+        );
+        return;
+      }
+
       final snapshot = await _api.getTaskStatus(taskId);
 
       if (_activeTaskId != taskId || state.runStatus != RunStatus.running) {
@@ -2459,6 +2515,7 @@ def lesson_function(*args, **kwargs):
               failureKind: null,
               unresolvedBlanks: const [],
               studentFeedback: null,
+              workspaceFeedbackDismissed: false,
               statusMessage: result.visualizationReady
                   ? '${result.message} Replay ready.'
                   : '${result.message} No replay video generated.',
@@ -2494,6 +2551,7 @@ def lesson_function(*args, **kwargs):
               failureKind: snapshot.failureKind,
               unresolvedBlanks: snapshot.unresolvedBlanks,
               studentFeedback: snapshot.studentFeedback,
+              workspaceFeedbackDismissed: false,
               statusMessage: snapshot.errorMessage ?? 'Execution task failed.',
             ),
           );

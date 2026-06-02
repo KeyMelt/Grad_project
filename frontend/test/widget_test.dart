@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rl_ide/core/backend_api.dart';
 import 'package:rl_ide/core/workbench_state.dart';
+import 'package:rl_ide/features/home/home_dashboard.dart';
+import 'package:rl_ide/features/workspace/code_editor.dart';
+import 'package:rl_ide/features/workspace/exercise_brief_panel.dart';
 import 'package:rl_ide/layout/main_layout.dart';
 import 'package:rl_ide/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,6 +17,8 @@ class FakeBackendApi extends BackendApi {
   String? _token;
   List<int>? submittedSusResponses;
   int? submittedTlxMentalDemand;
+  String? signInError;
+  bool failNextSubmission = false;
 
   @override
   String? get accessToken => _token;
@@ -33,6 +38,10 @@ class FakeBackendApi extends BackendApi {
     String? firebaseIdToken,
   }) async {
     if (firebaseIdToken != null) {}
+    final error = signInError;
+    if (error != null) {
+      throw BackendApiException(error);
+    }
     _student = LearnerProfile(
       id: 'student-123',
       displayName: displayName,
@@ -199,6 +208,36 @@ class FakeBackendApi extends BackendApi {
 
   @override
   Future<ExecutionTaskSnapshot> getTaskStatus(String taskId) async {
+    if (failNextSubmission) {
+      failNextSubmission = false;
+      return const ExecutionTaskSnapshot(
+        taskId: 'task-123',
+        status: ExecutionTaskStatus.failed,
+        errorMessage: 'Lesson checks failed.',
+        failureKind: 'test_failure',
+        studentFeedback: ExecutionStudentFeedback(
+          status: 'test_failure',
+          summary: 'The value table did not match the expected update.',
+          likelyIssue: 'Review the Bellman expectation loops.',
+          affectedBlankIds: ['policy_eval_expectation'],
+          nextSteps: [
+            'Accumulate every transition branch for each action.',
+            'Keep terminal future value at zero.',
+          ],
+          hintLevel: 'targeted',
+        ),
+        testResults: [
+          ExecutionTestCaseResult(
+            name: 'policy_evaluation_bellman_backup',
+            passed: false,
+            message: 'The Bellman backup did not include every branch.',
+            expected: 'Every model branch contributes to the backup.',
+            actual: 'At least one model branch was missing.',
+          ),
+        ],
+      );
+    }
+
     _progress = const LearnerProgress(
       completedLessonIds: ['dp_policy_eval'],
       successfulRuns: 1,
@@ -444,6 +483,122 @@ void main() {
     await cubit.close();
   });
 
+  testWidgets('Auth errors stay in the auth dialog', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final api = FakeBackendApi()
+      ..signInError = 'Account is not provisioned for this Firebase user.';
+    final cubit = RLWorkbenchCubit(api: api);
+
+    await tester.pumpWidget(
+      RLSimulationIDE(
+        home: MainLayout(cubit: cubit),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Sign in'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(0), 'maya@example.com');
+    await tester.enterText(find.byType(TextField).at(1), 'Password123!');
+    await tester.tap(find.text('Sign in').last);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching:
+            find.text('Account is not provisioned for this Firebase user.'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(HomeDashboard),
+        matching:
+            find.text('Account is not provisioned for this Firebase user.'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.text('Sign in to save quiz results and lesson progress.'),
+      findsOneWidget,
+    );
+
+    await cubit.close();
+  });
+
+  testWidgets('Workspace feedback uses separate panel and dismisses', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final api = FakeBackendApi()..failNextSubmission = true;
+    final cubit = RLWorkbenchCubit(api: api);
+
+    await tester.pumpWidget(
+      RLSimulationIDE(
+        home: MainLayout(cubit: cubit),
+      ),
+    );
+
+    await tester.tap(find.text('Sign in'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(0), 'maya@example.com');
+    await tester.enterText(find.byType(TextField).at(1), 'Password123!');
+    await tester.tap(find.text('Sign in').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Workspace'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Code'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(FilledButton, 'Run'), findsNothing);
+
+    await tester.tap(find.text('Submit'));
+    await tester.pumpAndSettle();
+
+    const feedbackText = 'Review the Bellman expectation loops.';
+    expect(
+      find.descendant(
+        of: find.byType(WorkspaceFeedbackPanel),
+        matching: find.text(feedbackText),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(ExerciseBriefPanel),
+        matching: find.text(feedbackText),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(CodeEditorTab),
+        matching: find.text(feedbackText),
+      ),
+      findsNothing,
+    );
+
+    await tester.tap(find.byTooltip('Dismiss feedback'));
+    await tester.pumpAndSettle();
+    expect(find.text(feedbackText), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await cubit.close();
+  });
+
   testWidgets('Workspace and quiz flow update learner progress end to end', (
     WidgetTester tester,
   ) async {
@@ -476,9 +631,17 @@ void main() {
     await tester.tap(find.text('Code'));
     await tester.pumpAndSettle();
     expect(find.text('Implement iterative policy evaluation'), findsWidgets);
+    expect(find.widgetWithText(FilledButton, 'Run'), findsNothing);
 
     await tester.tap(find.text('Submit'));
     await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byType(WorkspaceFeedbackPanel),
+        matching: find.text('Submission passed'),
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Replay'));
     await tester.pumpAndSettle();
@@ -539,6 +702,8 @@ void main() {
       findsOneWidget,
     );
 
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
     await cubit.close();
   });
 }

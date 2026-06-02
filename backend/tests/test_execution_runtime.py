@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import backend.execution_runtime as execution_runtime
 import backend.lesson_registry as lesson_registry
-from backend.execution_runtime import _run_execution_pipeline
+from backend.execution_runtime import _derive_timeout_seconds, _run_execution_pipeline
 from backend.validation.validator import ValidationResult
 
 
@@ -97,6 +97,21 @@ class _FakeVisualizationService:
     def generate_animation(self, log_data, lesson_id):
         del log_data, lesson_id
         return ""
+
+
+def test_derived_submission_timeout_is_capped_at_eighteen_seconds(monkeypatch):
+    monkeypatch.delenv("RL_IDE_EXECUTION_TIMEOUT_BASE_SECONDS", raising=False)
+    monkeypatch.delenv("RL_IDE_EXECUTION_TIMEOUT_PER_EPISODE_SECONDS", raising=False)
+    monkeypatch.delenv("RL_IDE_EXECUTION_TIMEOUT_MAX_SECONDS", raising=False)
+
+    timeout_seconds = _derive_timeout_seconds(
+        {
+            "lesson_id": "demo_lesson",
+            "code": "EPISODE_COUNT = 500\n",
+        }
+    )
+
+    assert timeout_seconds == 18
 
 
 def test_execution_trace_frame_paths_are_absolute(monkeypatch, tmp_path):

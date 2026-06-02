@@ -27,6 +27,7 @@ class WorkspaceTabs extends StatefulWidget {
   final String? failureKind;
   final List<String> unresolvedBlanks;
   final ExecutionStudentFeedback? studentFeedback;
+  final bool feedbackDismissed;
   final double totalReward;
   final double averageReward;
   final double bestEpisodeReward;
@@ -40,7 +41,7 @@ class WorkspaceTabs extends StatefulWidget {
   final ValueChanged<Map<String, dynamic>>? onConceptVideoSession;
   final void Function(String viewId, Duration duration)?
       onWorkspaceFocusSession;
-  final VoidCallback? onRun;
+  final VoidCallback? onDismissFeedback;
   final bool showExerciseBriefInCodePane;
 
   const WorkspaceTabs({
@@ -62,6 +63,7 @@ class WorkspaceTabs extends StatefulWidget {
     required this.failureKind,
     required this.unresolvedBlanks,
     required this.studentFeedback,
+    required this.feedbackDismissed,
     required this.totalReward,
     required this.averageReward,
     required this.bestEpisodeReward,
@@ -74,7 +76,7 @@ class WorkspaceTabs extends StatefulWidget {
     required this.episodeSummaries,
     this.onConceptVideoSession,
     this.onWorkspaceFocusSession,
-    this.onRun,
+    this.onDismissFeedback,
     this.showExerciseBriefInCodePane = true,
   });
 
@@ -158,6 +160,7 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
     final failureKind = widget.failureKind;
     final unresolvedBlanks = widget.unresolvedBlanks;
     final studentFeedback = widget.studentFeedback;
+    final feedbackDismissed = widget.feedbackDismissed;
     final totalReward = widget.totalReward;
     final averageReward = widget.averageReward;
     final bestEpisodeReward = widget.bestEpisodeReward;
@@ -208,12 +211,13 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
                         failureKind: failureKind,
                         unresolvedBlanks: unresolvedBlanks,
                         studentFeedback: studentFeedback,
+                        feedbackDismissed: feedbackDismissed,
                         testResults: testResults,
                         onSubmit: widget.onSubmit,
                         onStop: widget.onStop,
                         onReset: widget.onReset,
                         onReconnectWorkspace: widget.onReconnectWorkspace,
-                        onRun: widget.onRun,
+                        onDismissFeedback: widget.onDismissFeedback,
                         showExerciseBrief: widget.showExerciseBriefInCodePane,
                       ),
                       TraceReplayPanel(
@@ -277,12 +281,13 @@ class _CodeExercisePane extends StatelessWidget {
   final String? failureKind;
   final List<String> unresolvedBlanks;
   final ExecutionStudentFeedback? studentFeedback;
+  final bool feedbackDismissed;
   final List<ExecutionTestCaseResult> testResults;
   final VoidCallback onSubmit;
   final VoidCallback onStop;
   final VoidCallback onReset;
   final VoidCallback onReconnectWorkspace;
-  final VoidCallback? onRun;
+  final VoidCallback? onDismissFeedback;
   final bool showExerciseBrief;
 
   const _CodeExercisePane({
@@ -299,12 +304,13 @@ class _CodeExercisePane extends StatelessWidget {
     required this.failureKind,
     required this.unresolvedBlanks,
     required this.studentFeedback,
+    required this.feedbackDismissed,
     required this.testResults,
     required this.onSubmit,
     required this.onStop,
     required this.onReset,
     required this.onReconnectWorkspace,
-    this.onRun,
+    this.onDismissFeedback,
     required this.showExerciseBrief,
   });
 
@@ -321,7 +327,17 @@ class _CodeExercisePane extends StatelessWidget {
               children: [
                 SizedBox(
                   width: briefWidth,
-                  child: ExerciseBriefPanel(lesson: lesson),
+                  child: _BriefAndFeedbackPanel(
+                    lesson: lesson,
+                    runStatusLabel: runStatusLabel,
+                    statusMessage: statusMessage,
+                    failureKind: failureKind,
+                    unresolvedBlanks: unresolvedBlanks,
+                    studentFeedback: studentFeedback,
+                    testResults: testResults,
+                    feedbackDismissed: feedbackDismissed,
+                    onDismissFeedback: onDismissFeedback,
+                  ),
                 ),
                 const SizedBox(width: 18),
                 Expanded(
@@ -336,15 +352,10 @@ class _CodeExercisePane extends StatelessWidget {
                     statusMessage: statusMessage,
                     runStatusLabel: runStatusLabel,
                     scriptVersion: scriptVersion,
-                    failureKind: failureKind,
-                    unresolvedBlanks: unresolvedBlanks,
-                    studentFeedback: studentFeedback,
-                    testResults: testResults,
                     onSubmit: onSubmit,
                     onStop: onStop,
                     onReset: onReset,
                     onReconnect: onReconnectWorkspace,
-                    onRun: onRun,
                   ),
                 ),
               ],
@@ -357,7 +368,17 @@ class _CodeExercisePane extends StatelessWidget {
             children: [
               SizedBox(
                 height: briefHeight,
-                child: ExerciseBriefPanel(lesson: lesson),
+                child: _BriefAndFeedbackPanel(
+                  lesson: lesson,
+                  runStatusLabel: runStatusLabel,
+                  statusMessage: statusMessage,
+                  failureKind: failureKind,
+                  unresolvedBlanks: unresolvedBlanks,
+                  studentFeedback: studentFeedback,
+                  testResults: testResults,
+                  feedbackDismissed: feedbackDismissed,
+                  onDismissFeedback: onDismissFeedback,
+                ),
               ),
               const SizedBox(height: 20),
               Expanded(
@@ -372,15 +393,10 @@ class _CodeExercisePane extends StatelessWidget {
                   statusMessage: statusMessage,
                   runStatusLabel: runStatusLabel,
                   scriptVersion: scriptVersion,
-                  failureKind: failureKind,
-                  unresolvedBlanks: unresolvedBlanks,
-                  studentFeedback: studentFeedback,
-                  testResults: testResults,
                   onSubmit: onSubmit,
                   onStop: onStop,
                   onReset: onReset,
                   onReconnect: onReconnectWorkspace,
-                  onRun: onRun,
                 ),
               ),
             ],
@@ -398,15 +414,78 @@ class _CodeExercisePane extends StatelessWidget {
           statusMessage: statusMessage,
           runStatusLabel: runStatusLabel,
           scriptVersion: scriptVersion,
-          failureKind: failureKind,
-          unresolvedBlanks: unresolvedBlanks,
-          studentFeedback: studentFeedback,
-          testResults: testResults,
           onSubmit: onSubmit,
           onStop: onStop,
           onReset: onReset,
           onReconnect: onReconnectWorkspace,
-          onRun: onRun,
+        );
+      },
+    );
+  }
+}
+
+class _BriefAndFeedbackPanel extends StatelessWidget {
+  final LessonDefinition lesson;
+  final String runStatusLabel;
+  final String statusMessage;
+  final String? failureKind;
+  final List<String> unresolvedBlanks;
+  final ExecutionStudentFeedback? studentFeedback;
+  final bool feedbackDismissed;
+  final List<ExecutionTestCaseResult> testResults;
+  final VoidCallback? onDismissFeedback;
+
+  const _BriefAndFeedbackPanel({
+    required this.lesson,
+    required this.runStatusLabel,
+    required this.statusMessage,
+    required this.failureKind,
+    required this.unresolvedBlanks,
+    required this.studentFeedback,
+    required this.feedbackDismissed,
+    required this.testResults,
+    required this.onDismissFeedback,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final showFeedback = !feedbackDismissed &&
+        (studentFeedback != null ||
+            testResults.isNotEmpty ||
+            unresolvedBlanks.isNotEmpty ||
+            failureKind != null);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final feedbackMaxHeight = constraints.maxHeight < 360
+            ? (constraints.maxHeight * 0.36).clamp(80.0, 130.0).toDouble()
+            : (constraints.maxHeight * 0.42).clamp(150.0, 300.0).toDouble();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: ExerciseBriefPanel(lesson: lesson),
+            ),
+            if (showFeedback) ...[
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: feedbackMaxHeight),
+                child: SingleChildScrollView(
+                  child: WorkspaceFeedbackPanel(
+                    lesson: lesson,
+                    runStatusLabel: runStatusLabel,
+                    statusMessage: statusMessage,
+                    failureKind: failureKind,
+                    unresolvedBlanks: unresolvedBlanks,
+                    studentFeedback: studentFeedback,
+                    testResults: testResults,
+                    onDismiss: onDismissFeedback,
+                  ),
+                ),
+              ),
+            ],
+          ],
         );
       },
     );

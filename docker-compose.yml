@@ -18,6 +18,9 @@ services:
       RL_IDE_BOOTSTRAP_ADMIN_DISPLAY_NAME: ${RL_IDE_BOOTSTRAP_ADMIN_DISPLAY_NAME:-Platform Admin}
       RL_IDE_OPEN_PROVISIONING: ${RL_IDE_OPEN_PROVISIONING:-1}
       RL_IDE_ALLOW_LEGACY_PASSWORD_SIGN_IN: ${RL_IDE_ALLOW_LEGACY_PASSWORD_SIGN_IN:-1}
+      # Evaluation harness local-auth mode
+      RL_IDE_ALLOW_LOCAL_PASSWORD_AUTH: ${RL_IDE_ALLOW_LOCAL_PASSWORD_AUTH:-1}
+      RL_IDE_AGENT_EVAL_PASSWORD: ${RL_IDE_AGENT_EVAL_PASSWORD:-AgentEval123!}
     volumes:
       - .:${PROJECT_ROOT:-/Users/ultramarine/Desktop/grad_project}
       - ${RL_IDE_FIREBASE_CREDENTIALS_PATH:-/tmp/firebase-adminsdk-missing.json}:${RL_IDE_FIREBASE_CREDENTIALS_PATH:-/tmp/firebase-adminsdk-missing.json}:ro
@@ -70,6 +73,9 @@ services:
       RL_IDE_INTERNAL_TOKEN: ${RL_IDE_INTERNAL_TOKEN:-local-dev-internal-token}
       RL_IDE_FIREBASE_CREDENTIALS_PATH: ${PROJECT_ROOT:-/Users/ultramarine/Desktop/grad_project}/backend/secrets/firebase-admin-key.json
       RL_IDE_FIREBASE_APP_NAME: ${RL_IDE_FIREBASE_APP_NAME:-rl-ide-backend}
+      # Evaluation harness local-auth mode - bypasses Firebase for @example.test accounts
+      RL_IDE_ALLOW_LOCAL_PASSWORD_AUTH: ${RL_IDE_ALLOW_LOCAL_PASSWORD_AUTH:-1}
+      RL_IDE_AGENT_EVAL_PASSWORD: ${RL_IDE_AGENT_EVAL_PASSWORD:-AgentEval123!}
     volumes:
       - .:${PROJECT_ROOT:-/Users/ultramarine/Desktop/grad_project}
       - ${RL_IDE_FIREBASE_CREDENTIALS_PATH:-/tmp/firebase-adminsdk-missing.json}:${RL_IDE_FIREBASE_CREDENTIALS_PATH:-/tmp/firebase-adminsdk-missing.json}:ro

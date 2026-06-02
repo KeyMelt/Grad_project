@@ -7,7 +7,10 @@ from typing import Any
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
+import os
+
 from backend.services.firebase_progress_service import FirebaseProgressService
+from backend.services.local_eval_progress_service import LocalEvalProgressService
 from backend.services.quiz_service import QuizService
 from backend.services.user_evaluation_service import UserEvaluationService
 from backend.settings import UserEvaluationSettings, require_configured_secret
@@ -29,6 +32,11 @@ class QuizStartRequest(BaseModel):
     phase: str
 
 
+class StudentEnsureRequest(BaseModel):
+    student_id: str
+    display_name: str = Field(default="", max_length=120)
+
+
 class QuizAnswer(BaseModel):
     question_id: str
     selected_index: int = Field(ge=0)
@@ -48,10 +56,17 @@ def _close_if_present(service: Any) -> None:
 
 def _build_services() -> ServiceContainer:
     settings = UserEvaluationSettings.from_env()
-    progress = FirebaseProgressService(
-        credentials_path=settings.firebase_credentials_path,
-        app_name=settings.firebase_app_name,
-    )
+
+    # When RL_IDE_ALLOW_LOCAL_PASSWORD_AUTH=1 the evaluation harness uses a
+    # local SQLite-backed service instead of Firebase. This mode is intended
+    # ONLY for the AI-agent evaluation harness - never for production.
+    if os.environ.get("RL_IDE_ALLOW_LOCAL_PASSWORD_AUTH", "0").strip() == "1":
+        progress = LocalEvalProgressService()
+    else:
+        progress = FirebaseProgressService(
+            credentials_path=settings.firebase_credentials_path,
+            app_name=settings.firebase_app_name,
+        )
 
     return ServiceContainer(
         user_evaluation=UserEvaluationService(
@@ -118,6 +133,20 @@ def create_app(services: ServiceContainer | None = None) -> FastAPI:
                 detail=f"Unknown student_id '{student_id}'.",
             )
         return dashboard
+
+    @app.post("/internal/students/ensure")
+    def ensure_student_record(
+        request: StudentEnsureRequest,
+        x_internal_token: str | None = Header(default=None),
+    ):
+        _assert_internal_access(x_internal_token)
+        try:
+            return svc.user_evaluation.ensure_student_record(
+                student_id=request.student_id,
+                display_name=request.display_name or request.student_id,
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
 
     @app.post("/internal/quiz/start")
     def start_quiz(

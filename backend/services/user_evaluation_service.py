@@ -29,6 +29,15 @@ class UserEvaluationService:
     def get_dashboard(self, student_id: str) -> dict[str, Any] | None:
         return self._progress_service.get_dashboard(student_id)
 
+    def ensure_student_record(self, *, student_id: str, display_name: str) -> dict[str, Any]:
+        ensure_record = getattr(self._progress_service, "ensure_student_record", None)
+        if callable(ensure_record):
+            return ensure_record(student_id=student_id, display_name=display_name)
+        dashboard = self._progress_service.get_dashboard(student_id)
+        if dashboard is None:
+            raise ValueError("Unknown student_id.")
+        return dashboard
+
     def start_quiz(self, student_id: str, phase: str) -> dict[str, Any]:
         return self._quiz_service.start_session(student_id=student_id, phase=phase)
 

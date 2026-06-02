@@ -65,6 +65,24 @@ class _FakeUserEvaluationService:
     def get_dashboard(self, student_id: str):
         return self._dashboards.get(student_id)
 
+    def ensure_student_record(self, *, student_id: str, display_name: str):
+        dashboard = self._dashboards.get(student_id)
+        if dashboard is None:
+            dashboard = {
+                "student": {"id": student_id, "display_name": display_name},
+                "progress": {
+                    "completed_lesson_ids": [],
+                    "successful_runs": 0,
+                    "latest_lesson_id": None,
+                    "pretest_score": None,
+                    "posttest_score": None,
+                    "n_gain": None,
+                    "quiz_attempts": {"pretest": 0, "posttest": 0},
+                },
+            }
+            self._dashboards[student_id] = dashboard
+        return dashboard
+
     def list_n_gain_metrics(self) -> list[dict[str, Any]]:
         return [
             {
@@ -797,3 +815,28 @@ def test_quiz_start_requires_authentication():
         json={"phase": "pretest"},
     )
     assert response.status_code == 401
+
+
+def test_quiz_start_ensures_logged_in_student_record():
+    user_evaluation = _FakeUserEvaluationService()
+    user_evaluation._dashboards.pop("student-1")
+    services = ServiceContainer(
+        lesson_catalog=_FakeLessonCatalogService(),
+        user_evaluation=user_evaluation,
+        auth=_FakeAuthService(user_evaluation),
+        execution=_FakeExecutionService(),
+        workspace=_FakeWorkspaceService(),
+        metrics_export=_FakeMetricsExportService(),
+        shell_tokens=_FakeShellTokenService(),
+    )
+    client = TestClient(create_app(services=services))
+
+    response = client.post(
+        "/quiz/start",
+        json={"phase": "pretest"},
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["session_id"] == "session-1"
+    assert user_evaluation.get_dashboard("student-1") is not None

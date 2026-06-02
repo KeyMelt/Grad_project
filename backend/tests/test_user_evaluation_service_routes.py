@@ -54,6 +54,20 @@ class _FakeUserEvaluationService:
             },
         }
 
+    def ensure_student_record(self, *, student_id: str, display_name: str) -> dict[str, Any]:
+        return {
+            "student": {"id": student_id, "display_name": display_name},
+            "progress": {
+                "completed_lesson_ids": [],
+                "successful_runs": 0,
+                "latest_lesson_id": None,
+                "pretest_score": None,
+                "posttest_score": None,
+                "n_gain": None,
+                "quiz_attempts": {"pretest": 0, "posttest": 0},
+            },
+        }
+
     def start_quiz(self, student_id: str, phase: str) -> dict[str, Any]:
         if student_id == "missing":
             raise ValueError("Unknown student_id.")
@@ -167,6 +181,20 @@ def test_internal_dashboard_returns_404_for_missing_student():
     )
 
     assert response.status_code == 404
+
+
+def test_internal_student_ensure_returns_seeded_dashboard():
+    client = _make_client()
+    response = client.post(
+        "/internal/students/ensure",
+        json={"student_id": "new-student", "display_name": "New Student"},
+        headers=_internal_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["student"]["id"] == "new-student"
+    assert payload["student"]["display_name"] == "New Student"
 
 
 def test_internal_quiz_start_omits_answer_key():

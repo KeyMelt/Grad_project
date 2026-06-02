@@ -36,6 +36,7 @@ from backend.services.prediction_probe_service import PredictionProbeService
 from backend.services.study_session_survey_service import StudySessionSurveyService
 from backend.services.execution_service import ExecutionService as LocalExecutionService
 from backend.services.firebase_progress_service import FirebaseProgressService
+from backend.services.local_eval_progress_service import LocalEvalProgressService
 from backend.services.learning_analytics_export_service import LearningAnalyticsExportService
 from backend.services.lesson_catalog_service import LessonCatalogService
 from backend.services.metrics_export_service import MetricsExportService
@@ -98,10 +99,17 @@ def _build_services() -> ServiceContainer:
     )
     user_evaluation, local_progress_service = _build_user_evaluation(settings)
     firebase_client = _build_firebase_admin_client(settings)
-    progress_for_auth: FirebaseProgressService = local_progress_service or FirebaseProgressService(
-        credentials_path=settings.firebase_credentials_path,
-        app_name=settings.firebase_app_name,
-    )
+
+    import os as _os
+    if _os.environ.get("RL_IDE_ALLOW_LOCAL_PASSWORD_AUTH", "0").strip() == "1":
+        # Evaluation harness: use local SQLite auth so @example.test accounts
+        # can sign in without Firebase. Never used in production.
+        progress_for_auth: Any = LocalEvalProgressService()
+    else:
+        progress_for_auth = local_progress_service or FirebaseProgressService(
+            credentials_path=settings.firebase_credentials_path,
+            app_name=settings.firebase_app_name,
+        )
     audit = SecurityAuditService(database=database)
     auth_service = AuthService(
         database=database,

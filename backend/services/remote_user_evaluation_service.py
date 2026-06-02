@@ -46,6 +46,14 @@ class RemoteUserEvaluationService:
             return None
         return response.json()
 
+    def ensure_student_record(self, *, student_id: str, display_name: str) -> dict[str, Any]:
+        response = self._request(
+            "POST",
+            "/internal/students/ensure",
+            json={"student_id": student_id, "display_name": display_name},
+        )
+        return response.json()
+
     def start_quiz(self, student_id: str, phase: str) -> dict[str, Any]:
         response = self._request(
             "POST",
