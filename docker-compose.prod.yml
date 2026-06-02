@@ -8,8 +8,8 @@ x-backend-image: &backend-image
 
 x-common-environment: &common-environment
   # Frontend-only vars (not passed to backend services):
-  #   RL_IDE_FRONTEND_IMAGE — Docker image for the nginx/Flutter frontend (default: rl-platform-frontend:latest)
-  #   RL_IDE_HTTP_BIND      — Host:port binding for the public HTTP port (default: 0.0.0.0:80)
+  #   RL_IDE_FRONTEND_IMAGE - Docker image for the nginx/Flutter frontend (default: rl-platform-frontend:latest)
+  #   RL_IDE_HTTP_BIND      - Host:port binding for the public HTTP port (default: 0.0.0.0:80)
   RL_IDE_BACKEND_HOST: 0.0.0.0
   RL_IDE_INTERNAL_TOKEN: ${RL_IDE_INTERNAL_TOKEN:?Set RL_IDE_INTERNAL_TOKEN to a generated secret}
   RL_IDE_AUTH_TOKEN_SECRET: ${RL_IDE_AUTH_TOKEN_SECRET:?Set RL_IDE_AUTH_TOKEN_SECRET to a generated secret}
@@ -165,8 +165,13 @@ services:
     init: true
     security_opt:
       - no-new-privileges:true
+    environment:
+      RL_IDE_TLS_DOMAIN: ${RL_IDE_TLS_DOMAIN:-reinfource.app}
     ports:
       - "${RL_IDE_HTTP_BIND:-0.0.0.0:80}:80"
+      - "${RL_IDE_HTTPS_BIND:-0.0.0.0:443}:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       gateway:
         condition: service_healthy

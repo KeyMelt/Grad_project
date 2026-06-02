@@ -24,7 +24,12 @@ FROM nginx:1.27-alpine
 # Copy built web assets
 COPY --from=builder /build/build/web /usr/share/nginx/html
 
-# Copy Nginx config
+# Copy Nginx configs. The startup hook selects TLS when certificates are mounted.
 COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx/nginx.conf /etc/nginx/default-http.conf
+COPY nginx/nginx-ssl.conf /etc/nginx/default-ssl.conf
+COPY nginx/99-select-frontend-config.sh /docker-entrypoint.d/99-select-frontend-config.sh
+RUN chmod +x /docker-entrypoint.d/99-select-frontend-config.sh
 
 EXPOSE 80
+EXPOSE 443
