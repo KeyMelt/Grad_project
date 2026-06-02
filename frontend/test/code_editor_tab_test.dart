@@ -5,7 +5,7 @@ import 'package:rl_ide/core/workbench_state.dart';
 import 'package:rl_ide/features/workspace/code_editor.dart';
 
 void main() {
-  testWidgets('code tab shows checklist and feedback for unresolved blanks', (
+  testWidgets('code tab keeps feedback out of the editor surface', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1280, 900);
@@ -58,16 +58,6 @@ void main() {
             statusMessage: 'Code validation failed.',
             runStatusLabel: 'Failed',
             scriptVersion: 1,
-            failureKind: 'incomplete_template',
-            unresolvedBlanks: const ['policy_eval_expectation'],
-            studentFeedback: const ExecutionStudentFeedback(
-              status: 'incomplete_template',
-              summary: 'The submission still contains guided blanks.',
-              likelyIssue: 'A TODO block was left unchanged.',
-              affectedBlankIds: ['policy_eval_expectation'],
-              nextSteps: ['Complete the Bellman expectation block.'],
-              hintLevel: 'light',
-            ),
             onSubmit: () {},
             onStop: () {},
             onReset: () {},
@@ -80,10 +70,9 @@ void main() {
     await tester.pump();
 
     expect(find.text('Exercise checklist'), findsNothing);
-    expect(find.text('Fill the remaining blanks'), findsOneWidget);
     expect(
       find.text('The submission still contains guided blanks.'),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.text('script.py'), findsNothing);
     expect(find.text('Editor'), findsNothing);
