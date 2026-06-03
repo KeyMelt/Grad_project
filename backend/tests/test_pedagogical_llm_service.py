@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import pytest
+
 from backend.services.pedagogical_context_assembler import PedagogicalPromptContext
 from backend.services.pedagogical_llm_service import (
     PedagogicalChatContext,
     PedagogicalLLMService,
+    PedagogicalLLMUnavailableError,
 )
 
 
@@ -39,34 +42,48 @@ def _chat_context(message: str) -> PedagogicalChatContext:
     )
 
 
-def test_llm_service_uses_fallback_without_key(monkeypatch):
+def test_llm_service_requires_key(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "")
     service = PedagogicalLLMService(enabled=True)
 
-    intervention, metadata = service.generate(_context())
+    with pytest.raises(PedagogicalLLMUnavailableError) as exc_info:
+        service.generate(_context())
 
-    assert intervention.title == "Check the failing pattern"
-    assert intervention.solution_leakage_risk == "low"
-    assert metadata["used_fallback"] is True
-    assert metadata["prompt_version"] == "deterministic_v1"
+    assert exc_info.value.error_type == "missing_api_key"
 
 
-def test_chat_fallback_responds_to_latest_message(monkeypatch):
+def test_chat_requires_key(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "")
     service = PedagogicalLLMService(enabled=True)
 
-    greeting, greeting_metadata = service.generate_chat(_chat_context("hello"))
-    blocker, blocker_metadata = service.generate_chat(
-        _chat_context("why is this timing out?")
+    with pytest.raises(PedagogicalLLMUnavailableError) as exc_info:
+        service.generate_chat(_chat_context("hello"))
+
+    assert exc_info.value.error_type == "missing_api_key"
+
+
+def test_chat_uses_mocked_gemini_json():
+    service = PedagogicalLLMService(
+        enabled=True,
+        api_key="test-key",
+        model="gemini-test",
+        timeout_seconds=2,
     )
-    recap, _ = service.generate_chat(_chat_context("Give me a quick recap"))
+    service._call_gemini_for_schema = lambda _prompt, _schema: """
+        {
+          "reply": "Check the Bellman expectation target before changing code.",
+          "suggested_next_step": "State the update target in words.",
+          "concept_ids": ["dp_policy_eval"],
+          "solution_leakage_risk": "low"
+        }
+        """
 
-    assert "Hi." in greeting.reply
-    assert "blocker" in blocker.reply
-    assert "Quick recap" in recap.reply
-    assert greeting.reply != blocker.reply
-    assert greeting_metadata["used_fallback"] is True
-    assert blocker_metadata["prompt_version"] == "deterministic_chat_v1"
+    reply, metadata = service.generate_chat(_chat_context("hello"))
+
+    assert "Bellman expectation target" in reply.reply
+    assert metadata["model"] == "gemini-test"
+    assert metadata["prompt_version"] == "pedagogical_chat_v1"
+    assert metadata["used_fallback"] is False
 
 
 def test_llm_service_accepts_mocked_gemini_json(monkeypatch):
@@ -103,7 +120,7 @@ def test_llm_service_accepts_mocked_gemini_json(monkeypatch):
     assert metadata["used_fallback"] is False
 
 
-def test_llm_service_falls_back_on_invalid_model_output(monkeypatch):
+def test_llm_service_raises_on_invalid_model_output(monkeypatch):
     service = PedagogicalLLMService(
         enabled=True,
         api_key="test-key",
@@ -112,8 +129,7 @@ def test_llm_service_falls_back_on_invalid_model_output(monkeypatch):
     )
     monkeypatch.setattr(service, "_call_gemini", lambda _prompt: "not json")
 
-    intervention, metadata = service.generate(_context())
+    with pytest.raises(PedagogicalLLMUnavailableError) as exc_info:
+        service.generate(_context())
 
-    assert intervention.title == "Check the failing pattern"
-    assert metadata["used_fallback"] is True
-    assert metadata["error"]
+    assert exc_info.value.error_type

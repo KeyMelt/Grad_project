@@ -18,6 +18,7 @@ from backend.services.pedagogical_llm_service import (
     PedagogicalChatContext,
     PedagogicalChatReply,
     PedagogicalIntervention,
+    PedagogicalLLMUnavailableError,
 )
 from backend.services.study_buddy_service import StudyBuddyService
 from backend.services.telemetry_service import TelemetryService
@@ -145,17 +146,6 @@ class _FakeLLMService:
         self,
         context: PedagogicalPromptContext,
     ) -> tuple[PedagogicalIntervention, dict]:
-        return self.fallback_intervention(context), {
-            "model": "fake-model",
-            "prompt_version": self.prompt_version,
-            "latency_ms": 1,
-            "used_fallback": False,
-        }
-
-    def fallback_intervention(
-        self,
-        context: PedagogicalPromptContext,
-    ) -> PedagogicalIntervention:
         return PedagogicalIntervention(
             intervention_type=context.intervention_type,
             title="Study Buddy test prompt",
@@ -166,7 +156,12 @@ class _FakeLLMService:
             next_step="Run one small check.",
             concept_ids=[context.concept_id or context.lesson_id],
             solution_leakage_risk="low",
-        )
+        ), {
+            "model": "fake-model",
+            "prompt_version": self.prompt_version,
+            "latency_ms": 1,
+            "used_fallback": False,
+        }
 
     def generate_chat(
         self,
@@ -188,6 +183,30 @@ class _FakeLLMService:
         }
 
 
+class _UnavailableLLMService(_FakeLLMService):
+    def generate(
+        self,
+        context: PedagogicalPromptContext,
+    ) -> tuple[PedagogicalIntervention, dict]:
+        del context
+        raise PedagogicalLLMUnavailableError(
+            "Study Buddy AI is not configured.",
+            error_type="missing_api_key",
+            model=None,
+        )
+
+    def generate_chat(
+        self,
+        context: PedagogicalChatContext,
+    ) -> tuple[PedagogicalChatReply, dict]:
+        del context
+        raise PedagogicalLLMUnavailableError(
+            "Study Buddy AI is not configured.",
+            error_type="missing_api_key",
+            model=None,
+        )
+
+
 def _service() -> StudyBuddyService:
     database = Database("sqlite://")
     telemetry = TelemetryService(database=database)
@@ -196,6 +215,26 @@ def _service() -> StudyBuddyService:
         database=database,
         llm_service=_FakeLLMService(),
     )
+
+
+def test_unavailable_llm_skips_pending_intervention_but_records_events():
+    database = Database("sqlite://")
+    telemetry = TelemetryService(database=database)
+    service = StudyBuddyService(
+        telemetry_service=telemetry,
+        database=database,
+        llm_service=_UnavailableLLMService(),
+    )
+
+    event_ids = service.ingest_events(
+        [
+            _event("submission_result", {"passed": False, "failure_kind": "test_failure"}),
+            _event("submission_result", {"passed": False, "failure_kind": "test_failure"}),
+        ]
+    )
+
+    assert len(event_ids) == 2
+    assert service.pending_intervention("study-session-1") is None
 
 
 def test_submission_failure_streak_creates_pending_intervention():
@@ -431,6 +470,47 @@ def test_study_buddy_routes_poll_and_respond():
     )
     assert export_response.status_code == 200
     assert export_response.content
+
+
+def test_study_buddy_chat_route_reports_unavailable_llm():
+    database = Database("sqlite://")
+    telemetry = TelemetryService(database=database)
+    service = StudyBuddyService(
+        telemetry_service=telemetry,
+        database=database,
+        llm_service=_UnavailableLLMService(),
+    )
+    auth = _FakeAuthService()
+    app = create_app(
+        services=ServiceContainer(
+            lesson_catalog=None,
+            user_evaluation=None,
+            auth=auth,
+            execution=None,
+            workspace=None,
+            metrics_export=MetricsExportService(),
+            learning_analytics_export=LearningAnalyticsExportService(
+                database=service._database,
+            ),
+            telemetry=service.telemetry_service,
+            study_buddy=service,
+        )
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/me/study-buddy/chat",
+        json={
+            "lesson_id": "dp_policy_eval",
+            "session_id": "study-session-1",
+            "message": "hello",
+            "history": [],
+        },
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Study Buddy AI is not configured."
 
 
 def test_quiz_submit_route_records_mastery_evidence():

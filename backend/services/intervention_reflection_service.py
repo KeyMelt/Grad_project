@@ -9,7 +9,7 @@ from backend.services.pedagogical_llm_service import PedagogicalIntervention
 
 @dataclass(frozen=True)
 class ReflectionResult:
-    intervention: PedagogicalIntervention
+    intervention: PedagogicalIntervention | None
     pass_result: str
     note: str = ""
 
@@ -21,13 +21,12 @@ class InterventionReflectionService:
         self,
         *,
         intervention: PedagogicalIntervention,
-        fallback: PedagogicalIntervention,
         lesson_id: str,
     ) -> ReflectionResult:
         if intervention.solution_leakage_risk == "high":
             return ReflectionResult(
-                intervention=fallback,
-                pass_result="fallback_substituted",
+                intervention=None,
+                pass_result="blocked",
                 note="llm_reported_high_leakage_risk",
             )
 
@@ -41,16 +40,16 @@ class InterventionReflectionService:
         )
         if self._has_large_code_block(text):
             return ReflectionResult(
-                intervention=fallback,
-                pass_result="fallback_substituted",
+                intervention=None,
+                pass_result="blocked",
                 note="large_code_block",
             )
 
         leaked_blank = self._leaks_template_blank(text, lesson_id)
         if leaked_blank:
             return ReflectionResult(
-                intervention=fallback,
-                pass_result="fallback_substituted",
+                intervention=None,
+                pass_result="blocked",
                 note=f"template_blank_leak:{leaked_blank}",
             )
 

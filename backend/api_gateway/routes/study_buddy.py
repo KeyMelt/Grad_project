@@ -10,6 +10,7 @@ from backend.api_gateway.schemas import (
 )
 from backend.auth.dependencies import build_current_principal_dependency, require_roles
 from backend.auth.roles import PlatformRole, Principal
+from backend.services.pedagogical_llm_service import PedagogicalLLMUnavailableError
 
 
 def build_study_buddy_router(services: Any) -> APIRouter:
@@ -53,17 +54,23 @@ def build_study_buddy_router(services: Any) -> APIRouter:
         request: StudyBuddyChatRequest,
         principal: Principal = Depends(student_or_admin),
     ):
-        return services.study_buddy.chat(
-            student_id=principal.id,
-            lesson_id=request.lesson_id,
-            session_id=request.session_id,
-            message=request.message,
-            history=[message.model_dump(mode="json") for message in request.history],
-            current_code=request.current_code,
-            unresolved_blanks=request.unresolved_blanks,
-            failure_kind=request.failure_kind,
-            latest_feedback=request.latest_feedback,
-        )
+        try:
+            return services.study_buddy.chat(
+                student_id=principal.id,
+                lesson_id=request.lesson_id,
+                session_id=request.session_id,
+                message=request.message,
+                history=[message.model_dump(mode="json") for message in request.history],
+                current_code=request.current_code,
+                unresolved_blanks=request.unresolved_blanks,
+                failure_kind=request.failure_kind,
+                latest_feedback=request.latest_feedback,
+            )
+        except PedagogicalLLMUnavailableError as error:
+            raise HTTPException(
+                status_code=503,
+                detail=error.public_message,
+            ) from error
 
     @router.get("/admin/students/{student_id}/learning-timeline")
     def admin_learning_timeline(

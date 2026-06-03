@@ -18,6 +18,7 @@ from backend.services.pedagogical_llm_service import (
     PedagogicalChatContext,
     PedagogicalChatMessage,
     PedagogicalLLMService,
+    PedagogicalLLMUnavailableError,
 )
 from backend.services.spaced_review_scheduler import SpacedReviewScheduler
 from backend.services.study_buddy_trigger_service import StudyBuddyTriggerService
@@ -73,19 +74,26 @@ class StudyBuddyService:
         decision = self.coordinator.select(session, triggers)
         if decision is None:
             return
-        intervention_record = self._generate_intervention(session, decision)
+        try:
+            intervention_record = self._generate_intervention(session, decision)
+        except PedagogicalLLMUnavailableError:
+            return
         session.add(intervention_record)
         self.mastery_service.record_intervention_evidence(session, intervention_record)
 
     def _generate_intervention(self, session: Any, decision: Any) -> StudyBuddyInterventionRecord:
         context = self.context_assembler.assemble(session, decision)
         raw_intervention, metadata = self.llm_service.generate(context)
-        fallback = self.llm_service.fallback_intervention(context)
         reflection = self.reflection_service.reflect(
             intervention=raw_intervention,
-            fallback=fallback,
             lesson_id=decision.trigger.lesson_id,
         )
+        if reflection.intervention is None:
+            raise PedagogicalLLMUnavailableError(
+                "Study Buddy AI response was blocked by the educational guardrails.",
+                error_type=reflection.note or reflection.pass_result,
+                model=metadata.get("model"),
+            )
         response_payload = reflection.intervention.model_dump(mode="json")
         response_payload["observability"] = {
             **metadata,
@@ -101,7 +109,7 @@ class StudyBuddyService:
             intervention_type=reflection.intervention.intervention_type,
             status="ready",
             llm_model=metadata.get("model"),
-            prompt_version=metadata.get("prompt_version", "deterministic_v1"),
+            prompt_version=metadata.get("prompt_version", "pedagogical_intervention_v1"),
             context_hash=context.stable_hash(),
             response_json=json.dumps(
                 response_payload,
@@ -184,7 +192,24 @@ class StudyBuddyService:
                 latest_feedback=latest_feedback or {},
             )
 
-        reply, metadata = self.llm_service.generate_chat(context)
+        try:
+            reply, metadata = self.llm_service.generate_chat(context)
+        except PedagogicalLLMUnavailableError as error:
+            self._record_chat_telemetry(
+                student_id=student_id,
+                lesson_id=lesson_id,
+                session_id=session_id,
+                message=normalized_message,
+                reply="",
+                metadata={
+                    "model": error.model,
+                    "prompt_version": "pedagogical_chat_v1",
+                    "latency_ms": 0,
+                    "used_fallback": False,
+                    "error": error.error_type,
+                },
+            )
+            raise
         self._record_chat_telemetry(
             student_id=student_id,
             lesson_id=lesson_id,
