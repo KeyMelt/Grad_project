@@ -7,6 +7,7 @@ import '../core/onboarding_prefs.dart';
 import '../core/theme.dart';
 import '../core/workbench_state.dart';
 import '../features/admin/admin_console.dart';
+import '../features/feedback/feedback_section.dart';
 import '../features/flashcards/flashcards_section.dart';
 import '../features/home/home_dashboard.dart';
 import '../features/lessons/lesson_browser.dart';
@@ -136,6 +137,7 @@ class _MainLayoutState extends State<MainLayout> {
               intervention: state.studyBuddyIntervention,
               isLoading: state.studyBuddyLoading,
               isDismissed: state.studyBuddyPanelDismissed,
+              isSubmissionTakingLong: state.isSubmissionTakingLong,
               chatMessages: state.studyBuddyChatMessages,
               isChatLoading: state.studyBuddyChatLoading,
               chatError: state.studyBuddyChatError,
@@ -146,6 +148,16 @@ class _MainLayoutState extends State<MainLayout> {
               onSendChatMessage: _cubit.sendStudyBuddyChat,
             );
 
+            if ((state.isSubmissionTakingLong ||
+                    state.studyBuddyIntervention != null) &&
+                !_studyBuddyDrawerOpen) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  _setStudyBuddyDrawerOpen(true);
+                }
+              });
+            }
+
             return Padding(
               padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
               child: Row(
@@ -155,7 +167,8 @@ class _MainLayoutState extends State<MainLayout> {
                   _StudyBuddyDrawer(
                     isOpen: _studyBuddyDrawerOpen,
                     drawerWidth: _studyBuddyRailWidth(constraints.maxWidth),
-                    hasIntervention: state.studyBuddyIntervention != null,
+                    hasIntervention: state.studyBuddyIntervention != null ||
+                        state.isSubmissionTakingLong,
                     onToggle: () => _setStudyBuddyDrawerOpen(
                       !_studyBuddyDrawerOpen,
                     ),
@@ -189,6 +202,14 @@ class _MainLayoutState extends State<MainLayout> {
           onAnswerQuestion: _cubit.answerQuizQuestion,
           onSubmitQuiz: _cubit.submitQuiz,
           onSubmitPostStudySurvey: _cubit.submitPostStudySurvey,
+        );
+      case AppSection.feedback:
+        return FeedbackSection(
+          learner: state.learner,
+          isSubmitting: state.isPostStudySurveySubmitting,
+          isComplete: state.postStudySurveyCompleted,
+          message: state.postStudySurveyMessage,
+          onSubmit: _cubit.submitPostStudySurvey,
         );
       case AppSection.admin:
         if (!state.canAccessAuthoring) {
@@ -381,6 +402,12 @@ class _MainLayoutState extends State<MainLayout> {
                           label: 'Quiz',
                           selected: state.currentSection == AppSection.quiz,
                           onTap: () => _cubit.navigateTo(AppSection.quiz),
+                        ),
+                        const SizedBox(width: 8),
+                        _NavChip(
+                          label: 'Feedback',
+                          selected: state.currentSection == AppSection.feedback,
+                          onTap: () => _cubit.navigateTo(AppSection.feedback),
                         ),
                         const SizedBox(width: 8),
                         if (state.canAccessAuthoring)

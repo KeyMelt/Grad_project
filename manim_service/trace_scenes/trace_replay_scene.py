@@ -111,16 +111,18 @@ def _safe_tex(value: object) -> str:
 
 
 def _parse_updated_values(raw) -> dict[int, float]:
-    """Convert updated_values dict like {'V(3)': 0.5} → {3: 0.5}."""
+    """Convert updated_values dict like {'V(3)': 0.5} or {'Q(3,1)': 0.2}."""
     if not isinstance(raw, dict):
         return {}
     result: dict[int, float] = {}
     for k, v in raw.items():
-        # Accept "V(3)", "3", or integer keys
+        # Accept "V(3)", "Q(3,1)", "3", or integer keys. For Q-table updates,
+        # the state heatmap highlights the updated source state.
         key_str = str(k).strip()
-        # Strip surrounding V(...) notation
         if key_str.startswith("V(") and key_str.endswith(")"):
             key_str = key_str[2:-1]
+        elif key_str.startswith("Q(") and key_str.endswith(")"):
+            key_str = key_str[2:-1].split(",", 1)[0].strip()
         try:
             state_idx = int(key_str)
             result[state_idx] = float(v)
@@ -143,7 +145,7 @@ def _build_equation_panel(step: dict) -> VGroup:
         code_lines = step.get("code_lines") or []
         code_focus = code_lines[-1] if code_lines else "update value from target"
 
-    code_mob = Text(code_focus, font_size=15, color=ACCENT, font="Courier")
+    code_mob = Text(code_focus, font_size=15, color=ACCENT, font="Menlo")
     _fit_inside(code_mob, 4.65, 0.38)
 
     title_mob = Text("Equation", font_size=20, color=MATH)
@@ -160,7 +162,7 @@ def _build_backup_panel(step: dict) -> VGroup:
         gamma = _fmt(eq_update.get("gamma", 0))
         bootstrap = _fmt(eq_update.get("bootstrap_value", 0))
         target = _fmt(eq_update.get("td_target", 0))
-        label = _safe_tex(eq_update.get("bootstrap_label", "B"))
+        label = str(eq_update.get("bootstrap_label", "B"))
         lines = VGroup(
             MathTex(r"\text{target}=r+\gamma B", font_size=26, color=TEXT),
             MathTex(

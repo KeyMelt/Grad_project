@@ -154,8 +154,13 @@ class PoliciesValuesBellmanConcept(BaseConceptScene):
         return mobs[0] if len(mobs) == 1 else mobs
 
     def _fade_all(self, keep=(), run_time=0.8):
+        # Fade EVERYTHING currently on screen except `keep` (and the camera
+        # frame) — not just self._live. This clears untracked/orphan mobjects
+        # (e.g. a leftover code-panel debugger highlight from the S7 phases)
+        # that would otherwise persist into a later phase as a ghost rectangle.
         keep_ids = {id(m) for m in keep}
-        mobs = [m for m in self._live if id(m) not in keep_ids]
+        frame = self.camera.frame
+        mobs = [m for m in self.mobjects if m is not frame and id(m) not in keep_ids]
         if mobs:
             self.play(*[FadeOut(m) for m in mobs], run_time=run_time)
         self._live = [m for m in self._live if id(m) in keep_ids]
@@ -216,7 +221,7 @@ class PoliciesValuesBellmanConcept(BaseConceptScene):
             Text("Return folds the future backward.", font_size=26, color=VALUE_COLOR),
         ).arrange(DOWN, buff=0.22, aligned_edge=LEFT)
         self.place_mid_right_panel(notes)
-        self.play(FadeIn(grid), LaggedStart(*[FadeIn(n) for n in notes], lag_ratio=0.18), run_time=1.5)
+        self.play(FadeIn(grid), LaggedStart(*[FadeIn(n) for n in notes], lag_ratio=0.18), run_time=0.8)
         self.header.set_opacity(OPACITY_BACKGROUND)
         self._register(self.header, grid, notes)
         self.recap_grid = grid
@@ -405,9 +410,11 @@ class PoliciesValuesBellmanConcept(BaseConceptScene):
         # The chart reveal is deliberately first in this phase's visible beat,
         # so the mandatory P11 check sees q-bars at start + 1s.
         self.play(FadeIn(chart), run_time=0.8)
+        # FadeOut the value panel rather than dimming it: q_side lands on the
+        # same left anchor, so a dim v-panel garbles it into doubled text.
         self.play(
             ReplacementTransform(self.q_def, q_side),
-            self.v_panel.animate.set_opacity(OPACITY_SECONDARY),
+            FadeOut(self.v_panel),
             run_time=1.0,
         )
         for bar in chart.bars:
@@ -449,30 +456,38 @@ class PoliciesValuesBellmanConcept(BaseConceptScene):
                 ["2,0", "7,0", "10,0"],
                 ["2,0", "6,0", "10,0"],
             ],
-            total_width=7.0,
-            level_height=1.45,
-            label_font_size=22,
+            total_width=10.5,
+            level_height=1.5,
+            label_font_size=24,
         )
-        thumb = self.policy_b_hidden.copy().scale(0.35).set_opacity(OPACITY_BACKGROUND)
-        self.place_bottom_right_panel(thumb)
-        self.play(FadeIn(self.backup), FadeIn(thumb), run_time=1.6)
+        # Fill the lower ~two-thirds of the canvas; the equation lives across
+        # the top (added from P14). Vertical split = no wasted side space and a
+        # tree large enough to read on a small screen.
+        self.backup.move_to([0.0, -0.6, 0.0])
+        thumb = self.policy_b_hidden.copy().scale(0.32).set_opacity(OPACITY_BACKGROUND)
+        thumb.to_corner(DOWN + LEFT, buff=0.3)
+        self.play(FadeIn(self.backup), FadeIn(thumb), run_time=0.8)
         self.policy_thumb = thumb
         trace_vector(self, thumb, self.backup.action_nodes[2], color=POLICY_COLOR, run_time=0.6)
         trace_vector(self, thumb, self.backup.outcome_nodes[2][0], color=CODE_ACCENT, run_time=0.6)
         self._register(self.backup, thumb)
-        zoom_to(self, self.backup, scale=0.82, run_time=1.0)
         self.ingestion_wait(1.6)
         self._phase_done(13)
 
     def _deriv_eq(self, *parts):
-        eq = self._eq(*parts, size=34)
-        self.place_left_panel(eq)
+        # Large, top-centred equation spanning the full width — vertically
+        # separated from the backup tree below. Uses the whole top band instead
+        # of being squeezed into a narrow left column.
+        eq = self._eq(*parts, size=44)
+        if eq.width > 12.5:
+            eq.scale_to_fit_width(12.5)
+        eq.to_edge(UP, buff=0.75)
         return eq
 
     def _phase14_derivation_step1(self):
         self.mark_phase("S5-P14_derivation_definition")
         eq1 = self._deriv_eq("v_\\pi(s)", "\\doteq", "\\mathbb{E}_\\pi", "[", "G_t", "\\mid", "S_t=s", "]")
-        self.play(self.backup.animate.scale(0.72).shift(RIGHT * 1.8), Write(eq1), run_time=1.2)
+        self.play(Write(eq1), run_time=0.9)
         cross_highlight_pair(self, eq1[0], self.backup.root_node, primary_color=VALUE_COLOR, pulse_run_time=0.7)
         trace_vector(self, self.backup.root_node, eq1[0], color=VALUE_COLOR, run_time=0.6)
         self.deriv_eq = eq1
@@ -523,12 +538,23 @@ class PoliciesValuesBellmanConcept(BaseConceptScene):
     def _phase18_derivation_step5(self):
         self.mark_phase("S5-P18_recursive_value_label")
         eq5 = self._deriv_eq("v_\\pi(s)", "=", "\\sum_a", "\\pi(a\\mid s)", "\\sum_{s',r}", "p(s',r\\mid s,a)", "[", "r", "+", "\\gamma", "v_\\pi(s')", "]")
+        # Stagger the three leaf-value labels (zigzag high/low) and shrink them
+        # so adjacent labels under the closely-spaced R-branch leaves do not
+        # overlap into garbled text.
         leaf_labels = VGroup(
-            self._eq("v_\\pi(2)", size=24, color=VALUE_COLOR).next_to(self.backup.outcome_nodes[2][0], DOWN, buff=0.08),
-            self._eq("v_\\pi(7)=0", size=24, color=VALUE_COLOR).next_to(self.backup.outcome_nodes[2][1], DOWN, buff=0.08),
-            self._eq("v_\\pi(10)", size=24, color=VALUE_COLOR).next_to(self.backup.outcome_nodes[2][2], DOWN, buff=0.08),
+            self._eq("v_\\pi(2)", size=20, color=VALUE_COLOR).next_to(self.backup.outcome_nodes[2][0], DOWN, buff=0.1),
+            self._eq("v_\\pi(7)=0", size=20, color=VALUE_COLOR).next_to(self.backup.outcome_nodes[2][1], DOWN, buff=0.62),
+            self._eq("v_\\pi(10)", size=20, color=VALUE_COLOR).next_to(self.backup.outcome_nodes[2][2], DOWN, buff=0.1),
         )
-        self.play(ReplacementTransform(self.deriv_eq, eq5), LaggedStart(*[Write(m) for m in leaf_labels], lag_ratio=0.2), run_time=1.4)
+        # The G_{t+1} brace/labels from P15 have served their purpose — the
+        # concept now becomes the recursive value v_pi(s'); fade them so they
+        # do not collide with the leaf labels under the same leaves.
+        self.play(
+            ReplacementTransform(self.deriv_eq, eq5),
+            FadeOut(self.rg_labels),
+            LaggedStart(*[Write(m) for m in leaf_labels], lag_ratio=0.2),
+            run_time=1.4,
+        )
         for label in leaf_labels:
             trace_vector(self, label, eq5[9], color=VALUE_COLOR, run_time=0.45)
         self.deriv_eq = eq5
@@ -558,23 +584,26 @@ class PoliciesValuesBellmanConcept(BaseConceptScene):
 
     def _phase20_numeric_check(self):
         self.mark_phase("S6-P20_numeric_consistency")
-        small_box = self.boxed_bellman.copy().scale(0.48)
-        small_box.shift(UP * 0.25)
+        # Reference equation pinned to the TOP band (not a tiny centred copy);
+        # the two numeric sides spread large and low — fills the whole frame so
+        # the equality reads clearly on a small screen (§36).
+        small_box = self.boxed_bellman.copy().scale(0.62)
+        small_box.to_edge(UP, buff=0.7)
         lhs = VGroup(
-            Text("Heatmap value", font_size=24, color=VALUE_COLOR),
-            self._eq("v_\\pi(6)\\approx0.039", size=32, color=VALUE_COLOR),
-        ).arrange(DOWN, buff=0.18)
+            Text("Heatmap value", font_size=30, color=VALUE_COLOR),
+            self._eq("v_\\pi(6)\\approx0.039", size=44, color=VALUE_COLOR),
+        ).arrange(DOWN, buff=0.25)
         rhs = VGroup(
-            Text("Bellman RHS", font_size=24, color=VALUE_COLOR),
-            self._eq("\\tfrac14\\sum_a\\sum_{s',r}p[\\cdot]\\approx0.039", size=30, color=VALUE_COLOR),
-        ).arrange(DOWN, buff=0.18)
-        self.place_left_panel(lhs)
-        self.place_mid_right_panel(rhs)
-        self.play(ReplacementTransform(self.boxed_bellman, small_box), FadeIn(lhs), FadeIn(rhs), run_time=1.2)
+            Text("Bellman RHS", font_size=30, color=VALUE_COLOR),
+            self._eq("\\tfrac14\\sum_a\\sum_{s',r}p[\\cdot]\\approx0.039", size=40, color=VALUE_COLOR),
+        ).arrange(DOWN, buff=0.25)
+        lhs.move_to([-3.5, -0.9, 0.0])
+        rhs.move_to([3.5, -0.9, 0.0])
+        self.play(ReplacementTransform(self.boxed_bellman, small_box), FadeIn(lhs), FadeIn(rhs), run_time=0.9)
         trace_vector(self, lhs[1], small_box[0][0], color=VALUE_COLOR, run_time=0.6)
         trace_vector(self, rhs[1], small_box[0][2], color=VALUE_COLOR, run_time=0.6)
-        check = Text("LHS and RHS match: this is an equality, not an assignment.", font_size=24, color=WHITE)
-        check.next_to(small_box, DOWN, buff=0.3)
+        check = Text("LHS and RHS match: this is an equality, not an assignment.", font_size=28, color=WHITE)
+        check.to_edge(DOWN, buff=0.6)
         self.play(FadeIn(check), run_time=0.5)
         self.boxed_bellman = small_box
         self.numeric_panels = VGroup(lhs, rhs, check)
@@ -597,7 +626,7 @@ class PoliciesValuesBellmanConcept(BaseConceptScene):
         # (spans -1.2 to 6.8). Gap of ~2 units between panels.
         heatmap.move_to([-5.0, -0.05, 0.0])
         code.shift(RIGHT * (2.8 - code.panel.get_center()[0]))
-        self.play(FadeIn(heatmap), FadeIn(code), run_time=1.2)
+        self.play(FadeIn(heatmap), FadeIn(code), run_time=0.7)
         self.wait(1.5)
         cross_highlight_pair(self, self._cell(heatmap, 6), self._label_for_state(heatmap, 6), primary_color=VALUE_COLOR, pulse_run_time=0.8)
         self.code_heatmap = heatmap
@@ -674,8 +703,10 @@ class PoliciesValuesBellmanConcept(BaseConceptScene):
         eq.move_to([0.0, 0.0, 0.0])
         box = SurroundingRectangle(eq, color=VALUE_COLOR, buff=0.22, stroke_width=3)
         full = VGroup(eq, box)
-        self.play(Write(eq), Create(box), run_time=1.2)
-        zoom_to(self, full, scale=0.82, run_time=1.0)
+        self.play(Write(eq), Create(box), run_time=0.7)
+        # scale=0.95 (was 0.82): a gentler zoom that keeps the full box inside
+        # the frame. At 0.82 the 11.94-wide box was magnified past both edges.
+        zoom_to(self, full, scale=0.95, run_time=1.0)
         self.boxed_bellman = full
         self._register(full)
         self.ingestion_wait(1.6)

@@ -12,6 +12,7 @@ class StudyBuddyPanel extends StatelessWidget {
   final List<StudyBuddyChatMessage> chatMessages;
   final bool isChatLoading;
   final String? chatError;
+  final bool isSubmissionTakingLong;
   final VoidCallback onDismiss;
   final VoidCallback onComplete;
   final VoidCallback onReopen;
@@ -27,6 +28,7 @@ class StudyBuddyPanel extends StatelessWidget {
     this.chatMessages = const [],
     this.isChatLoading = false,
     this.chatError,
+    this.isSubmissionTakingLong = false,
     required this.onDismiss,
     required this.onComplete,
     required this.onReopen,
@@ -41,15 +43,15 @@ class StudyBuddyPanel extends StatelessWidget {
       elevation: 10,
       color: AppTheme.surfaceWhite,
       borderRadius: const BorderRadius.only(
-          topRight: Radius.circular(24),
-          bottomRight: Radius.circular(24),
-        ),
+        topRight: Radius.circular(24),
+        bottomRight: Radius.circular(24),
+      ),
       child: Container(
         decoration: BoxDecoration(
           borderRadius: const BorderRadius.only(
-          topRight: Radius.circular(24),
-          bottomRight: Radius.circular(24),
-        ),
+            topRight: Radius.circular(24),
+            bottomRight: Radius.circular(24),
+          ),
           border: Border.all(color: AppTheme.borderLight),
         ),
         padding: const EdgeInsets.all(18),
@@ -94,6 +96,17 @@ class StudyBuddyPanel extends StatelessWidget {
         key: const ValueKey('study-buddy-intervention'),
         intervention: intervention!,
         onComplete: onComplete,
+      );
+    } else if (isSubmissionTakingLong) {
+      coachContent = _TraceWaitContent(
+        key: const ValueKey('study-buddy-trace-wait'),
+        isChatLoading: isChatLoading,
+        onReviewQuestion: () => onSendChatMessage(
+          'My replay trace is still rendering. Ask me one concise review question about the current lesson while I wait.',
+        ),
+        onMiniReview: () => onSendChatMessage(
+          'My replay trace is still rendering. Give me a short review drill for the current lesson without revealing solution code.',
+        ),
       );
     } else {
       coachContent = _IdleContent(
@@ -418,6 +431,84 @@ class _DismissedContent extends StatelessWidget {
               onPressed: onReopen,
               icon: const Icon(Icons.visibility_rounded),
               label: const Text('Open Study Buddy'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TraceWaitContent extends StatelessWidget {
+  final bool isChatLoading;
+  final VoidCallback onReviewQuestion;
+  final VoidCallback onMiniReview;
+
+  const _TraceWaitContent({
+    super.key,
+    required this.isChatLoading,
+    required this.onReviewQuestion,
+    required this.onMiniReview,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.tealBorder),
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Replay trace is still building',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Use the wait to rehearse the current concept. The full trace will appear automatically when rendering completes.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppTheme.textPrimary,
+                    height: 1.35,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ActionChip(
+                  key: const ValueKey('study-buddy-review-question'),
+                  tooltip: 'Ask one review question',
+                  avatar: const Icon(Icons.help_outline_rounded, size: 18),
+                  label: const Text('Review question'),
+                  onPressed: isChatLoading ? null : onReviewQuestion,
+                ),
+                ActionChip(
+                  key: const ValueKey('study-buddy-mini-review'),
+                  tooltip: 'Start a short review drill',
+                  avatar: const Icon(Icons.school_outlined, size: 18),
+                  label: const Text('Mini review'),
+                  onPressed: isChatLoading ? null : onMiniReview,
+                ),
+              ],
             ),
           ],
         ),

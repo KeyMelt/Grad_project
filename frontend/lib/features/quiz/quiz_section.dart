@@ -314,6 +314,7 @@ class _PostStudySurveyCardState extends State<PostStudySurveyCard> {
   final _helpfulController = TextEditingController();
   final _confusingController = TextEditingController();
   final _improvementController = TextEditingController();
+  int _step = 0;
   int _mentalDemand = 50;
   int _physicalDemand = 10;
   int _temporalDemand = 40;
@@ -344,6 +345,12 @@ class _PostStudySurveyCardState extends State<PostStudySurveyCard> {
 
   @override
   Widget build(BuildContext context) {
+    final stepContent = switch (_step) {
+      0 => _buildUsabilityStep(),
+      1 => _buildWorkloadStep(),
+      _ => _buildFeedbackStep(),
+    };
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -400,83 +407,184 @@ class _PostStudySurveyCardState extends State<PostStudySurveyCard> {
             ),
             if (!widget.isComplete) ...[
               const SizedBox(height: 18),
-              _buildSectionTitle('System usability'),
-              const SizedBox(height: 8),
-              ..._susPrompts.asMap().entries.map(
-                    (entry) => _buildSusQuestion(entry.key, entry.value),
-                  ),
+              _buildProgressHeader(),
               const SizedBox(height: 18),
-              _buildSectionTitle('NASA-TLX workload'),
-              const SizedBox(height: 8),
-              _buildTlxSlider(
-                label: 'Mental demand',
-                value: _mentalDemand,
-                onChanged: (value) => setState(() => _mentalDemand = value),
-              ),
-              _buildTlxSlider(
-                label: 'Physical demand',
-                value: _physicalDemand,
-                onChanged: (value) => setState(() => _physicalDemand = value),
-              ),
-              _buildTlxSlider(
-                label: 'Temporal demand',
-                value: _temporalDemand,
-                onChanged: (value) => setState(() => _temporalDemand = value),
-              ),
-              _buildTlxSlider(
-                label: 'Performance',
-                value: _performance,
-                onChanged: (value) => setState(() => _performance = value),
-              ),
-              _buildTlxSlider(
-                label: 'Effort',
-                value: _effort,
-                onChanged: (value) => setState(() => _effort = value),
-              ),
-              _buildTlxSlider(
-                label: 'Frustration',
-                value: _frustration,
-                onChanged: (value) => setState(() => _frustration = value),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                child: stepContent,
               ),
               const SizedBox(height: 18),
-              _buildSectionTitle('Optional feedback'),
-              const SizedBox(height: 8),
-              _buildFeedbackField(
-                controller: _helpfulController,
-                label: 'What helped most?',
-              ),
-              _buildFeedbackField(
-                controller: _confusingController,
-                label: 'What was confusing?',
-              ),
-              _buildFeedbackField(
-                controller: _improvementController,
-                label: 'What should improve?',
-              ),
-              const SizedBox(height: 18),
-              Align(
-                alignment: Alignment.centerRight,
-                child: ElevatedButton.icon(
-                  onPressed: widget.isSubmitting ? null : _submit,
-                  icon: widget.isSubmitting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.send_outlined),
-                  label: Text(
-                    widget.isSubmitting ? 'Submitting...' : 'Submit Survey',
-                  ),
-                ),
-              ),
+              _buildNavigation(),
             ],
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildProgressHeader() {
+    const labels = ['Usability', 'Workload', 'Feedback'];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        LinearProgressIndicator(
+          value: (_step + 1) / labels.length,
+          minHeight: 6,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (var index = 0; index < labels.length; index += 1)
+              _SurveyStepPill(
+                label: '${index + 1}. ${labels[index]}',
+                selected: index == _step,
+                complete: index < _step,
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUsabilityStep() {
+    return KeyedSubtree(
+      key: const ValueKey('survey-usability-step'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitle('System usability'),
+          const SizedBox(height: 8),
+          const Text(
+            'Choose 1 for strongly disagree and 5 for strongly agree.',
+            style: TextStyle(color: AppTheme.textSecondary),
+          ),
+          const SizedBox(height: 12),
+          ..._susPrompts.asMap().entries.map(
+                (entry) => _buildSusQuestion(entry.key, entry.value),
+              ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWorkloadStep() {
+    return KeyedSubtree(
+      key: const ValueKey('survey-workload-step'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitle('NASA-TLX workload'),
+          const SizedBox(height: 8),
+          const Text(
+            'Rate each workload dimension from 0 to 100.',
+            style: TextStyle(color: AppTheme.textSecondary),
+          ),
+          const SizedBox(height: 12),
+          _buildTlxSlider(
+            label: 'Mental demand',
+            value: _mentalDemand,
+            onChanged: (value) => setState(() => _mentalDemand = value),
+          ),
+          _buildTlxSlider(
+            label: 'Physical demand',
+            value: _physicalDemand,
+            onChanged: (value) => setState(() => _physicalDemand = value),
+          ),
+          _buildTlxSlider(
+            label: 'Temporal demand',
+            value: _temporalDemand,
+            onChanged: (value) => setState(() => _temporalDemand = value),
+          ),
+          _buildTlxSlider(
+            label: 'Performance',
+            value: _performance,
+            onChanged: (value) => setState(() => _performance = value),
+          ),
+          _buildTlxSlider(
+            label: 'Effort',
+            value: _effort,
+            onChanged: (value) => setState(() => _effort = value),
+          ),
+          _buildTlxSlider(
+            label: 'Frustration',
+            value: _frustration,
+            onChanged: (value) => setState(() => _frustration = value),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeedbackStep() {
+    return KeyedSubtree(
+      key: const ValueKey('survey-feedback-step'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitle('Optional feedback'),
+          const SizedBox(height: 8),
+          const Text(
+            'Add notes only where they help explain the ratings.',
+            style: TextStyle(color: AppTheme.textSecondary),
+          ),
+          const SizedBox(height: 12),
+          _buildFeedbackField(
+            controller: _helpfulController,
+            label: 'What helped most?',
+          ),
+          _buildFeedbackField(
+            controller: _confusingController,
+            label: 'What was confusing?',
+          ),
+          _buildFeedbackField(
+            controller: _improvementController,
+            label: 'What should improve?',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavigation() {
+    final isLastStep = _step == 2;
+    return Row(
+      children: [
+        TextButton.icon(
+          onPressed: widget.isSubmitting || _step == 0
+              ? null
+              : () => setState(() => _step -= 1),
+          icon: const Icon(Icons.arrow_back_rounded),
+          label: const Text('Back'),
+        ),
+        const Spacer(),
+        if (!isLastStep)
+          ElevatedButton.icon(
+            onPressed:
+                widget.isSubmitting ? null : () => setState(() => _step += 1),
+            icon: const Icon(Icons.arrow_forward_rounded),
+            label: const Text('Next'),
+          )
+        else
+          ElevatedButton.icon(
+            onPressed: widget.isSubmitting ? null : _submit,
+            icon: widget.isSubmitting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.send_outlined),
+            label: Text(
+              widget.isSubmitting ? 'Submitting...' : 'Submit Survey',
+            ),
+          ),
+      ],
     );
   }
 
@@ -598,6 +706,58 @@ class _PostStudySurveyCardState extends State<PostStudySurveyCard> {
       feedbackHelpful: _helpfulController.text,
       feedbackConfusing: _confusingController.text,
       feedbackImprovement: _improvementController.text,
+    );
+  }
+}
+
+class _SurveyStepPill extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final bool complete;
+
+  const _SurveyStepPill({
+    required this.label,
+    required this.selected,
+    required this.complete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: selected ? AppTheme.tealSurface : Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: selected || complete
+              ? AppTheme.primaryBlue
+              : AppTheme.borderLight,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            complete
+                ? Icons.check_circle_rounded
+                : selected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_unchecked_rounded,
+            size: 16,
+            color: selected || complete
+                ? AppTheme.primaryBlue
+                : AppTheme.textSecondary,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: selected ? AppTheme.primaryBlue : AppTheme.textSecondary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

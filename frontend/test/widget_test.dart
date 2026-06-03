@@ -678,6 +678,15 @@ void main() {
     expect(find.text('100.0%'), findsWidgets);
     expect(find.text('Post-study workload survey'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Next'));
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    expect(find.text('NASA-TLX workload'), findsOneWidget);
+    await tester.ensureVisible(find.text('Next'));
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    expect(find.text('Optional feedback'), findsOneWidget);
+
     await tester.ensureVisible(find.text('Submit Survey'));
     await tester.tap(find.text('Submit Survey'));
     await tester.pumpAndSettle();

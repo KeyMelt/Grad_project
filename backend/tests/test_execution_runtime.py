@@ -99,7 +99,7 @@ class _FakeVisualizationService:
         return ""
 
 
-def test_derived_submission_timeout_is_capped_at_eighteen_seconds(monkeypatch):
+def test_derived_submission_timeout_scales_but_remains_capped(monkeypatch):
     monkeypatch.delenv("RL_IDE_EXECUTION_TIMEOUT_BASE_SECONDS", raising=False)
     monkeypatch.delenv("RL_IDE_EXECUTION_TIMEOUT_PER_EPISODE_SECONDS", raising=False)
     monkeypatch.delenv("RL_IDE_EXECUTION_TIMEOUT_MAX_SECONDS", raising=False)
@@ -111,7 +111,7 @@ def test_derived_submission_timeout_is_capped_at_eighteen_seconds(monkeypatch):
         }
     )
 
-    assert timeout_seconds == 18
+    assert timeout_seconds == 90
 
 
 def test_execution_trace_frame_paths_are_absolute(monkeypatch, tmp_path):

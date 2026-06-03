@@ -71,7 +71,7 @@ class InterventionCoordinator:
         trigger: StudyBuddyTrigger,
     ) -> bool:
         lower_bound = datetime.now(timezone.utc) - timedelta(
-            seconds=trigger_config.INTERVENTION_COOLDOWN_SECONDS
+            seconds=self._cooldown_seconds(trigger.trigger_type)
         )
         statement = (
             select(StudyBuddyInterventionRecord)
@@ -86,6 +86,11 @@ class InterventionCoordinator:
                 StudyBuddyInterventionRecord.concept_id == trigger.concept_id
             )
         return session.exec(statement).first() is not None
+
+    def _cooldown_seconds(self, trigger_type: str) -> int:
+        if trigger_type == "submission_failure_streak":
+            return trigger_config.SUBMISSION_FAILURE_INTERVENTION_COOLDOWN_SECONDS
+        return trigger_config.INTERVENTION_COOLDOWN_SECONDS
 
     def _latest_confidence(
         self,

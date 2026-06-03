@@ -271,9 +271,14 @@ class IDECodePanel(VGroup):
         character offset in the original source line. This sidesteps manim
         Text's variable bounding boxes and respects indentation exactly.
         """
-        # Character width estimator — a single 'M' in this font/size.
+        # Monospace ADVANCE (cell) width — NOT the inked bbox of one glyph.
+        # A single glyph's bounding box is narrower than its cell by the side
+        # bearings; using it under-counts every column and compresses the line
+        # until adjacent letters collide. Measure the true per-character advance
+        # from a run of glyphs ("M"*11 minus "M" = 10 advances).
         sizer = Text("M", font=self._font, font_size=self._font_size)
-        char_w = sizer.width  # one char width
+        ref = Text("M" * 11, font=self._font, font_size=self._font_size)
+        char_w = (ref.width - sizer.width) / 10  # true monospace cell width
         ascender = sizer.height  # used for y centring
 
         token_mobs: list[Text] = []

@@ -16,6 +16,7 @@ from manim_service.jobs.trace_renderer import (
     render_trace,
 )
 from manim_service.storage import output as storage
+from manim_service.trace_scenes.trace_replay_scene import _parse_updated_values
 
 
 def _make_trace_job(lesson_id: str = "td_q_learning", steps: list | None = None) -> Job:
@@ -64,10 +65,24 @@ class TestComputeTraceHash:
             "td_q_learning", steps_b
         )
 
+    def test_different_render_quality(self, monkeypatch):
+        steps = [{"state": 0, "action": 1, "reward": 0.5, "next_state": 1}]
+        monkeypatch.setattr(manim_settings, "RENDER_QUALITY", "l")
+        low_hash = _compute_trace_hash("td_q_learning", steps)
+        monkeypatch.setattr(manim_settings, "RENDER_QUALITY", "m")
+        medium_hash = _compute_trace_hash("td_q_learning", steps)
+        assert low_hash != medium_hash
+
     def test_returns_16_hex_chars(self):
         h = _compute_trace_hash("dp_policy_eval", [])
         assert len(h) == 16
         assert all(c in "0123456789abcdef" for c in h)
+
+
+def test_trace_scene_parses_q_table_updated_values_as_source_state():
+    parsed = _parse_updated_values({"Q(3, 1)": 0.42, "Q(7,2)": -0.5, "V(9)": 1.0})
+
+    assert parsed == {3: 0.42, 7: -0.5, 9: 1.0}
 
 
 LESSON_ID = "td_q_learning"

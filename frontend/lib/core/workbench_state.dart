@@ -18,9 +18,11 @@ export 'lesson_models.dart';
 enum RunStatus { idle, running, success, failed, stopped }
 
 /// Top-level application destinations owned by [MainLayout].
-enum AppSection { home, workspace, flashcards, quiz, admin }
+enum AppSection { home, workspace, flashcards, quiz, feedback, admin }
 
-const Duration _submissionUiTimeout = Duration(seconds: 18);
+const Duration _longRunningSubmissionNoticeDelay = Duration(seconds: 12);
+const String _longRunningSubmissionStatusMessage =
+    'This trace is taking a bit to complete. Keep the workspace open; Study Buddy has a short review ready while the full replay finishes.';
 const Object _sentinel = Object();
 const String _authoredLessonsPrefsKey = 'rl_ide_authored_lessons_v1';
 
@@ -96,6 +98,7 @@ class RLWorkbenchState {
   final bool isPostStudySurveySubmitting;
   final bool postStudySurveyCompleted;
   final String postStudySurveyMessage;
+  final bool isSubmissionTakingLong;
 
   const RLWorkbenchState({
     required this.sections,
@@ -159,6 +162,7 @@ class RLWorkbenchState {
     required this.isPostStudySurveySubmitting,
     required this.postStudySurveyCompleted,
     required this.postStudySurveyMessage,
+    required this.isSubmissionTakingLong,
   });
 
   factory RLWorkbenchState.initial() {
@@ -227,6 +231,7 @@ class RLWorkbenchState {
       postStudySurveyCompleted: false,
       postStudySurveyMessage:
           'Complete the post-study survey to record workload and usability.',
+      isSubmissionTakingLong: false,
     );
   }
 
@@ -307,6 +312,7 @@ class RLWorkbenchState {
     bool? isPostStudySurveySubmitting,
     bool? postStudySurveyCompleted,
     String? postStudySurveyMessage,
+    bool? isSubmissionTakingLong,
   }) {
     return RLWorkbenchState(
       sections: sections ?? this.sections,
@@ -407,6 +413,8 @@ class RLWorkbenchState {
           postStudySurveyCompleted ?? this.postStudySurveyCompleted,
       postStudySurveyMessage:
           postStudySurveyMessage ?? this.postStudySurveyMessage,
+      isSubmissionTakingLong:
+          isSubmissionTakingLong ?? this.isSubmissionTakingLong,
     );
   }
 
@@ -1672,6 +1680,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         unresolvedBlanks: const [],
         studentFeedback: null,
         workspaceFeedbackDismissed: false,
+        isSubmissionTakingLong: false,
         statusMessage:
             'Submitting ${state.selectedLesson.title} for grading...',
       ),
@@ -1720,6 +1729,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
           unresolvedBlanks: error.unresolvedBlanks,
           studentFeedback: error.studentFeedback,
           workspaceFeedbackDismissed: false,
+          isSubmissionTakingLong: false,
           statusMessage: error.message,
         ),
       );
@@ -1750,6 +1760,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
           failureKind: null,
           unresolvedBlanks: const [],
           studentFeedback: null,
+          isSubmissionTakingLong: false,
           statusMessage: 'Connection unavailable. Try again shortly.',
         ),
       );
@@ -1767,6 +1778,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       state.copyWith(
         activeRunId: null,
         runStatus: RunStatus.stopped,
+        isSubmissionTakingLong: false,
         statusMessage:
             'Stopped monitoring the current run. Background execution may continue.',
       ),
@@ -1796,6 +1808,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         failureKind: null,
         unresolvedBlanks: const [],
         studentFeedback: null,
+        isSubmissionTakingLong: false,
         statusMessage:
             'Reset ${state.selectedLesson.title} to its starter template.',
       ),
@@ -2426,6 +2439,7 @@ def lesson_function(*args, **kwargs):
       unresolvedBlanks: const [],
       studentFeedback: null,
       workspaceFeedbackDismissed: false,
+      isSubmissionTakingLong: false,
       statusMessage: message,
     );
   }
@@ -2436,41 +2450,28 @@ def lesson_function(*args, **kwargs):
 
   Future<void> _pollUntilComplete(String taskId) async {
     final startedAt = DateTime.now();
+    var longRunningNoticeShown = false;
     while (_activeTaskId == taskId && state.runStatus == RunStatus.running) {
-      if (DateTime.now().difference(startedAt) >= _submissionUiTimeout) {
-        _activeTaskId = null;
+      if (!longRunningNoticeShown &&
+          DateTime.now().difference(startedAt) >=
+              _longRunningSubmissionNoticeDelay) {
+        longRunningNoticeShown = true;
         emit(
           state.copyWith(
-            runStatus: RunStatus.failed,
-            currentEpisode: 0,
-            currentStep: 0,
-            totalReward: 0.0,
-            averageReward: 0.0,
-            bestEpisodeReward: 0.0,
-            videoPath: '',
-            testResults: const [],
-            stepTrace: const [],
-            traceEpisodes: const [],
-            episodeSummaries: const [],
-            failureKind: 'runtime_error',
-            unresolvedBlanks: const [],
-            studentFeedback: null,
-            workspaceFeedbackDismissed: false,
-            statusMessage:
-                'Submission timed out after 18 seconds. Check for long loops or reduce episode counts before submitting again.',
+            isSubmissionTakingLong: true,
+            studyBuddyPanelDismissed: false,
+            statusMessage: _longRunningSubmissionStatusMessage,
           ),
         );
         _recordTelemetry(
-          'submission_result',
+          'submission_long_running_notice',
           {
-            'passed': false,
             'task_id': taskId,
-            'failure_kind': 'submission_timeout',
+            'elapsed_seconds': _longRunningSubmissionNoticeDelay.inSeconds,
             'origin': 'frontend_submit',
           },
           flushAfter: true,
         );
-        return;
       }
 
       final snapshot = await _api.getTaskStatus(taskId);
@@ -2482,12 +2483,16 @@ def lesson_function(*args, **kwargs):
       switch (snapshot.status) {
         case ExecutionTaskStatus.queued:
           emit(state.copyWith(
-            statusMessage: 'Task $taskId queued.',
+            statusMessage: longRunningNoticeShown
+                ? _longRunningSubmissionStatusMessage
+                : 'Task $taskId queued.',
           ));
           break;
         case ExecutionTaskStatus.running:
           emit(state.copyWith(
-            statusMessage: 'Task $taskId running.',
+            statusMessage: longRunningNoticeShown
+                ? _longRunningSubmissionStatusMessage
+                : 'Task $taskId running.',
           ));
           break;
         case ExecutionTaskStatus.succeeded:
@@ -2516,6 +2521,7 @@ def lesson_function(*args, **kwargs):
               unresolvedBlanks: const [],
               studentFeedback: null,
               workspaceFeedbackDismissed: false,
+              isSubmissionTakingLong: false,
               statusMessage: result.visualizationReady
                   ? '${result.message} Replay ready.'
                   : '${result.message} No replay video generated.',
@@ -2552,6 +2558,7 @@ def lesson_function(*args, **kwargs):
               unresolvedBlanks: snapshot.unresolvedBlanks,
               studentFeedback: snapshot.studentFeedback,
               workspaceFeedbackDismissed: false,
+              isSubmissionTakingLong: false,
               statusMessage: snapshot.errorMessage ?? 'Execution task failed.',
             ),
           );

@@ -15,6 +15,7 @@ import shutil
 from pathlib import Path
 
 from manim_service import settings
+from manim_service.storage import spaces
 
 CONCEPT_VIDEOS_SUBDIR = "concept_videos"
 TRACES_SUBDIR = "traces"
@@ -42,7 +43,26 @@ def store_rendered_video(src: Path, dest: Path) -> Path:
         raise FileNotFoundError(f"Render output not found: {src}")
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(src, dest)
+    publish_media_file(dest)
     return dest
+
+
+def media_object_key(path: Path) -> str:
+    """Return the Spaces object key for a file inside SHARED_MEDIA_DIR."""
+    return path.resolve().relative_to(settings.SHARED_MEDIA_DIR.resolve()).as_posix()
+
+
+def publish_media_file(path: Path) -> str | None:
+    """Publish a media file to the configured remote backend, if enabled."""
+    return spaces.upload_public_file(path, media_object_key(path))
+
+
+def public_url_for_media_path(path: Path) -> str | None:
+    """Return the CDN URL for a local media path when Spaces is configured."""
+    try:
+        return spaces.public_url(media_object_key(path))
+    except ValueError:
+        return None
 
 
 def resolve_safe_video_path(filename: str) -> Path | None:
@@ -64,3 +84,4 @@ def resolve_safe_video_path(filename: str) -> Path | None:
         if candidate.is_file():
             return candidate
     return None
+

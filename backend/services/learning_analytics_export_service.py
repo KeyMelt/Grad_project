@@ -141,7 +141,7 @@ class LearningAnalyticsExportService:
                     event.event_type,
                 )
                 counts[key] = counts.get(key, 0) + 1
-            for (student_id, lesson_id, concept_id, event_type), count in sorted(counts.items()):
+            for (student_id, lesson_id, concept_id, event_type), count in sorted(counts.items(), key=lambda x: tuple(v or "" for v in x[0])):
                 telemetry_sheet.append([student_id, lesson_id, concept_id, event_type, count])
 
         content = io.BytesIO()

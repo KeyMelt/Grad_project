@@ -510,6 +510,7 @@ def test_lessons_returns_grouped_frontend_catalog():
 
 
 def test_concept_video_serves_backend_media(tmp_path, monkeypatch):
+    monkeypatch.setenv("RL_IDE_MEDIA_STORAGE_BACKEND", "local")
     monkeypatch.setenv("RL_IDE_CONCEPT_VIDEO_DIR", str(tmp_path))
     video_path = tmp_path / "dp_policy_eval_concept.mp4"
     video_path.write_bytes(b"mp4-data")

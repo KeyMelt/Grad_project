@@ -200,6 +200,8 @@ class _OnboardingTutorialDialogState extends State<_OnboardingTutorialDialog> {
         return 'Flashcards';
       case AppSection.quiz:
         return 'Quiz';
+      case AppSection.feedback:
+        return 'Feedback';
       case AppSection.admin:
         return 'Authoring';
     }

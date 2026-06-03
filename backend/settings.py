@@ -103,6 +103,8 @@ class GatewaySettings:
     internal_token: str | None
     visualization_output_dir: Path
     concept_video_dir: Path
+    media_storage_backend: str
+    media_cdn_url: str
     cors_allowed_origins: list[str]
     cors_allow_local_regex: bool
     auth_token_secret: str
@@ -149,6 +151,8 @@ class GatewaySettings:
                 "RL_IDE_CONCEPT_VIDEO_DIR",
                 "backend/media/concept_videos",
             ),
+            media_storage_backend=env_str("RL_IDE_MEDIA_STORAGE_BACKEND", "local").lower(),
+            media_cdn_url=env_str("DO_SPACES_CDN_URL").rstrip("/"),
             cors_allowed_origins=cors_origins,
             cors_allow_local_regex=not explicit_origins_configured,
             auth_token_secret=runtime_secret("RL_IDE_AUTH_TOKEN_SECRET"),
@@ -242,7 +246,7 @@ class ExecutionSettings:
                 "RL_IDE_EXECUTION_TIMEOUT_PER_EPISODE_SECONDS",
                 1,
             ),
-            timeout_max_seconds=env_int("RL_IDE_EXECUTION_TIMEOUT_MAX_SECONDS", 18),
+            timeout_max_seconds=env_int("RL_IDE_EXECUTION_TIMEOUT_MAX_SECONDS", 90),
         )
 
 

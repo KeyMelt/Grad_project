@@ -15,6 +15,18 @@ SHARED_MEDIA_DIR: Path = Path(
     os.environ.get("SHARED_MEDIA_DIR", str(PROJECT_ROOT / "backend" / "media"))
 )
 
+# Media publishing. The default keeps local development file-system based.
+MEDIA_STORAGE_BACKEND: str = os.environ.get("RL_IDE_MEDIA_STORAGE_BACKEND", "local").lower()
+DO_SPACES_REGION: str = os.environ.get("DO_SPACES_REGION", "fra1")
+DO_SPACES_BUCKET: str = os.environ.get("DO_SPACES_BUCKET", "")
+DO_SPACES_ENDPOINT: str = os.environ.get(
+    "DO_SPACES_ENDPOINT",
+    f"https://{DO_SPACES_REGION}.digitaloceanspaces.com",
+)
+DO_SPACES_CDN_URL: str = os.environ.get("DO_SPACES_CDN_URL", "").rstrip("/")
+DO_SPACES_ACCESS_KEY: str = os.environ.get("DO_SPACES_ACCESS_KEY", "")
+DO_SPACES_SECRET_KEY: str = os.environ.get("DO_SPACES_SECRET_KEY", "")
+
 # Render quality: "l" (480p15 dev), "m" (720p30 final)
 RENDER_QUALITY: str = os.environ.get("RENDER_QUALITY", "l")
 

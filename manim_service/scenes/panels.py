@@ -107,13 +107,21 @@ class BaseConceptScene(MovingCameraScene):
         self.camera.background_color = BG_COLOR
         self.camera.frame.save_state()
         self._phase_marks = []
+        self._layout_records = []
 
     def mark_phase(self, name: str) -> None:
         """Record the current scene time as the start of a named phase.
 
         Call this at the top of each ``_phaseN_*()`` method. The phase
         number is inferred from the call order (1, 2, 3, ...).
+
+        Side effect: before recording the new mark, audit the *settled*
+        layout left by the previous phase (Tier-0 visual QA, zero render or
+        token cost). The very first phase has no predecessor to audit.
         """
+        if getattr(self, "_phase_marks", None):
+            prev = self._phase_marks[-1]
+            self._audit_layout(prev["phase"], prev["name"])
         try:
             current_time = float(self.renderer.time)
         except Exception:
@@ -132,10 +140,21 @@ class BaseConceptScene(MovingCameraScene):
         output path Manim chose for this scene.
         """
         try:
+            # Audit the final phase (no successor mark_phase will fire for it).
+            if getattr(self, "_phase_marks", None):
+                last = self._phase_marks[-1]
+                self._audit_layout(last["phase"], last["name"])
+        except Exception:
+            logger.exception("failed to audit final phase layout")
+        try:
             self._write_phase_timestamps()
         except Exception:
             # Never let the sidecar block a successful render.
             logger.exception("failed to write phase_timestamps.json")
+        try:
+            self._write_layout_audit()
+        except Exception:
+            logger.exception("failed to write layout_audit.json")
         super().tear_down()
 
     def _write_phase_timestamps(self) -> None:
@@ -155,6 +174,119 @@ class BaseConceptScene(MovingCameraScene):
             "phases": list(self._phase_marks),
         }
         sidecar = mp4_path.with_name("phase_timestamps.json")
+        sidecar.parent.mkdir(parents=True, exist_ok=True)
+        sidecar.write_text(json.dumps(payload, indent=2))
+
+    # ------------------------------------------------------------------
+    # Tier-0 layout audit (deterministic visual QA, no vision tokens)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _eff_opacity(leaf) -> float:
+        """Best-effort effective opacity of a leaf mobject.
+
+        Unknown (e.g. ImageMobject without fill/stroke getters) -> 1.0 so the
+        element still counts as visible for clipping checks.
+        """
+        vals = []
+        for getter in ("get_fill_opacity", "get_stroke_opacity"):
+            fn = getattr(leaf, getter, None)
+            if callable(fn):
+                try:
+                    vals.append(float(fn()))
+                except Exception:
+                    pass
+        for attr in ("fill_opacity", "stroke_opacity"):
+            v = getattr(leaf, attr, None)
+            if isinstance(v, (int, float)):
+                vals.append(float(v))
+        return max(vals) if vals else 1.0
+
+    @staticmethod
+    def _leaf_bbox(leaf):
+        return (
+            float(leaf.get_left()[0]), float(leaf.get_right()[0]),
+            float(leaf.get_bottom()[1]), float(leaf.get_top()[1]),
+        )
+
+    @staticmethod
+    def _union(bboxes) -> dict:
+        return {
+            "x_min": round(min(b[0] for b in bboxes), 3),
+            "x_max": round(max(b[1] for b in bboxes), 3),
+            "y_min": round(min(b[2] for b in bboxes), 3),
+            "y_max": round(max(b[3] for b in bboxes), 3),
+        }
+
+    def _extract_groups(self):
+        """Snapshot per-top-level-mobject geometry from the live scene."""
+        from manim_service.pipeline.layout_audit import (
+            PRIMARY_OPACITY, VISIBLE_OPACITY,
+        )
+        frame = self.camera.frame
+        cx, cy = float(frame.get_center()[0]), float(frame.get_center()[1])
+        w, h = float(frame.get_width()), float(frame.get_height())
+        canvas = {
+            "x_min": round(cx - w / 2, 3), "x_max": round(cx + w / 2, 3),
+            "y_min": round(cy - h / 2, 3), "y_max": round(cy + h / 2, 3),
+        }
+        groups = []
+        for gid, mob in enumerate(self.mobjects):
+            if mob is frame:
+                continue
+            try:
+                leaves = mob.family_members_with_points()
+            except Exception:
+                continue
+            vis, prim, op_max = [], [], 0.0
+            for leaf in leaves:
+                try:
+                    op = self._eff_opacity(leaf)
+                    if op <= VISIBLE_OPACITY:
+                        continue
+                    bb = self._leaf_bbox(leaf)
+                except Exception:
+                    continue
+                vis.append(bb)
+                op_max = max(op_max, op)
+                if op >= PRIMARY_OPACITY:
+                    prim.append(bb)
+            if not vis:
+                continue
+            groups.append({
+                "id": gid,
+                "kind": type(mob).__name__,
+                "opacity": round(op_max, 3),
+                "full_bbox": self._union(vis),
+                "primary_bbox": self._union(prim) if prim else None,
+            })
+        return groups, canvas
+
+    def _audit_layout(self, phase: int, name: str) -> None:
+        try:
+            from manim_service.pipeline.layout_audit import analyze_phase
+            groups, canvas = self._extract_groups()
+            rec = analyze_phase(phase, name, groups, canvas)
+            # Keep raw geometry so the gate logic can be re-tuned offline
+            # (layout_audit --reanalyze) without paying for another render.
+            rec["_raw"] = {"canvas": canvas, "groups": groups}
+            self._layout_records.append(rec)
+        except Exception:
+            logger.exception("layout audit failed for phase %s (%s)", phase, name)
+
+    def _write_layout_audit(self) -> None:
+        if not getattr(self, "_layout_records", None):
+            return
+        try:
+            mp4_path = Path(self.renderer.file_writer.movie_file_path)
+        except Exception:
+            return
+        payload = {
+            "lesson_id": getattr(self, "lesson_id", type(self).__name__),
+            "scene": type(self).__name__,
+            "phases": self._layout_records,
+        }
+        sidecar = mp4_path.with_name("layout_audit.json")
         sidecar.parent.mkdir(parents=True, exist_ok=True)
         sidecar.write_text(json.dumps(payload, indent=2))
 

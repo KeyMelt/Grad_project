@@ -6,10 +6,11 @@
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from manim_service.jobs.queue import JobKind, JobStatus, get_queue
@@ -86,8 +87,10 @@ def get_job(job_id: str) -> JobStatusResponse:
         raise HTTPException(status_code=404, detail=f"job_id={job_id!r} not found")
     video_url: str | None = None
     if job.status == JobStatus.COMPLETE and job.video_path:
-        from pathlib import Path
-        video_url = f"/videos/{Path(job.video_path).name}"
+        video_path = Path(job.video_path)
+        video_url = storage.public_url_for_media_path(video_path)
+        if video_url is None:
+            video_url = f"/videos/{video_path.name}"
     return JobStatusResponse(
         job_id=job.job_id,
         status=job.status.value,
@@ -97,8 +100,11 @@ def get_job(job_id: str) -> JobStatusResponse:
 
 
 @router.get("/videos/{filename}")
-def get_video(filename: str) -> FileResponse:
+def get_video(filename: str):
     resolved = storage.resolve_safe_video_path(filename)
     if resolved is None:
         raise HTTPException(status_code=404, detail=f"video {filename!r} not found")
+    cdn_url = storage.public_url_for_media_path(resolved)
+    if cdn_url is not None:
+        return RedirectResponse(cdn_url, status_code=302)
     return FileResponse(path=str(resolved), media_type="video/mp4", filename=resolved.name)

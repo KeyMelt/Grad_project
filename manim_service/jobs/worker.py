@@ -101,7 +101,10 @@ def _render_concept_video(*, lesson_id: str, force: bool) -> Path:
     # This is best-effort: if the narration script is missing, we leave the
     # silent MP4 in place and the Voice & BGM agent will fill it in later.
     narrated = _maybe_mux_narration(lesson_id=lesson_id, silent_mp4=silent_path)
-    return narrated or silent_path
+    final_path = narrated or silent_path
+    if final_path != silent_path:
+        storage.publish_media_file(final_path)
+    return final_path
 
 
 def _maybe_mux_narration(*, lesson_id: str, silent_mp4: Path) -> Path | None:

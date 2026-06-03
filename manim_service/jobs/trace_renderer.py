@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parents[2]
 TRACE_SCENE_FILE = ROOT / "manim_service" / "trace_scenes" / "trace_replay_scene.py"
 TRACE_SCENE_CLASS = "TraceReplayScene"
+TRACE_VISUAL_HELPERS = (ROOT / "manim_service" / "scenes" / "rl_visuals.py",)
 
 QUALITY_TO_DIR: dict[str, str] = {
     "l": "480p15",
@@ -55,6 +56,18 @@ class RenderError(RuntimeError):
 # Content-hash helpers
 # ---------------------------------------------------------------------------
 
+def _source_signature() -> str:
+    h = hashlib.sha256()
+    h.update(settings.RENDER_QUALITY.encode())
+    for path in (TRACE_SCENE_FILE, *TRACE_VISUAL_HELPERS):
+        h.update(str(path).encode())
+        try:
+            h.update(path.read_bytes())
+        except OSError:
+            h.update(b"<missing>")
+    return h.hexdigest()
+
+
 def _compute_trace_hash(lesson_id: str, steps: list) -> str:
     """Stable sha256 hash of (lesson_id, steps).
 
@@ -69,7 +82,11 @@ def _compute_trace_hash(lesson_id: str, steps: list) -> str:
         First 16 hex characters of the sha256 digest (64 bits of collision
         resistance — sufficient for a local file-system cache).
     """
-    payload = lesson_id + json.dumps(steps, sort_keys=True, default=str)
+    payload = (
+        lesson_id
+        + _source_signature()
+        + json.dumps(steps, sort_keys=True, default=str)
+    )
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
@@ -138,6 +155,7 @@ def render_trace(job: Job) -> Path:
             job_path,
         )
         shutil.copy2(canonical, job_path)
+        storage.publish_media_file(job_path)
         return job_path
 
     # ------------------------------------------------------------------
@@ -162,6 +180,7 @@ def render_trace(job: Job) -> Path:
         # Copy to job-specific destination
         job_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(rendered, job_path)
+        storage.publish_media_file(job_path)
 
     # Cache the result for future reuse
     try:

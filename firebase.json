@@ -1,7 +1,15 @@
 {
   "auth": {
     "providers": {
-      "emailPassword": true
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Reinfource",
+        "supportEmail": "ymohamed.gabr@gmail.com",
+        "authorizedRedirectUris": [
+          "https://reinfource.app",
+          "https://www.reinfource.app"
+        ]
+      }
     }
   },
   "firestore": {

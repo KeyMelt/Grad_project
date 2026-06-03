@@ -960,6 +960,50 @@ knowledgeable guide building genuine curiosity — not a textbook being read alo
 **Never read raw LaTeX aloud.** Every equation narrated must have its spoken form
 written out in the narration script.
 
+### 30.5 Speaking numbers like a person (mandatory)
+
+On-screen precision is for the eye; the narration is for the ear. **Nobody says
+"zero point zero zero zero zero zero zero."** A lecturer reads the *meaning* of a
+number, not its digits. This is the #1 source of screen-reader monotony — fix it.
+
+| On screen | ❌ Screen-reader | ✅ Human lecturer |
+|---|---|---|
+| `0.000000` | "zero point zero zero zero zero zero zero" | "zeroed out" / "still flat zero" / "nothing yet" |
+| `0.433579` | "zero point four three three five seven nine" | "about 0.43" / "roughly four-tenths" |
+| `0.039` | "zero point zero three nine" | "around four percent" / "a hair above zero" |
+| `0.012` | "zero point zero one two" | "barely off zero" |
+| `0.333` | "zero point three three three" | "about a third" |
+| `0.53` | "zero point five three" | "just over half" |
+| `0.99` (γ) | "zero point nine nine" | "a discount close to one" / "nearly one" |
+| `1290` | "one two nine zero" | "about thirteen hundred" |
+
+Rules:
+- **Round hard for the ear.** Two significant figures is plenty; one is often better.
+- **Never voice trailing zeros**, and never spell a number digit-by-digit.
+- **Prefer the qualitative read** ("about a third", "barely moved", "zeroed out")
+  when the exact value isn't the teaching point. Reach for a precise rounded number
+  only when the *specific* value matters (e.g. the goal state's value being ~0.43).
+- The full-precision number stays *on screen*; the script writes the spoken form.
+
+### 30.6 Sound like a person, not a parser (mandatory)
+
+The narration should sound like a sharp lecturer talking *to one student*, not a
+document being voiced. Concretely:
+
+- **Use contractions.** "it's", "we're", "that's", "here's", "doesn't", "let's" —
+  always, unless the uncontracted form carries deliberate stress.
+- **Talk, don't recite.** Reframe a fact as a small realization: "And here's the
+  catch — one sweep isn't enough." rather than "One sweep is not enough."
+- **Address the viewer as "you."** "You'd expect the value to be high here — it's
+  not."
+- **Let rhythm breathe.** A short fragment after a long sentence lands. "So the
+  whole table updates at once. Every state. One pass."
+- **Plain words over jargon** when both work: "the look-ahead", "the running total",
+  "fold the future back" beat their formal twins on first contact.
+
+These coexist with §30.2: still no filler openers ("So,", "Okay,"), no hedging that
+undercuts authority ("kind of", "I guess"), and no performative excitement.
+
 ---
 
 ## 31. Gymnasium Asset Mandate (mandatory)
@@ -1298,3 +1342,151 @@ equation, it must be its own phase that explicitly hands off (e.g.,
 "the line we just walked through computes the inner sum of the equation
 — let's look at that equation now"), with a clean transition between
 the two-panel layouts.
+
+---
+
+## 36. Canvas Utilization & Legibility (mandatory, gate-enforced)
+
+A layout that is technically correct (nothing clipped) but uses a third of the
+screen is still a bad layout. Tiny artifacts marooned in an empty frame are
+illegible the moment the video is watched on a phone or in a small embed — which
+is how most students will watch it. **Fill the frame and make every artifact
+readable on the smallest screen.**
+
+### 36.1 Fill both dimensions (QA: canvas-utilization)
+
+The bounding box of the phase's primary content must span **≥ 40 % of BOTH the
+frame width and the frame height.** A multi-element phase whose content sits in a
+thin horizontal band (everything at the vertical middle, empty top and bottom) or
+a narrow column is a violation. The deterministic gate
+(`layout_audit.py`, `LOW_CANVAS_USE`) reports `under-uses canvas: NN%×NN%` for any
+phase that fails this; treat it as a layout defect to fix, not a cosmetic note.
+
+### 36.2 Stack, do not cram (equation + artifact)
+
+When an equation and a supporting artifact (backup tree, grid, chart) must be
+on screen together, the default is **vertical**: the equation large across the
+**top** band, the artifact large **centered below it.** Do NOT squeeze the
+equation into a narrow side column to fit the artifact beside it — that shrinks
+both. Horizontal side-by-side is only acceptable when each half independently
+satisfies §36.1 and §36.3.
+
+### 36.3 Minimum legible sizes (small-screen floor)
+
+- Primary equation: `font_size ≥ 40` (a focal derivation step should fill the
+  top band — `scale_to_fit_width(~12)` when long, not a fixed tiny size).
+- Any primary text/caption a viewer must read: `font_size ≥ 24`.
+- Secondary/decorative labels (node labels, dim context): `font_size ≥ 18`.
+- Never park a focal artifact at < 40 % frame width when the rest of the frame
+  is empty — scale it up to use the space.
+
+### 36.4 Camera zoom is not a substitute for layout
+
+Zooming the camera into one artifact (`zoom_to(... scale<1)`) leaves everything
+placed for the full frame outside the view (clipped) and is a frequent source of
+off-canvas defects. Lay out for the frame you are actually rendering. Reset the
+camera (`zoom_reset` / `set_width(14.222)`) before a phase that places content
+across the whole frame.
+
+---
+
+## 37. Segment-Based Authoring & Rendering (mandatory)
+
+A concept video is **not** one monolithic scene file. A one-line fix to a
+21-minute video must never require re-rendering 21 minutes. Author every video as
+a **workspace of independently-renderable segments** and let the pipeline render
+only what changed.
+
+### 37.1 Workspace structure
+
+    manim_service/workspaces/<lesson_id>/
+        manifest.json            # ordered segments + quality flag
+        segments/
+            s01_intro.py         # exactly ONE Scene subclass per file
+            s02_policy.py
+            ...
+        cache/                   # rendered segment MP4s, content-hash keyed
+        <lesson_id>_silent.mp4   # the concatenated render product
+
+### 37.2 Segments are self-contained
+
+Each segment Scene **starts from and ends on the clean dark background** (fade in
+from / fade out to black). No mobject, camera, or Python state is carried across
+segment files — anything a segment needs, it rebuilds. This is what makes a
+segment independently renderable and seamlessly concatenable. A segment maps to a
+narration/teaching beat boundary (roughly the old "S<n>" segments).
+
+### 37.3 Render only what changed
+
+    # render changed segments + concat (caching reuses unchanged segments)
+    python -m manim_service.pipeline.segment_render --lesson-id <id>
+    # force one segment
+    python -m manim_service.pipeline.segment_render --lesson-id <id> --segment s05_derivation
+
+Editing one segment re-renders only that segment; a shared-module change
+(`manim_service/scenes/*.py`) correctly busts every segment. The tool concatenates
+the cached segment MP4s into `<lesson_id>_silent.mp4`.
+
+### 37.4 Narration is applied ONCE, to the approved concat
+
+Voiceover / BGM (`narrate_mux`) runs on the **final, QA-approved, concatenated
+silent video** — never per segment, and never redone for a visual-only fix unless
+the concatenated video itself changed. This avoids re-synthesising TTS every time
+a single scene is patched. The per-phase `hold_until` timing contract still holds,
+so narration aligns with the concat by construction.
+
+---
+
+## 38. Notation Expansion — Unpack the Sum (SIGNATURE TECHNIQUE, mandatory)
+
+**This is the defining teaching move of the series — the thing that sets these
+videos apart.** A compact expression (a sum, an expectation, a recursion — `Σ_a`,
+`Σ_{s',r}`, `E_π`, the Bellman backup) *hides* the very thing the learner needs to
+see. **Never leave a summation condensed when you first teach it.** Expand it into
+its concrete terms, ground each term in the environment, then collapse it back so
+the symbol finally *means* something. Every video from V-03 onward is built around
+this move; a phase that introduces a summation without performing it is incomplete.
+
+### 38.1 The four-beat expansion (apply to every first-time sum / expectation)
+
+1. **Simplify to make it concrete.** Pin the free parameters to friendly values
+   *on screen* and say so out loud — typically **γ = 1**, a single **deterministic
+   best action**, and one specific starting state. The goal is real numbers, not
+   abstract indices. ("Set gamma to 1 for a moment, and just take the best move.")
+
+2. **Morph the operator into its actual terms.** Use `TransformMatchingTex` to turn
+   the `Σ`/`E` into the written-out sum. The compact `v(s) = r + γ·v(s')` becomes the
+   explicit `v(5) = 1 + 3 = 4`; a multi-outcome sum becomes `[t₁ + t₂ + t₃]` with each
+   tᵢ a real number. The learner must SEE what the sigma contained.
+
+3. **Ground every term on the grid, at the same instant.** As each term appears, the
+   matching cell / transition / path lights up (`trace_vector`,
+   `cross_highlight_pair`, `sprite_action_binding`). Term ↔ cell binding is
+   mandatory: the equation and the environment tell the *same* story simultaneously.
+   This is the cross-modal half — without it the expansion is just algebra.
+
+4. **Collapse back to the general form.** Once the concrete expansion is understood,
+   morph it back to the compact notation (restore γ, re-fold the sum). The learner now
+   reads the symbol as the thing they just watched.
+
+### 38.2 Build value from the goal backward
+
+When showing where a state's value comes from, **propagate from the terminal/goal
+back to the current state, one hop at a time**, so the learner watches value
+accumulate along the path. "The goal is worth +1. The state before it inherits that
+plus its own reward — so it's worth 4. And the state before *that*…" Each hop both
+updates the number AND lights the cell. The recursion becomes a visible chain of
+cells, not a symbol. (Worked example: v(5) = reward 1 + best-next-value 3 = 4.)
+
+### 38.3 Worked numeric anchor (mandatory)
+
+Every expansion carries **real numbers from the actual environment** through to a
+final computed value. Abstract-only expansions are banned — the learner must leave
+the beat with a concrete number they watched get built.
+
+### 38.4 Relationship to §35
+
+This supersedes "read the equation token by token" as the *centrepiece*. Token
+highlighting (§35) still applies to the dissection, but the heart of any equation
+beat is the **expand → ground → collapse** morph plus the synchronized grid
+animation — never a static recitation of symbols.

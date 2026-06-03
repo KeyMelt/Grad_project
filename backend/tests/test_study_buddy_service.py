@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi.testclient import TestClient
@@ -229,6 +229,34 @@ def test_coordinator_suppresses_duplicate_ready_trigger_in_cooldown():
     with service._database.session() as session:
         interventions = session.exec(select(StudyBuddyInterventionRecord)).all()
     assert len(interventions) == 1
+
+
+def test_submission_failure_streak_can_reintervene_after_short_cooldown():
+    service = _service()
+
+    service.ingest_events(
+        [
+            _event("submission_result", {"passed": False, "failure_kind": "test_failure"}),
+            _event("submission_result", {"passed": False, "failure_kind": "test_failure"}),
+        ]
+    )
+    with service._database.session() as session:
+        first = session.exec(select(StudyBuddyInterventionRecord)).first()
+        assert first is not None
+        first.created_at_utc = datetime.now(timezone.utc) - timedelta(minutes=3)
+        session.add(first)
+        session.commit()
+
+    service.ingest_events(
+        [
+            _event("submission_result", {"passed": False, "failure_kind": "test_failure"}),
+            _event("submission_result", {"passed": False, "failure_kind": "test_failure"}),
+        ]
+    )
+
+    with service._database.session() as session:
+        interventions = session.exec(select(StudyBuddyInterventionRecord)).all()
+    assert len(interventions) == 2
 
 
 def test_respond_to_intervention_marks_record_completed():

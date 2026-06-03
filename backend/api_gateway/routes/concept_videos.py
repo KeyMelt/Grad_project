@@ -3,13 +3,20 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 from backend.settings import GatewaySettings
 
 
 def _concept_video_root() -> Path:
     return GatewaySettings.from_env().concept_video_dir.resolve()
+
+
+def _cdn_concept_video_url(filename: str) -> str | None:
+    settings = GatewaySettings.from_env()
+    if settings.media_storage_backend != "spaces" or not settings.media_cdn_url:
+        return None
+    return f"{settings.media_cdn_url}/concept_videos/{filename}"
 
 
 _ALLOWED_EXTENSIONS: dict[str, str] = {
@@ -48,6 +55,9 @@ def build_concept_videos_router() -> APIRouter:
 
     @router.get("/media/concept-videos/{filename}")
     def concept_video(filename: str):
+        cdn_url = _cdn_concept_video_url(filename)
+        if cdn_url is not None:
+            return RedirectResponse(cdn_url, status_code=302)
         file_path, media_type = _resolve_concept_video(filename)
         headers = {"Cache-Control": "public, max-age=3600"}
         if media_type == "text/vtt":

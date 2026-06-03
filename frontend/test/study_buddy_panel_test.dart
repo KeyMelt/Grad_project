@@ -37,7 +37,7 @@ void main() {
     expect(find.text('Current Exercise'), findsNothing);
 
     await tester.ensureVisible(find.text('Done'));
-    await tester.pumpAndSettle();
+    await tester.pump();
     await tester.tap(find.text('Done'));
     await tester.pump();
     expect(completed, isTrue);
@@ -106,7 +106,7 @@ void main() {
     expect(
         find.byKey(const ValueKey('study-buddy-chat-input')), findsOneWidget);
 
-    await tester.pumpAndSettle();
+    await tester.pump();
     await tester.ensureVisible(find.widgetWithText(ActionChip, 'Quick recap'));
     await tester.tap(find.widgetWithText(ActionChip, 'Quick recap'));
     await tester.pump();
@@ -116,6 +116,43 @@ void main() {
     await tester.tap(find.widgetWithText(ActionChip, 'Find blocker'));
     await tester.pump();
     expect(sentMessage, contains('most likely blocker'));
+  });
+
+  testWidgets('long-running trace state offers review actions', (
+    tester,
+  ) async {
+    String? sentMessage;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StudyBuddyPanel(
+            lesson: _lesson(),
+            intervention: null,
+            isLoading: false,
+            isDismissed: false,
+            isSubmissionTakingLong: true,
+            onDismiss: _noop,
+            onComplete: _noop,
+            onReopen: _noop,
+            onRefresh: _noop,
+            onSendChatMessage: (message) => sentMessage = message,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Replay trace is still building'), findsOneWidget);
+    expect(find.widgetWithText(ActionChip, 'Review question'), findsOneWidget);
+
+    await tester.pump();
+    await tester.ensureVisible(
+      find.widgetWithText(ActionChip, 'Review question'),
+    );
+    await tester.tap(find.widgetWithText(ActionChip, 'Review question'));
+    await tester.pump();
+
+    expect(sentMessage, contains('Ask me one concise review question'));
   });
 
   testWidgets('current exercise brief renders as standalone widget', (
