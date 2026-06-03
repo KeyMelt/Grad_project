@@ -440,6 +440,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       autoStart: autoStartTelemetry,
     );
     unawaited(loadBackendLessonCatalog());
+    unawaited(restoreSession());
   }
 
   final BackendApi _api;
@@ -602,6 +603,22 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       return;
     }
     emit(state.copyWith(authMessage: ''));
+  }
+
+  Future<void> restoreSession() async {
+    try {
+      final dashboard = await _api.restoreSession();
+      if (dashboard == null || isClosed || state.isAuthenticated) {
+        return;
+      }
+      _applyAuthenticatedSession(
+        dashboard,
+        successMessage:
+            'Signed in as ${dashboard.student.displayName}.',
+      );
+    } catch (_) {
+      _api.clearAuthToken();
+    }
   }
 
   void dismissWorkspaceFeedback() {

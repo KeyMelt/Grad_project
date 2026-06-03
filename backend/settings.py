@@ -109,6 +109,9 @@ class GatewaySettings:
     cors_allow_local_regex: bool
     auth_token_secret: str
     auth_token_ttl_seconds: int
+    session_cookie_name: str
+    session_cookie_secure: bool
+    session_cookie_samesite: str
     shell_token_secret: str
     open_provisioning: bool
     allow_legacy_password_sign_in: bool
@@ -157,6 +160,15 @@ class GatewaySettings:
             cors_allow_local_regex=not explicit_origins_configured,
             auth_token_secret=runtime_secret("RL_IDE_AUTH_TOKEN_SECRET"),
             auth_token_ttl_seconds=env_int("RL_IDE_AUTH_TOKEN_TTL_SECONDS", 43_200),
+            session_cookie_name=env_str(
+                "RL_IDE_SESSION_COOKIE_NAME",
+                "__Host-rl_ide_session",
+            ),
+            session_cookie_secure=env_bool("RL_IDE_SESSION_COOKIE_SECURE", True),
+            session_cookie_samesite=env_str(
+                "RL_IDE_SESSION_COOKIE_SAMESITE",
+                "lax",
+            ).lower(),
             shell_token_secret=runtime_secret("RL_IDE_SHELL_TOKEN_SECRET"),
             open_provisioning=env_bool("RL_IDE_OPEN_PROVISIONING", True),
             allow_legacy_password_sign_in=env_bool(
@@ -241,12 +253,12 @@ class ExecutionSettings:
                     "backend/visualization/animations",
                 )
             ),
-            timeout_base_seconds=env_int("RL_IDE_EXECUTION_TIMEOUT_BASE_SECONDS", 10),
+            timeout_base_seconds=env_int("RL_IDE_EXECUTION_TIMEOUT_BASE_SECONDS", 300),
             timeout_per_episode_seconds=env_int(
                 "RL_IDE_EXECUTION_TIMEOUT_PER_EPISODE_SECONDS",
-                1,
+                5,
             ),
-            timeout_max_seconds=env_int("RL_IDE_EXECUTION_TIMEOUT_MAX_SECONDS", 90),
+            timeout_max_seconds=env_int("RL_IDE_EXECUTION_TIMEOUT_MAX_SECONDS", 900),
         )
 
 

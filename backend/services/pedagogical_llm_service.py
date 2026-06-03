@@ -177,13 +177,52 @@ class PedagogicalLLMService:
             if context.unresolved_blanks
             else ""
         )
+        lesson_goal = context.lesson_description or context.lesson_title
+        prompt = context.message.strip()
+        prompt_lower = prompt.lower()
+        latest_feedback = _summarize_latest_feedback(context.latest_feedback)
+        recent_failure = _summarize_recent_failure(context.recent_failures)
+        issue_summary = latest_feedback or recent_failure or blocker.strip()
+
+        if _looks_like_greeting(prompt_lower):
+            reply = (
+                f"Hi. I can help with {context.lesson_title}. Ask about a specific "
+                f"line, or use recap/blocker prompts. Current checkpoint: {next_step}"
+            )
+        elif _asks_for_recap(prompt_lower):
+            reply = (
+                f"Quick recap: {lesson_goal} Focus next on this checkpoint: "
+                f"{next_step}{blank_note}"
+            )
+        elif _asks_for_blocker(prompt_lower):
+            issue_text = f" The latest signal is: {issue_summary}." if issue_summary else ""
+            focus = (
+                f" Start with `{context.unresolved_blanks[0]}` and verify the expected "
+                "Bellman quantity before changing multiple branches."
+                if context.unresolved_blanks
+                else " Compare the expected backup target with the value your code updates."
+            )
+            reply = (
+                f"I would isolate the blocker in {context.lesson_title}.{issue_text}"
+                f"{focus} One useful check: can you state which value should be updated "
+                "after each transition?"
+            )
+        elif _asks_for_solution(prompt_lower):
+            reply = (
+                "I will keep this as a hint rather than a full solution: identify the "
+                "state value being updated, then combine immediate reward with the "
+                "discounted next-state value under the fixed policy. After that, run one "
+                f"small check: {next_step}"
+            )
+        else:
+            reply = (
+                f"For your question about \"{_shorten(prompt, 80)}\", connect it back "
+                f"to {context.lesson_title}: {lesson_goal}{blank_note} The next useful "
+                f"checkpoint is: {next_step}"
+            )
+
         return PedagogicalChatReply(
-            reply=(
-                f"Use the lesson goal as the anchor: {context.lesson_description}"
-                f"{blocker}{blank_note} I can help you reason through the next "
-                "step, but I will keep it at the checkpoint level so you still "
-                "write the solution yourself."
-            ),
+            reply=reply,
             suggested_next_step=next_step,
             concept_ids=[context.lesson_id],
             solution_leakage_risk="low",
@@ -278,3 +317,77 @@ Context JSON:
     def _load_prompt_template(self) -> str:
         prompt_path = Path(__file__).resolve().parents[1] / "prompts" / f"{self.prompt_version}.txt"
         return prompt_path.read_text()
+
+
+def _looks_like_greeting(message: str) -> bool:
+    cleaned = message.strip(" .,!?\t\n")
+    return cleaned in {"hi", "hello", "hey", "yo"}
+
+
+def _asks_for_recap(message: str) -> bool:
+    return any(
+        token in message
+        for token in ("recap", "summarize", "summary", "what should i focus")
+    )
+
+
+def _asks_for_blocker(message: str) -> bool:
+    return any(
+        token in message
+        for token in (
+            "blocker",
+            "stuck",
+            "failing",
+            "fails",
+            "error",
+            "timeout",
+            "why",
+            "not working",
+        )
+    )
+
+
+def _asks_for_solution(message: str) -> bool:
+    return any(
+        token in message
+        for token in (
+            "give me the answer",
+            "show solution",
+            "full solution",
+            "write the code",
+            "solve it",
+        )
+    )
+
+
+def _summarize_latest_feedback(feedback: dict[str, Any]) -> str | None:
+    if not feedback:
+        return None
+    for key in ("summary", "message", "likely_issue", "failure_kind"):
+        value = feedback.get(key)
+        if isinstance(value, str) and value.strip():
+            return _shorten(value.strip(), 180)
+    issues = feedback.get("issues")
+    if isinstance(issues, list):
+        for issue in issues:
+            if isinstance(issue, str) and issue.strip():
+                return _shorten(issue.strip(), 180)
+    return None
+
+
+def _summarize_recent_failure(failures: list[dict[str, Any]]) -> str | None:
+    for failure in failures:
+        message = failure.get("message")
+        if isinstance(message, str) and message.strip():
+            return _shorten(message.strip(), 180)
+        kind = failure.get("failure_kind")
+        if isinstance(kind, str) and kind.strip():
+            return kind.strip()
+    return None
+
+
+def _shorten(value: str, max_chars: int) -> str:
+    stripped = " ".join(value.split())
+    if len(stripped) <= max_chars:
+        return stripped
+    return f"{stripped[: max_chars - 3].rstrip()}..."

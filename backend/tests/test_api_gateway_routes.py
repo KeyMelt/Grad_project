@@ -493,6 +493,10 @@ def _auth_headers(token: str = "student-token") -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def _session_cookie_header(token: str = "student-token") -> dict[str, str]:
+    return {"Cookie": f"__Host-rl_ide_session={token}"}
+
+
 def test_lessons_returns_grouped_frontend_catalog():
     client = _make_client()
     response = client.get("/lessons")
@@ -770,6 +774,43 @@ def test_sign_in_error_maps_to_http_400():
         json={"display_name": "Maya", "password": "bad"},
     )
     assert response.status_code == 400
+
+
+def test_sign_in_sets_secure_http_only_session_cookie():
+    client = _make_client()
+
+    response = client.post(
+        "/auth/sign-in",
+        json={"display_name": "Maya", "password": "good"},
+    )
+
+    assert response.status_code == 200
+    set_cookie = response.headers["set-cookie"]
+    assert "__Host-rl_ide_session=student-token" in set_cookie
+    assert "HttpOnly" in set_cookie
+    assert "Secure" in set_cookie
+    assert "SameSite=lax" in set_cookie
+    assert "Max-Age=43200" in set_cookie
+
+
+def test_cookie_session_authenticates_dashboard_without_bearer_header():
+    client = _make_client()
+
+    response = client.get("/me/dashboard", headers=_session_cookie_header())
+
+    assert response.status_code == 200
+    assert response.json()["student"]["id"] == "student-1"
+
+
+def test_sign_out_clears_session_cookie():
+    client = _make_client()
+
+    response = client.post("/auth/sign-out", headers=_session_cookie_header())
+
+    assert response.status_code == 200
+    set_cookie = response.headers["set-cookie"]
+    assert "__Host-rl_ide_session=" in set_cookie
+    assert "Max-Age=0" in set_cookie
 
 
 def test_sign_in_seeds_missing_dashboard_via_user_evaluation_service():

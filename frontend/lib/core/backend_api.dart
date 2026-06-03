@@ -37,6 +37,10 @@ abstract class BackendApi {
     String? firebaseIdToken,
   });
 
+  Future<LearnerDashboard?> restoreSession() async {
+    return null;
+  }
+
   Future<void> signOut() async {}
 
   Future<LearnerDashboard> getDashboard();

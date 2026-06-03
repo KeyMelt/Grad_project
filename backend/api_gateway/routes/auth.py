@@ -2,15 +2,20 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 
-from backend.auth.dependencies import build_current_principal_dependency, require_roles
+from backend.auth.dependencies import (
+    build_current_principal_dependency,
+    build_optional_principal_dependency,
+    require_roles,
+)
 from backend.auth.roles import PlatformRole, Principal
 from backend.api_gateway.schemas import (
     AuthRoleUpdateRequest,
     AuthStatusUpdateRequest,
     StudentSignInRequest,
 )
+from backend.settings import GatewaySettings
 
 
 def _empty_progress_payload() -> dict[str, Any]:
@@ -32,10 +37,12 @@ def _empty_progress_payload() -> dict[str, Any]:
 
 def build_auth_router(services: Any) -> APIRouter:
     router = APIRouter()
+    settings = GatewaySettings.from_env()
     current_principal = build_current_principal_dependency(
         auth_service=services.auth,
         audit_service=getattr(services, "audit", None),
     )
+    optional_principal = build_optional_principal_dependency(auth_service=services.auth)
     admin_principal = require_roles(current_principal, PlatformRole.ADMIN)
     staff_principal = require_roles(
         current_principal,
@@ -44,7 +51,7 @@ def build_auth_router(services: Any) -> APIRouter:
     )
 
     @router.post("/auth/sign-in")
-    def sign_in(request: StudentSignInRequest):
+    def sign_in(request: StudentSignInRequest, response: Response):
         try:
             principal, access_token = services.auth.sign_in(
                 display_name=request.display_name,
@@ -68,6 +75,7 @@ def build_auth_router(services: Any) -> APIRouter:
                 }
             dashboard["student"]["role"] = principal.role.value
             dashboard["access_token"] = access_token
+            _set_session_cookie(response, access_token, settings=settings)
             return dashboard
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
@@ -77,8 +85,13 @@ def build_auth_router(services: Any) -> APIRouter:
             raise HTTPException(status_code=500, detail=str(error)) from error
 
     @router.post("/auth/sign-out")
-    def sign_out(principal: Principal = Depends(current_principal)):
-        services.auth.sign_out(principal)
+    def sign_out(
+        response: Response,
+        principal: Principal | None = Depends(optional_principal),
+    ):
+        if principal is not None:
+            services.auth.sign_out(principal)
+        _clear_session_cookie(response, settings=settings)
         return {"status": "signed_out"}
 
     @router.get("/me/dashboard")
@@ -174,3 +187,35 @@ def build_auth_router(services: Any) -> APIRouter:
             raise HTTPException(status_code=500, detail=str(error)) from error
 
     return router
+
+
+def _set_session_cookie(
+    response: Response,
+    token: str,
+    *,
+    settings: GatewaySettings,
+) -> None:
+    response.set_cookie(
+        key=settings.session_cookie_name,
+        value=token,
+        max_age=settings.auth_token_ttl_seconds,
+        expires=settings.auth_token_ttl_seconds,
+        path="/",
+        secure=settings.session_cookie_secure,
+        httponly=True,
+        samesite=settings.session_cookie_samesite,  # type: ignore[arg-type]
+    )
+
+
+def _clear_session_cookie(
+    response: Response,
+    *,
+    settings: GatewaySettings,
+) -> None:
+    response.delete_cookie(
+        key=settings.session_cookie_name,
+        path="/",
+        secure=settings.session_cookie_secure,
+        httponly=True,
+        samesite=settings.session_cookie_samesite,  # type: ignore[arg-type]
+    )

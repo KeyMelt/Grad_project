@@ -132,6 +132,17 @@ class HttpBackendApi extends BackendApi {
   }
 
   @override
+  Future<LearnerDashboard?> restoreSession() async {
+    try {
+      final responseJson = await _getJson('/me/dashboard');
+      return LearnerDashboard.fromJson(responseJson);
+    } on BackendApiException {
+      clearAuthToken();
+      return null;
+    }
+  }
+
+  @override
   Future<void> signOut() async {
     try {
       await _postJson('/auth/sign-out', const {});

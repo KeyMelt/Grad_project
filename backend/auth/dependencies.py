@@ -3,9 +3,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Annotated, Any
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Cookie, Depends, Header, HTTPException, status
 
 from backend.auth.roles import PlatformRole, Principal
+from backend.settings import GatewaySettings
 
 
 def build_current_principal_dependency(
@@ -15,8 +16,12 @@ def build_current_principal_dependency(
 ) -> Callable[..., Principal]:
     def _dependency(
         authorization: Annotated[str | None, Header()] = None,
+        session_cookie: Annotated[
+            str | None,
+            Cookie(alias=GatewaySettings.from_env().session_cookie_name),
+        ] = None,
     ) -> Principal:
-        token = _extract_bearer_token(authorization)
+        token = _extract_auth_token(authorization, session_cookie)
         try:
             return auth_service.authenticate_token(token)
         except Exception as error:  # noqa: BLE001
@@ -47,10 +52,14 @@ def build_optional_principal_dependency(
 ) -> Callable[..., Principal | None]:
     def _dependency(
         authorization: Annotated[str | None, Header()] = None,
+        session_cookie: Annotated[
+            str | None,
+            Cookie(alias=GatewaySettings.from_env().session_cookie_name),
+        ] = None,
     ) -> Principal | None:
-        if not authorization:
+        if not authorization and not session_cookie:
             return None
-        token = _extract_bearer_token(authorization)
+        token = _extract_auth_token(authorization, session_cookie)
         try:
             return auth_service.authenticate_token(token)
         except Exception:  # noqa: BLE001
@@ -106,3 +115,14 @@ def _extract_bearer_token(authorization: str | None) -> str:
             detail="Authorization header must be Bearer <token>.",
         )
     return token.strip()
+
+
+def _extract_auth_token(authorization: str | None, session_cookie: str | None) -> str:
+    if authorization:
+        return _extract_bearer_token(authorization)
+    if session_cookie and session_cookie.strip():
+        return session_cookie.strip()
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Missing authentication credentials.",
+    )

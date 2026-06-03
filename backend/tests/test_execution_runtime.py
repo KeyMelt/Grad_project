@@ -111,7 +111,7 @@ def test_derived_submission_timeout_scales_but_remains_capped(monkeypatch):
         }
     )
 
-    assert timeout_seconds == 90
+    assert timeout_seconds == 900
 
 
 def test_execution_trace_frame_paths_are_absolute(monkeypatch, tmp_path):

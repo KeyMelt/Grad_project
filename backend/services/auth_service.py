@@ -181,7 +181,10 @@ class AuthService:
         platform_error: Exception | None = None
         try:
             claims = self._token_service.verify(token)
-            return self._resolve_principal_by_user_id(str(claims["sub"]))
+            return self._resolve_principal_by_user_id(
+                str(claims["sub"]),
+                issued_at=int(claims.get("iat", 0)),
+            )
         except Exception as error:  # noqa: BLE001
             platform_error = error
 
@@ -390,11 +393,26 @@ class AuthService:
             self._ensure_student_progress_record(user.id, user.display_name)
         return user
 
-    def _resolve_principal_by_user_id(self, user_id: str) -> Principal:
+    def _resolve_principal_by_user_id(
+        self,
+        user_id: str,
+        *,
+        issued_at: int | None = None,
+    ) -> Principal:
         with self._database.session() as session:
             user = session.get(AuthUser, user_id)
             if user is None:
                 raise AuthError(status_code=401, detail="Authentication token subject is unknown.")
+            if issued_at is not None and user.revocation_time is not None:
+                issued_at_utc = datetime.fromtimestamp(issued_at, tz=timezone.utc)
+                revocation_time = user.revocation_time
+                if revocation_time.tzinfo is None:
+                    revocation_time = revocation_time.replace(tzinfo=timezone.utc)
+                if revocation_time >= issued_at_utc:
+                    raise AuthError(
+                        status_code=401,
+                        detail="Authentication token has been revoked.",
+                    )
             return self._principal_from_user(user)
 
     def _resolve_principal_by_firebase_uid(self, uid: str) -> Principal:

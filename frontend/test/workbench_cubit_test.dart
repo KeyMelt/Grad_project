@@ -8,11 +8,13 @@ class _FakeBackendApi extends BackendApi {
     this.shouldFailRun = false,
     this.shouldFailLessonFetch = false,
     this.lessonSections = const [],
+    this.restoredDashboard,
   });
 
   final bool shouldFailRun;
   final bool shouldFailLessonFetch;
   final List<LessonSection> lessonSections;
+  final LearnerDashboard? restoredDashboard;
   int _pollCount = 0;
   int _workspacePollCount = 0;
   String? _token;
@@ -54,6 +56,11 @@ class _FakeBackendApi extends BackendApi {
       ),
       progress: const LearnerProgress.empty(),
     );
+  }
+
+  @override
+  Future<LearnerDashboard?> restoreSession() async {
+    return restoredDashboard;
   }
 
   @override
@@ -357,6 +364,28 @@ void main() {
     cubit.signOut();
     expect(cubit.state.learner, isNull);
     expect(cubit.state.homeMessage, contains('Signed out.'));
+
+    await cubit.close();
+  });
+
+  test('cubit restores cookie-backed session on startup', () async {
+    const dashboard = LearnerDashboard(
+      student: LearnerProfile(
+        id: 'student-1',
+        displayName: 'Maya',
+        platformRole: 'student',
+      ),
+      progress: LearnerProgress.empty(),
+    );
+    final cubit = RLWorkbenchCubit(
+      api: _FakeBackendApi(restoredDashboard: dashboard),
+    );
+
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+
+    expect(cubit.state.isAuthenticated, isTrue);
+    expect(cubit.state.learner?.displayName, 'Maya');
+    expect(cubit.state.homeMessage, contains('Signed in as Maya.'));
 
     await cubit.close();
   });
