@@ -22,11 +22,11 @@ x-common-environment: &common-environment
   RL_IDE_DB_URL: sqlite:////srv/rl-platform/data/rl_learning_platform.db
   RL_IDE_VISUALIZATION_OUTPUT_DIR: /srv/rl-platform/animations
   RL_IDE_CONCEPT_VIDEO_DIR: /srv/rl-platform/concept-videos
-  RL_IDE_MEDIA_STORAGE_BACKEND: ${RL_IDE_MEDIA_STORAGE_BACKEND:-local}
+  RL_IDE_MEDIA_STORAGE_BACKEND: ${RL_IDE_MEDIA_STORAGE_BACKEND:-spaces}
   DO_SPACES_REGION: ${DO_SPACES_REGION:-fra1}
-  DO_SPACES_BUCKET: ${DO_SPACES_BUCKET:-}
+  DO_SPACES_BUCKET: ${DO_SPACES_BUCKET:-grad-project-prod-media-fra1}
   DO_SPACES_ENDPOINT: ${DO_SPACES_ENDPOINT:-https://fra1.digitaloceanspaces.com}
-  DO_SPACES_CDN_URL: ${DO_SPACES_CDN_URL:-}
+  DO_SPACES_CDN_URL: ${DO_SPACES_CDN_URL:-https://grad-project-prod-media-fra1.fra1.cdn.digitaloceanspaces.com}
   RL_IDE_MANIM_PYTHON: python3
   RL_IDE_MANIM_SERVICE_URL: ${RL_IDE_MANIM_SERVICE_URL:-http://manim-service:8300}
   RL_IDE_GEMINI_ENABLED: ${RL_IDE_GEMINI_ENABLED:-0}

@@ -530,6 +530,22 @@ def test_concept_video_serves_backend_media(tmp_path, monkeypatch):
     assert range_response.content == b"mp4"
 
 
+def test_concept_video_redirects_to_cdn_when_spaces_enabled(monkeypatch):
+    monkeypatch.setenv("RL_IDE_MEDIA_STORAGE_BACKEND", "spaces")
+    monkeypatch.setenv("DO_SPACES_CDN_URL", "https://cdn.example.test")
+    client = _make_client()
+
+    response = client.get(
+        "/media/concept-videos/dp_policy_eval_concept.mp4",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["location"] == (
+        "https://cdn.example.test/concept_videos/dp_policy_eval_concept.mp4"
+    )
+
+
 def test_execute_success():
     client = _make_client()
     response = client.post(
