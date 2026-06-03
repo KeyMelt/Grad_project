@@ -7,7 +7,6 @@ import '../core/onboarding_prefs.dart';
 import '../core/theme.dart';
 import '../core/workbench_state.dart';
 import '../features/admin/admin_console.dart';
-import '../features/feedback/feedback_section.dart';
 import '../features/flashcards/flashcards_section.dart';
 import '../features/home/home_dashboard.dart';
 import '../features/lessons/lesson_browser.dart';
@@ -129,6 +128,8 @@ class _MainLayoutState extends State<MainLayout> {
               onConceptVideoSession: _cubit.recordConceptVideoSession,
               onWorkspaceFocusSession: _cubit.recordWorkspaceFocusSession,
               onDismissFeedback: _cubit.dismissWorkspaceFeedback,
+              canShareSessionFeedback: _canShareSessionFeedback(state),
+              onOpenSessionFeedback: _showSessionFeedbackDialog,
               showExerciseBriefInCodePane: true,
             );
 
@@ -201,15 +202,8 @@ class _MainLayoutState extends State<MainLayout> {
           onStartQuiz: _cubit.startQuiz,
           onAnswerQuestion: _cubit.answerQuizQuestion,
           onSubmitQuiz: _cubit.submitQuiz,
+          onOpenPostStudySurvey: _showSessionFeedbackDialog,
           onSubmitPostStudySurvey: _cubit.submitPostStudySurvey,
-        );
-      case AppSection.feedback:
-        return FeedbackSection(
-          learner: state.learner,
-          isSubmitting: state.isPostStudySurveySubmitting,
-          isComplete: state.postStudySurveyCompleted,
-          message: state.postStudySurveyMessage,
-          onSubmit: _cubit.submitPostStudySurvey,
         );
       case AppSection.admin:
         if (!state.canAccessAuthoring) {
@@ -267,6 +261,63 @@ class _MainLayoutState extends State<MainLayout> {
     setState(() {
       _studyBuddyDrawerOpen = isOpen;
     });
+  }
+
+  bool _canShareSessionFeedback(RLWorkbenchState state) {
+    if (state.learner == null || state.postStudySurveyCompleted) {
+      return false;
+    }
+    return state.runStatus == RunStatus.success ||
+        state.stepTrace.isNotEmpty ||
+        state.traceEpisodes.isNotEmpty ||
+        state.videoPath.isNotEmpty;
+  }
+
+  Future<void> _showSessionFeedbackDialog() async {
+    if (_cubit.state.learner == null) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return BlocProvider.value(
+          value: _cubit,
+          child: Dialog(
+            insetPadding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 720),
+              child: BlocBuilder<RLWorkbenchCubit, RLWorkbenchState>(
+                builder: (context, state) {
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: IconButton(
+                            tooltip: 'Close feedback',
+                            onPressed: () => Navigator.of(dialogContext).pop(),
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                        ),
+                        PostStudySurveyCard(
+                          isSubmitting: state.isPostStudySurveySubmitting,
+                          isComplete: state.postStudySurveyCompleted,
+                          message: state.postStudySurveyMessage,
+                          onSubmit: _cubit.submitPostStudySurvey,
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _openOnboarding({required bool markSeen}) async {
@@ -402,12 +453,6 @@ class _MainLayoutState extends State<MainLayout> {
                           label: 'Quiz',
                           selected: state.currentSection == AppSection.quiz,
                           onTap: () => _cubit.navigateTo(AppSection.quiz),
-                        ),
-                        const SizedBox(width: 8),
-                        _NavChip(
-                          label: 'Feedback',
-                          selected: state.currentSection == AppSection.feedback,
-                          onTap: () => _cubit.navigateTo(AppSection.feedback),
                         ),
                         const SizedBox(width: 8),
                         if (state.canAccessAuthoring)

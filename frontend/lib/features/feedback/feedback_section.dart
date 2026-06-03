@@ -114,7 +114,7 @@ class _FeedbackIntroCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              'Thanks, $displayName. These responses are stored with your study session and exported with ALEI metrics.',
+              'Thanks, $displayName. Your feedback helps improve our services.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: AppTheme.textSecondary,
                     height: 1.45,
@@ -123,20 +123,20 @@ class _FeedbackIntroCard extends StatelessWidget {
             const SizedBox(height: 18),
             const _FeedbackFact(
               icon: Icons.view_agenda_outlined,
-              title: 'Focused steps',
-              body: 'Usability, workload, then optional written feedback.',
+              title: 'Quick check-in',
+              body: 'A few short ratings and optional notes.',
             ),
             const SizedBox(height: 12),
             const _FeedbackFact(
               icon: Icons.touch_app_outlined,
-              title: 'Low typing',
+              title: 'Low effort',
               body: 'Most inputs are selectable ratings or sliders.',
             ),
             const SizedBox(height: 12),
             const _FeedbackFact(
-              icon: Icons.insights_outlined,
-              title: 'Research metrics',
-              body: 'SUS and Raw NASA-TLX scores are computed server-side.',
+              icon: Icons.privacy_tip_outlined,
+              title: 'Optional notes',
+              body: 'Only add written details you are comfortable sharing.',
             ),
           ],
         ),

@@ -25,7 +25,7 @@ void main() {
             ),
             isSubmitting: false,
             isComplete: false,
-            message: 'Complete the post-study survey.',
+            message: 'Your feedback helps improve our services.',
             onSubmit: ({
               required susResponses,
               required tlxMentalDemand,
@@ -46,20 +46,20 @@ void main() {
     );
 
     expect(find.text('Session feedback'), findsOneWidget);
-    expect(find.text('System usability'), findsOneWidget);
+    expect(find.text('Using the service'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Next'));
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
-    expect(find.text('NASA-TLX workload'), findsOneWidget);
+    expect(find.text('Session effort'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Next'));
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
     expect(find.text('Optional feedback'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Submit Survey'));
-    await tester.tap(find.text('Submit Survey'));
+    await tester.ensureVisible(find.text('Submit feedback'));
+    await tester.tap(find.text('Submit feedback'));
     await tester.pump();
 
     expect(submittedSusResponses, List<int>.filled(10, 3));

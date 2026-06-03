@@ -642,6 +642,7 @@ void main() {
       ),
       findsOneWidget,
     );
+    expect(find.text('Share feedback'), findsOneWidget);
 
     await tester.tap(find.text('Replay'));
     await tester.pumpAndSettle();
@@ -676,25 +677,35 @@ void main() {
 
     expect(find.text('1.000'), findsWidgets);
     expect(find.text('100.0%'), findsWidgets);
-    expect(find.text('Post-study workload survey'), findsOneWidget);
+    expect(
+      find.text('Your feedback helps improve our services.'),
+      findsOneWidget,
+    );
+    expect(find.text('Share feedback'), findsOneWidget);
+
+    await tester.tap(find.text('Share feedback'));
+    await tester.pumpAndSettle();
+    expect(find.text('Quick session feedback'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Next'));
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
-    expect(find.text('NASA-TLX workload'), findsOneWidget);
+    expect(find.text('Session effort'), findsOneWidget);
     await tester.ensureVisible(find.text('Next'));
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
     expect(find.text('Optional feedback'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Submit Survey'));
-    await tester.tap(find.text('Submit Survey'));
+    await tester.ensureVisible(find.text('Submit feedback'));
+    await tester.tap(find.text('Submit feedback'));
     await tester.pumpAndSettle();
 
     expect(api.submittedSusResponses, List<int>.filled(10, 3));
     expect(api.submittedTlxMentalDemand, 50);
-    expect(find.textContaining('Survey recorded.'), findsOneWidget);
+    expect(find.text('Thanks. Your feedback has been recorded.'), findsWidgets);
 
+    await tester.tap(find.byTooltip('Close feedback'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Home'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Study Flashcards'));

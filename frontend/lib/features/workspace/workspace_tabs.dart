@@ -42,6 +42,8 @@ class WorkspaceTabs extends StatefulWidget {
   final void Function(String viewId, Duration duration)?
       onWorkspaceFocusSession;
   final VoidCallback? onDismissFeedback;
+  final bool canShareSessionFeedback;
+  final VoidCallback? onOpenSessionFeedback;
   final bool showExerciseBriefInCodePane;
 
   const WorkspaceTabs({
@@ -77,6 +79,8 @@ class WorkspaceTabs extends StatefulWidget {
     this.onConceptVideoSession,
     this.onWorkspaceFocusSession,
     this.onDismissFeedback,
+    this.canShareSessionFeedback = false,
+    this.onOpenSessionFeedback,
     this.showExerciseBriefInCodePane = true,
   });
 
@@ -241,6 +245,11 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
             ),
           ),
           const SizedBox(height: 8),
+          if (widget.canShareSessionFeedback &&
+              widget.onOpenSessionFeedback != null) ...[
+            _SessionFeedbackPrompt(onPressed: widget.onOpenSessionFeedback!),
+            const SizedBox(height: 8),
+          ],
           Container(
             padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(
@@ -262,6 +271,28 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SessionFeedbackPrompt extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _SessionFeedbackPrompt({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: TextButton.icon(
+        onPressed: onPressed,
+        icon: const Icon(Icons.rate_review_outlined, size: 18),
+        label: const Text('Share feedback'),
+        style: TextButton.styleFrom(
+          foregroundColor: AppTheme.textSecondary,
+          visualDensity: VisualDensity.compact,
+        ),
       ),
     );
   }

@@ -18,6 +18,7 @@ class QuizSection extends StatelessWidget {
   final ValueChanged<QuizPhase> onStartQuiz;
   final void Function(String questionId, int selectedIndex) onAnswerQuestion;
   final VoidCallback onSubmitQuiz;
+  final VoidCallback onOpenPostStudySurvey;
   final void Function({
     required List<int> susResponses,
     required int tlxMentalDemand,
@@ -46,6 +47,7 @@ class QuizSection extends StatelessWidget {
     required this.onStartQuiz,
     required this.onAnswerQuestion,
     required this.onSubmitQuiz,
+    required this.onOpenPostStudySurvey,
     required this.onSubmitPostStudySurvey,
   });
 
@@ -70,14 +72,15 @@ class QuizSection extends StatelessWidget {
           if (lastQuizSummary != null) ...[
             const SizedBox(height: AppConstants.defaultPadding),
             _buildLatestResult(lastQuizSummary!),
-            if (lastQuizSummary!.phase == QuizPhase.posttest) ...[
+            if (!postStudySurveyCompleted) ...[
               const SizedBox(height: AppConstants.defaultPadding),
-              PostStudySurveyCard(
-                isSubmitting: isPostStudySurveySubmitting,
-                isComplete: postStudySurveyCompleted,
+              SessionFeedbackCallout(
                 message: postStudySurveyMessage,
-                onSubmit: onSubmitPostStudySurvey,
+                onPressed: onOpenPostStudySurvey,
               ),
+            ] else ...[
+              const SizedBox(height: AppConstants.defaultPadding),
+              _FeedbackRecordedCallout(message: postStudySurveyMessage),
             ],
           ],
         ],
@@ -280,6 +283,71 @@ class QuizSection extends StatelessWidget {
   }
 }
 
+class SessionFeedbackCallout extends StatelessWidget {
+  final String message;
+  final VoidCallback onPressed;
+
+  const SessionFeedbackCallout({
+    super.key,
+    required this.message,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 8,
+      runSpacing: 4,
+      children: [
+        Text(
+          message,
+          style: const TextStyle(color: AppTheme.textSecondary),
+        ),
+        TextButton.icon(
+          onPressed: onPressed,
+          icon: const Icon(Icons.rate_review_outlined, size: 18),
+          label: const Text('Share feedback'),
+          style: TextButton.styleFrom(
+            foregroundColor: AppTheme.textSecondary,
+            visualDensity: VisualDensity.compact,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FeedbackRecordedCallout extends StatelessWidget {
+  final String message;
+
+  const _FeedbackRecordedCallout({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(
+          Icons.check_circle_outline_rounded,
+          size: 18,
+          color: AppTheme.successGreen,
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            message,
+            style: const TextStyle(
+              color: AppTheme.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class PostStudySurveyCard extends StatefulWidget {
   final bool isSubmitting;
   final bool isComplete;
@@ -375,7 +443,7 @@ class _PostStudySurveyCardState extends State<PostStudySurveyCard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Post-study workload survey',
+                        'Quick session feedback',
                         style: TextStyle(
                           color: AppTheme.textPrimary,
                           fontSize: 22,
@@ -384,7 +452,7 @@ class _PostStudySurveyCardState extends State<PostStudySurveyCard> {
                       ),
                       SizedBox(height: 6),
                       Text(
-                        'Rate usability and workload for this study session.',
+                        'Your feedback helps improve our services.',
                         style: TextStyle(
                           color: AppTheme.textSecondary,
                           height: 1.45,
@@ -423,7 +491,7 @@ class _PostStudySurveyCardState extends State<PostStudySurveyCard> {
   }
 
   Widget _buildProgressHeader() {
-    const labels = ['Usability', 'Workload', 'Feedback'];
+    const labels = ['Experience', 'Effort', 'Notes'];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -455,7 +523,7 @@ class _PostStudySurveyCardState extends State<PostStudySurveyCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionTitle('System usability'),
+          _buildSectionTitle('Using the service'),
           const SizedBox(height: 8),
           const Text(
             'Choose 1 for strongly disagree and 5 for strongly agree.',
@@ -476,10 +544,10 @@ class _PostStudySurveyCardState extends State<PostStudySurveyCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionTitle('NASA-TLX workload'),
+          _buildSectionTitle('Session effort'),
           const SizedBox(height: 8),
           const Text(
-            'Rate each workload dimension from 0 to 100.',
+            'Rate how this session felt from 0 to 100.',
             style: TextStyle(color: AppTheme.textSecondary),
           ),
           const SizedBox(height: 12),
@@ -581,7 +649,7 @@ class _PostStudySurveyCardState extends State<PostStudySurveyCard> {
                   )
                 : const Icon(Icons.send_outlined),
             label: Text(
-              widget.isSubmitting ? 'Submitting...' : 'Submit Survey',
+              widget.isSubmitting ? 'Submitting...' : 'Submit feedback',
             ),
           ),
       ],

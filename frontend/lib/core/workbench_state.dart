@@ -18,11 +18,13 @@ export 'lesson_models.dart';
 enum RunStatus { idle, running, success, failed, stopped }
 
 /// Top-level application destinations owned by [MainLayout].
-enum AppSection { home, workspace, flashcards, quiz, feedback, admin }
+enum AppSection { home, workspace, flashcards, quiz, admin }
 
 const Duration _longRunningSubmissionNoticeDelay = Duration(seconds: 12);
 const String _longRunningSubmissionStatusMessage =
     'This trace is taking a bit to complete. Keep the workspace open; Study Buddy has a short review ready while the full replay finishes.';
+const String _sessionFeedbackReadyMessage =
+    'Your feedback helps improve our services.';
 const Object _sentinel = Object();
 const String _authoredLessonsPrefsKey = 'rl_ide_authored_lessons_v1';
 
@@ -229,8 +231,7 @@ class RLWorkbenchState {
       studyBuddyChatError: null,
       isPostStudySurveySubmitting: false,
       postStudySurveyCompleted: false,
-      postStudySurveyMessage:
-          'Complete the post-study survey to record workload and usability.',
+      postStudySurveyMessage: _sessionFeedbackReadyMessage,
       isSubmissionTakingLong: false,
     );
   }
@@ -613,8 +614,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       }
       _applyAuthenticatedSession(
         dashboard,
-        successMessage:
-            'Signed in as ${dashboard.student.displayName}.',
+        successMessage: 'Signed in as ${dashboard.student.displayName}.',
       );
     } catch (_) {
       _api.clearAuthToken();
@@ -847,8 +847,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         studyBuddyChatError: null,
         isPostStudySurveySubmitting: false,
         postStudySurveyCompleted: false,
-        postStudySurveyMessage:
-            'Complete the post-study survey to record workload and usability.',
+        postStudySurveyMessage: _sessionFeedbackReadyMessage,
       ),
     );
   }
@@ -1098,7 +1097,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
             preserveWorkspace ? state.postStudySurveyCompleted : false,
         postStudySurveyMessage: preserveWorkspace
             ? state.postStudySurveyMessage
-            : 'Complete the post-study survey to record workload and usability.',
+            : _sessionFeedbackReadyMessage,
         statusMessage: preserveWorkspace
             ? state.statusMessage
             : !state.isAuthenticated
@@ -1166,7 +1165,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
             ? false
             : state.postStudySurveyCompleted,
         postStudySurveyMessage: phase == QuizPhase.posttest
-            ? 'Complete the post-study survey to record workload and usability.'
+            ? _sessionFeedbackReadyMessage
             : state.postStudySurveyMessage,
         quizStatusMessage:
             'Preparing ${quizPhaseLabel(phase).toLowerCase()}...',
@@ -1284,12 +1283,12 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     emit(
       state.copyWith(
         isPostStudySurveySubmitting: true,
-        postStudySurveyMessage: 'Submitting post-study survey...',
+        postStudySurveyMessage: 'Submitting feedback...',
       ),
     );
 
     try {
-      final result = await _api.submitStudySessionSurvey(
+      await _api.submitStudySessionSurvey(
         studySessionId: state.studySessionId,
         condition: 'adaptive',
         susResponses: susResponses,
@@ -1307,9 +1306,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         state.copyWith(
           isPostStudySurveySubmitting: false,
           postStudySurveyCompleted: true,
-          postStudySurveyMessage:
-              'Survey recorded. SUS ${result.susScore.toStringAsFixed(1)}, '
-              'TLX ${result.tlxOverall.toStringAsFixed(1)}.',
+          postStudySurveyMessage: 'Thanks. Your feedback has been recorded.',
         ),
       );
     } on BackendApiException catch (error) {
@@ -1324,7 +1321,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         state.copyWith(
           isPostStudySurveySubmitting: false,
           postStudySurveyMessage:
-              'Could not submit the survey. Try again shortly.',
+              'Could not submit feedback. Try again shortly.',
         ),
       );
     }
