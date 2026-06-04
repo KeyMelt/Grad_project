@@ -9,6 +9,7 @@ import ast
 import json
 import multiprocessing
 import os
+import time
 import uuid
 from typing import Any
 
@@ -41,18 +42,31 @@ def run_submission_with_timeout(
     lesson = get_lesson_definition(submission_payload["lesson_id"])
     feedback_service = StudentFeedbackService()
     ctx = multiprocessing.get_context("spawn")
-    queue: multiprocessing.Queue = ctx.Queue()
+    parent_conn, child_conn = ctx.Pipe(duplex=False)
     process = ctx.Process(
         target=_execution_worker,
-        args=(submission_payload, queue),
+        args=(submission_payload, child_conn),
         daemon=True,
     )
     process.start()
-    process.join(effective_timeout)
+    child_conn.close()
 
-    if process.is_alive():
+    deadline = time.monotonic() + effective_timeout
+    outcome: dict[str, Any] | None = None
+    while time.monotonic() < deadline:
+        if parent_conn.poll(0.1):
+            outcome = parent_conn.recv()
+            break
+        if not process.is_alive():
+            break
+
+    if outcome is None and parent_conn.poll():
+        outcome = parent_conn.recv()
+
+    if outcome is None and process.is_alive():
         process.terminate()
         process.join()
+        parent_conn.close()
         issues = [
             f"The lesson execution exceeded the {effective_timeout}-second limit.",
         ]
@@ -68,7 +82,13 @@ def run_submission_with_timeout(
             ),
         )
 
-    if queue.empty():
+    process.join(timeout=1.0)
+    if process.is_alive():
+        process.terminate()
+        process.join()
+    parent_conn.close()
+
+    if outcome is None:
         raise ExecutionPipelineError(
             status_code=500,
             detail=_failure_detail(
@@ -81,7 +101,6 @@ def run_submission_with_timeout(
             ),
         )
 
-    outcome = queue.get()
     if outcome["ok"]:
         return outcome["result"]
     raise ExecutionPipelineError(
@@ -90,19 +109,19 @@ def run_submission_with_timeout(
     )
 
 
-def _execution_worker(submission_payload: dict[str, Any], queue: multiprocessing.Queue) -> None:
+def _execution_worker(submission_payload: dict[str, Any], result_conn: Any) -> None:
     _ensure_process_lesson_registry()
     lesson = get_lesson_definition(submission_payload["lesson_id"])
     feedback_service = StudentFeedbackService()
     try:
-        queue.put(
+        result_conn.send(
             {
                 "ok": True,
                 "result": _run_execution_pipeline(submission_payload),
             },
         )
     except ExecutionPipelineError as error:
-        queue.put(
+        result_conn.send(
             {
                 "ok": False,
                 "status_code": error.status_code,
@@ -110,7 +129,7 @@ def _execution_worker(submission_payload: dict[str, Any], queue: multiprocessing
             },
         )
     except Exception as error:
-        queue.put(
+        result_conn.send(
             {
                 "ok": False,
                 "status_code": 500,
@@ -124,6 +143,8 @@ def _execution_worker(submission_payload: dict[str, Any], queue: multiprocessing
                 ),
             },
         )
+    finally:
+        result_conn.close()
 
 
 def _ensure_process_lesson_registry() -> None:
