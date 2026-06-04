@@ -154,7 +154,7 @@ class GatewaySettings:
                 "RL_IDE_CONCEPT_VIDEO_DIR",
                 "backend/media/concept_videos",
             ),
-            media_storage_backend=env_str("RL_IDE_MEDIA_STORAGE_BACKEND", "local").lower(),
+            media_storage_backend=env_str("RL_IDE_MEDIA_STORAGE_BACKEND", "spaces").lower(),
             media_cdn_url=env_str("DO_SPACES_CDN_URL").rstrip("/"),
             cors_allowed_origins=cors_origins,
             cors_allow_local_regex=not explicit_origins_configured,

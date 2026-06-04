@@ -9,17 +9,17 @@ export 'backend_connection_manager.dart';
 abstract class BackendApi {
   Future<List<LessonSection>> fetchLessonSections();
 
-  Future<List<LessonDefinition>> fetchAuthoredLessons() async {
+  Future<List<LessonDefinition>> fetchAdminLessons() async {
     return const [];
   }
 
-  Future<LessonDefinition> saveAuthoredLesson({
+  Future<LessonDefinition> saveAdminLessonRecord({
     required LessonDefinition lesson,
   }) {
     throw UnimplementedError();
   }
 
-  Future<void> deleteAuthoredLesson(String lessonId) async {}
+  Future<void> deleteAdminLessonRecord(String lessonId) async {}
 
   /// Upload a Markdown file as lecture notes for [lessonId].
   Future<void> uploadLectureNotes({
@@ -28,7 +28,7 @@ abstract class BackendApi {
     required String filename,
   }) async {}
 
-  /// Remove the admin-uploaded lecture notes for [lessonId].
+  /// Remove lecture notes from [lessonId].
   Future<void> deleteLectureNotes(String lessonId) async {}
 
   Future<LearnerDashboard> signIn({

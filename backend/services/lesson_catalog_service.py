@@ -1,25 +1,11 @@
-"""Lesson catalog service — presents lessons to the Flutter client.
-
-All lesson data now lives in the DB via LessonRegistryService.
-Lecture notes are resolved from two locations (first match wins):
-  1. backend/media/lesson_notes/<lesson_id>_lecture_notes.md  (admin-uploaded)
-  2. manim_service/concept_videos/<lesson_id>_lecture_notes.md (built-in generated)
-"""
+"""Lesson catalog service: presents registry-backed lessons to the Flutter client."""
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
-
-from backend.concept_videos.specs import LESSON_VIDEO_SPECS
 
 if TYPE_CHECKING:
     from backend.services.lesson_registry_service import LessonRegistryService
-
-# Primary upload dir (persistent volume in production, gitignored content)
-NOTES_UPLOAD_DIR = Path(__file__).resolve().parents[2] / "backend" / "media" / "lesson_notes"
-# Fallback dir (built-in manim-generated notes, committed to repo)
-NOTES_BUILTIN_DIR = Path(__file__).resolve().parents[2] / "manim_service" / "concept_videos"
 
 CONCEPT_VIDEO_ROUTE_PREFIX = "/media/concept-videos"
 LESSON_SECTION_ORDER = (
@@ -27,19 +13,6 @@ LESSON_SECTION_ORDER = (
     "Monte Carlo Methods",
     "Temporal Difference",
 )
-
-
-def load_lecture_notes(lesson_id: str) -> str:
-    """Load lecture notes for a lesson. Admin-uploaded file takes priority over built-in."""
-    NOTES_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    for directory in (NOTES_UPLOAD_DIR, NOTES_BUILTIN_DIR):
-        path = directory / f"{lesson_id}_lecture_notes.md"
-        if path.is_file():
-            try:
-                return path.read_text(encoding="utf-8")
-            except OSError:
-                pass
-    return ""
 
 
 def _with_backend_video_path(concept_video: dict, lesson_id: str) -> dict:
@@ -56,30 +29,15 @@ def _with_backend_video_path(concept_video: dict, lesson_id: str) -> dict:
 
 def _serialize_payload_for_client(payload: dict[str, Any]) -> dict[str, Any]:
     lesson_id = payload["id"]
-    video_spec = LESSON_VIDEO_SPECS.get(lesson_id)
 
     concept_video = dict(payload.get("concept_video") or {})
     concept_video = _with_backend_video_path(concept_video, lesson_id)
-    concept_video["lecture_notes"] = load_lecture_notes(lesson_id)
-
-    if video_spec is not None:
-        concept_video.update(
-            {
-                "theory_equation": video_spec.theory_equation,
-                "worked_example": video_spec.worked_example,
-                "misconception_to_prevent": video_spec.misconception_to_prevent,
-                "takeaway_line": video_spec.takeaway_line,
-                "theory_verification": [
-                    {
-                        "claim": v.claim,
-                        "source_url": v.source_url,
-                        "validation_note": v.validation_note,
-                        "is_inference": v.is_inference,
-                    }
-                    for v in video_spec.theory_verification
-                ],
-            }
-        )
+    concept_video.setdefault("lecture_notes", "")
+    concept_video.setdefault("theory_equation", "")
+    concept_video.setdefault("worked_example", "")
+    concept_video.setdefault("misconception_to_prevent", "")
+    concept_video.setdefault("takeaway_line", "")
+    concept_video.setdefault("theory_verification", [])
 
     exercise = dict(payload.get("exercise") or {})
     exercise["template_blanks"] = [

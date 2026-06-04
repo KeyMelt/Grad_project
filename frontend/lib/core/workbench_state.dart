@@ -26,7 +26,7 @@ const String _longRunningSubmissionStatusMessage =
 const String _sessionFeedbackReadyMessage =
     'Your feedback helps improve our services.';
 const Object _sentinel = Object();
-const String _authoredLessonsPrefsKey = 'rl_ide_authored_lessons_v1';
+const String _lessonEditsPrefsKey = 'rl_ide_lesson_edits_v1';
 
 bool _canUseGoogleSignInOnCurrentOrigin() {
   final uri = Uri.base;
@@ -477,22 +477,22 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   BackendApi get api => _api;
 
   Future<void> loadBackendLessonCatalog() async {
-    final authoredSections = await _loadAuthoredLessonSections();
-    if (authoredSections.isNotEmpty) {
-      final sectionsWithAuthored =
-          _mergeNonCoreLessons(state.sections, authoredSections);
+    final cachedSections = await _loadCachedLessonSections();
+    if (cachedSections.isNotEmpty) {
+      final sectionsWithCachedLessons =
+          _mergeNonCoreLessons(state.sections, cachedSections);
       final selectedLesson =
-          _findLessonById(sectionsWithAuthored, state.selectedLesson.id) ??
-              sectionsWithAuthored.first.lessons.first;
+          _findLessonById(sectionsWithCachedLessons, state.selectedLesson.id) ??
+              sectionsWithCachedLessons.first.lessons.first;
       emit(
         state.copyWith(
-          sections: sectionsWithAuthored,
+          sections: sectionsWithCachedLessons,
           selectedLesson: selectedLesson,
           code: state.code == state.selectedLesson.starterCode
               ? selectedLesson.starterCode
               : state.code,
           adminSelectedLessonId: selectedLesson.id,
-          adminMessage: 'Loaded locally saved authored lessons.',
+          adminMessage: 'Loaded locally cached lesson edits.',
         ),
       );
     }
@@ -551,20 +551,18 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     }
   }
 
-  Future<void> loadCloudAuthoredLessons() async {
+  Future<void> loadCloudLessonRecords() async {
     if (!state.canAccessAuthoring) {
       return;
     }
     try {
-      final lessons = await _api.fetchAuthoredLessons();
+      final lessons = await _api.fetchAdminLessons();
       if (lessons.isEmpty) {
         return;
       }
       var updatedSections = state.sections;
       for (final lesson in lessons) {
-        if (!_isCoreLessonId(lesson.id)) {
-          updatedSections = _upsertLessonInSections(updatedSections, lesson);
-        }
+        updatedSections = _upsertLessonInSections(updatedSections, lesson);
       }
       final selectedLesson =
           _findLessonById(updatedSections, state.selectedLesson.id) ??
@@ -576,15 +574,15 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
           code: state.code == state.selectedLesson.starterCode
               ? selectedLesson.starterCode
               : state.code,
-          adminMessage: 'Loaded cloud-authored lessons.',
+          adminMessage: 'Loaded cloud lesson records.',
         ),
       );
-      unawaited(_persistAuthoredLessonSections(updatedSections));
+      unawaited(_persistCachedLessonSections(updatedSections));
     } on BackendApiException catch (error) {
       emit(state.copyWith(adminMessage: error.message));
     } catch (_) {
       emit(
-        state.copyWith(adminMessage: 'Could not load cloud-authored lessons.'),
+        state.copyWith(adminMessage: 'Could not load cloud lesson records.'),
       );
     }
   }
@@ -1943,8 +1941,8 @@ def lesson_function(*args, **kwargs):
         adminMessage: 'Draft lesson created and saved locally.',
       ),
     );
-    unawaited(_persistAuthoredLessonSections(sections));
-    unawaited(_syncAuthoredLessonToCloud(draftLesson));
+    unawaited(_persistCachedLessonSections(sections));
+    unawaited(_syncLessonToRegistry(draftLesson));
   }
 
   void saveAdminLesson({
@@ -2037,8 +2035,8 @@ def lesson_function(*args, **kwargs):
         adminMessage: 'Saved "${updatedLesson.title}" locally.',
       ),
     );
-    unawaited(_persistAuthoredLessonSections(updatedSections));
-    unawaited(_syncAuthoredLessonToCloud(updatedLesson));
+    unawaited(_persistCachedLessonSections(updatedSections));
+    unawaited(_syncLessonToRegistry(updatedLesson));
   }
 
   void deleteAdminLesson(String lessonId) {
@@ -2047,16 +2045,6 @@ def lesson_function(*args, **kwargs):
           adminMessage: 'Authoring requires instructor or admin access.'));
       return;
     }
-    if (_isCoreLessonId(lessonId)) {
-      emit(
-        state.copyWith(
-          adminMessage:
-              'Core lessons are locked and cannot be deleted from the studio.',
-        ),
-      );
-      return;
-    }
-
     var lessonFound = false;
     final updatedSections = <LessonSection>[];
 
@@ -2101,8 +2089,8 @@ def lesson_function(*args, **kwargs):
         adminMessage: 'Deleted lesson $lessonId from local authoring.',
       ),
     );
-    unawaited(_persistAuthoredLessonSections(updatedSections));
-    unawaited(_deleteAuthoredLessonFromCloud(lessonId));
+    unawaited(_persistCachedLessonSections(updatedSections));
+    unawaited(_deleteAdminLessonRecordFromCloud(lessonId));
   }
 
   Future<void> uploadLectureNotes({
@@ -2462,7 +2450,7 @@ def lesson_function(*args, **kwargs):
       );
     }
     if (state.canAccessAuthoring) {
-      unawaited(loadCloudAuthoredLessons());
+      unawaited(loadCloudLessonRecords());
       unawaited(loadStaffProgressDirectory());
     }
     unawaited(refreshStudyBuddySummary(quiet: true));
@@ -2770,36 +2758,25 @@ def lesson_function(*args, **kwargs):
     return null;
   }
 
-  bool _isCoreLessonId(String lessonId) {
-    for (final section in fallbackLessonSections) {
-      for (final lesson in section.lessons) {
-        if (lesson.id == lessonId) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
+  bool _isCoreLessonId(String lessonId) => false;
 
   List<LessonSection> _mergeNonCoreLessons(
     List<LessonSection> baseSections,
-    List<LessonSection> authoredSections,
+    List<LessonSection> cachedSections,
   ) {
     var mergedSections = baseSections;
-    for (final section in authoredSections) {
+    for (final section in cachedSections) {
       for (final lesson in section.lessons) {
-        if (!_isCoreLessonId(lesson.id)) {
-          mergedSections = _upsertLessonInSections(mergedSections, lesson);
-        }
+        mergedSections = _upsertLessonInSections(mergedSections, lesson);
       }
     }
     return mergedSections;
   }
 
-  Future<List<LessonSection>> _loadAuthoredLessonSections() async {
+  Future<List<LessonSection>> _loadCachedLessonSections() async {
     try {
       final preferences = await SharedPreferences.getInstance();
-      final rawValue = preferences.getString(_authoredLessonsPrefsKey);
+      final rawValue = preferences.getString(_lessonEditsPrefsKey);
       if (rawValue == null || rawValue.isEmpty) {
         return const [];
       }
@@ -2816,23 +2793,23 @@ def lesson_function(*args, **kwargs):
     }
   }
 
-  Future<void> _syncAuthoredLessonToCloud(LessonDefinition lesson) async {
-    if (!state.canAccessAuthoring || _isCoreLessonId(lesson.id)) {
+  Future<void> _syncLessonToRegistry(LessonDefinition lesson) async {
+    if (!state.canAccessAuthoring) {
       return;
     }
     try {
-      final savedLesson = await _api.saveAuthoredLesson(lesson: lesson);
+      final savedLesson = await _api.saveAdminLessonRecord(lesson: lesson);
       final updatedSections =
           _upsertLessonInSections(state.sections, savedLesson);
       if (!isClosed) {
         emit(
           state.copyWith(
             sections: updatedSections,
-            adminMessage: 'Saved "${savedLesson.title}" to cloud authoring.',
+            adminMessage: 'Saved "${savedLesson.title}" to the lesson registry.',
           ),
         );
       }
-      unawaited(_persistAuthoredLessonSections(updatedSections));
+      unawaited(_persistCachedLessonSections(updatedSections));
     } on BackendApiException catch (error) {
       if (!isClosed) {
         emit(state.copyWith(adminMessage: error.message));
@@ -2841,19 +2818,19 @@ def lesson_function(*args, **kwargs):
       if (!isClosed) {
         emit(
           state.copyWith(
-            adminMessage: 'Saved locally, but cloud authoring sync failed.',
+            adminMessage: 'Saved locally, but registry sync failed.',
           ),
         );
       }
     }
   }
 
-  Future<void> _deleteAuthoredLessonFromCloud(String lessonId) async {
-    if (!state.canAccessAuthoring || _isCoreLessonId(lessonId)) {
+  Future<void> _deleteAdminLessonRecordFromCloud(String lessonId) async {
+    if (!state.canAccessAuthoring) {
       return;
     }
     try {
-      await _api.deleteAuthoredLesson(lessonId);
+      await _api.deleteAdminLessonRecord(lessonId);
     } on BackendApiException catch (error) {
       if (!isClosed && error.message.contains('not found') == false) {
         emit(state.copyWith(adminMessage: error.message));
@@ -2862,43 +2839,43 @@ def lesson_function(*args, **kwargs):
       if (!isClosed) {
         emit(
           state.copyWith(
-            adminMessage: 'Deleted locally, but cloud authoring sync failed.',
+            adminMessage: 'Deleted locally, but registry sync failed.',
           ),
         );
       }
     }
   }
 
-  Future<void> _persistAuthoredLessonSections(
+  Future<void> _persistCachedLessonSections(
     List<LessonSection> sections,
   ) async {
-    final authoredSections = <LessonSection>[];
+    final cachedSections = <LessonSection>[];
     for (final section in sections) {
-      final authoredLessons = section.lessons
+      final cachedLessons = section.lessons
           .where((lesson) => !_isCoreLessonId(lesson.id))
           .toList(growable: false);
-      if (authoredLessons.isNotEmpty) {
-        authoredSections.add(
-          LessonSection(title: section.title, lessons: authoredLessons),
+      if (cachedLessons.isNotEmpty) {
+        cachedSections.add(
+          LessonSection(title: section.title, lessons: cachedLessons),
         );
       }
     }
 
     try {
       final preferences = await SharedPreferences.getInstance();
-      if (authoredSections.isEmpty) {
-        await preferences.remove(_authoredLessonsPrefsKey);
+      if (cachedSections.isEmpty) {
+        await preferences.remove(_lessonEditsPrefsKey);
         return;
       }
       await preferences.setString(
-        _authoredLessonsPrefsKey,
+        _lessonEditsPrefsKey,
         jsonEncode(
-            authoredSections.map((section) => section.toJson()).toList()),
+            cachedSections.map((section) => section.toJson()).toList()),
       );
     } catch (_) {
       if (!isClosed) {
         emit(state.copyWith(
-          adminMessage: 'Could not save authored lessons locally.',
+          adminMessage: 'Could not save lesson edits locally.',
         ));
       }
     }

@@ -183,6 +183,10 @@ jobs:
           RL_IDE_FIREBASE_CREDENTIALS_FILE: /tmp/firebase-admin-key.json
           RL_IDE_INTERNAL_TOKEN: ci-internal-token
           RL_IDE_SHELL_TOKEN_SECRET: ci-shell-token-secret
+          DO_SPACES_BUCKET: ci-media-bucket
+          DO_SPACES_CDN_URL: https://cdn.example.test
+          DO_SPACES_ACCESS_KEY: ci-access-key
+          DO_SPACES_SECRET_KEY: ci-secret-key
         run: docker compose -f docker-compose.prod.yml config
 
   deploy:

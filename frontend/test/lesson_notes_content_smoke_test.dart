@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rl_ide/core/lesson_models.dart';
 import 'package:rl_ide/features/workspace/lesson_notes_panel.dart';
 
-/// Renders every authored `*_lecture_notes.md` file through [LessonNotesPanel]
+/// Renders every checked-in `*_lecture_notes.md` sample through [LessonNotesPanel]
 /// to guard against crashes / overflows on real LaTeX, tables, and code blocks.
 void main() {
   final notesDir = Directory('../manim_service/concept_videos');
@@ -20,7 +20,7 @@ void main() {
         ..sort((a, b) => a.path.compareTo(b.path)))
       : <File>[];
 
-  test('authored lecture notes exist', () {
+  test('lecture note samples exist', () {
     expect(files, isNotEmpty,
         reason: 'expected *_lecture_notes.md files under $notesDir');
   });

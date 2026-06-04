@@ -5,12 +5,10 @@ from datetime import datetime, timezone
 from sqlmodel import Field, SQLModel
 
 
-class AuthoredLesson(SQLModel, table=True):
-    """Persisted instructor-authored lesson metadata.
+class LessonRecord(SQLModel, table=True):
+    """Persisted lesson metadata for every lesson in the platform."""
 
-    These records make lesson studio edits deployable without changing the
-    source-code lesson registry.
-    """
+    __tablename__ = "authoredlesson"
 
     id: str = Field(primary_key=True)
     title: str

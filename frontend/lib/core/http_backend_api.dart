@@ -55,8 +55,8 @@ class HttpBackendApi extends BackendApi {
   }
 
   @override
-  Future<List<LessonDefinition>> fetchAuthoredLessons() async {
-    final responseJson = await _getJson('/admin/lessons/authored');
+  Future<List<LessonDefinition>> fetchAdminLessons() async {
+    final responseJson = await _getJson('/admin/lessons');
     final lessons = responseJson['lessons'];
     if (lessons is! List) {
       return const [];
@@ -68,11 +68,11 @@ class HttpBackendApi extends BackendApi {
   }
 
   @override
-  Future<LessonDefinition> saveAuthoredLesson({
+  Future<LessonDefinition> saveAdminLessonRecord({
     required LessonDefinition lesson,
   }) async {
     final responseJson = await _putJson(
-      '/admin/lessons/authored/${Uri.encodeComponent(lesson.id)}',
+      '/admin/lessons/${Uri.encodeComponent(lesson.id)}',
       {'lesson': lesson.toJson()},
     );
     final lessonJson = responseJson['lesson'];
@@ -83,8 +83,8 @@ class HttpBackendApi extends BackendApi {
   }
 
   @override
-  Future<void> deleteAuthoredLesson(String lessonId) async {
-    await _delete('/admin/lessons/authored/${Uri.encodeComponent(lessonId)}');
+  Future<void> deleteAdminLessonRecord(String lessonId) async {
+    await _delete('/admin/lessons/${Uri.encodeComponent(lessonId)}');
   }
 
   @override
