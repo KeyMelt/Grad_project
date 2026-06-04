@@ -9,6 +9,36 @@ import 'package:rl_ide/layout/main_layout.dart';
 import 'package:rl_ide/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+const LessonDefinition _testLesson = LessonDefinition(
+  id: 'dp_policy_eval',
+  title: 'Dynamic Programming: Policy Evaluation',
+  description: 'Evaluate a fixed policy with Bellman expectation backups.',
+  category: 'Dynamic Programming',
+  starterCode: 'def policy_evaluation():\n    return []\n',
+  backendEnabled: true,
+  conceptVideo: LessonConceptVideo(
+    streamPath: '/media/concept-videos/dp_policy_eval_concept.mp4',
+    durationLabel: '03:30',
+    summary: 'Bellman expectation backup walkthrough.',
+    highlights: ['Policy weighting'],
+  ),
+  exercise: LessonExerciseBrief(
+    title: 'Implement iterative policy evaluation',
+    overview: 'Complete the Bellman update.',
+    tasks: ['Fill the backup loop.'],
+    templateBlanks: [],
+    successCriteria: ['The function returns values.'],
+    codeTip: 'Tune DISCOUNT_FACTOR in code.',
+  ),
+);
+
+const List<LessonSection> _testLessonSections = [
+  LessonSection(
+    title: 'Dynamic Programming',
+    lessons: [_testLesson],
+  ),
+];
+
 class FakeBackendApi extends BackendApi {
   LearnerProfile? _student;
   LearnerProgress _progress = const LearnerProgress.empty();
@@ -29,7 +59,8 @@ class FakeBackendApi extends BackendApi {
   }
 
   @override
-  Future<List<LessonSection>> fetchLessonSections() async => const [];
+  Future<List<LessonSection>> fetchLessonSections() async =>
+      _testLessonSections;
 
   @override
   Future<LearnerDashboard> signIn({
@@ -527,7 +558,8 @@ void main() {
       findsNothing,
     );
     expect(
-      find.text('Sign in to save quiz results and lesson progress.'),
+      find.text(
+          'Lessons are ready. Sign in to save quiz results and lesson progress.'),
       findsOneWidget,
     );
 
