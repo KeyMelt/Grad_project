@@ -625,7 +625,7 @@ class _AdminConsoleState extends State<AdminConsole> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Edit lesson text, video metadata, and starter code. Drafts are saved locally.',
+              'Edit lesson text, video metadata, and starter code. Drafts sync through the lesson registry.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: AppTheme.textPrimary,
                     height: 1.45,

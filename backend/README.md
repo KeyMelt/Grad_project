@@ -14,7 +14,7 @@ The backend is a FastAPI-based service layer for lessons, code execution, RL sim
 - `rl_engine/engine.py`: wraps Gymnasium environments and runs RL episode loops.
 - `validation/validator.py`: checks submitted code against lesson contracts.
 - `logger/event_logger.py`: records step-level RL traces.
-- `visualization/controller.py`: converts traces into Manim replay artifacts.
+- `visualization/controller.py`: submits trace replay render jobs to the Manim service.
 
 ## Lesson and Assessment Modules
 
@@ -39,8 +39,7 @@ These are runtime outputs, not source:
 - `backend/data/`
 - `backend/logger/logs/`
 - `backend/visualization/animations/`
-- `backend/concept_videos/_manim_media/`
-- `backend/media/concept_videos/*.mp4`
+- `backend/media/traces/`
 
 They are ignored by `.gitignore`.
 

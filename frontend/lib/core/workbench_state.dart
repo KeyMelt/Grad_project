@@ -1,17 +1,14 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'backend_api.dart';
 import 'export_file_saver.dart';
 import 'http_backend_api.dart';
 import 'flashcard_catalog.dart';
 import 'lesson_models.dart';
-import 'local_lesson_catalog.dart';
 export 'lesson_models.dart';
 
 /// Current run lifecycle shown in the workspace controls and status strip.
@@ -26,7 +23,27 @@ const String _longRunningSubmissionStatusMessage =
 const String _sessionFeedbackReadyMessage =
     'Your feedback helps improve our services.';
 const Object _sentinel = Object();
-const String _lessonEditsPrefsKey = 'rl_ide_lesson_edits_v1';
+const LessonDefinition _registryLoadingLesson = LessonDefinition(
+  id: '__registry_loading__',
+  title: 'Loading lessons',
+  description: 'Lesson records are loading from the backend registry.',
+  category: 'Lessons',
+  starterCode: '',
+  backendEnabled: false,
+  conceptVideo: LessonConceptVideo(
+    streamPath: '',
+    durationLabel: '',
+    summary: '',
+    highlights: [],
+  ),
+  exercise: LessonExerciseBrief(
+    title: '',
+    overview: '',
+    tasks: [],
+    successCriteria: [],
+    codeTip: '',
+  ),
+);
 
 bool _canUseGoogleSignInOnCurrentOrigin() {
   final uri = Uri.base;
@@ -176,9 +193,9 @@ class RLWorkbenchState {
   });
 
   factory RLWorkbenchState.initial() {
-    final selectedLesson = fallbackLessonSections.first.lessons.first;
+    const selectedLesson = _registryLoadingLesson;
     return RLWorkbenchState(
-      sections: fallbackLessonSections,
+      sections: const [],
       flashcards: studyFlashcards,
       currentSection: AppSection.home,
       learner: null,
@@ -187,7 +204,7 @@ class RLWorkbenchState {
       progress: const LearnerProgress.empty(),
       isSigningIn: false,
       isQuizLoading: false,
-      homeMessage: 'Sign in to save quiz results and lesson progress.',
+      homeMessage: 'Loading lessons from the registry...',
       authMessage: '',
       quizStatusMessage:
           'Take a randomized pre-test before you begin the lessons.',
@@ -211,7 +228,7 @@ class RLWorkbenchState {
       totalReward: 0.0,
       averageReward: 0.0,
       bestEpisodeReward: 0.0,
-      statusMessage: 'Ready to run ${selectedLesson.title}.',
+      statusMessage: 'Waiting for lesson registry.',
       videoPath: '',
       replayRenderJobId: '',
       replayRenderStatus: 'idle',
@@ -477,26 +494,6 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   BackendApi get api => _api;
 
   Future<void> loadBackendLessonCatalog() async {
-    final cachedSections = await _loadCachedLessonSections();
-    if (cachedSections.isNotEmpty) {
-      final sectionsWithCachedLessons =
-          _mergeNonCoreLessons(state.sections, cachedSections);
-      final selectedLesson =
-          _findLessonById(sectionsWithCachedLessons, state.selectedLesson.id) ??
-              sectionsWithCachedLessons.first.lessons.first;
-      emit(
-        state.copyWith(
-          sections: sectionsWithCachedLessons,
-          selectedLesson: selectedLesson,
-          code: state.code == state.selectedLesson.starterCode
-              ? selectedLesson.starterCode
-              : state.code,
-          adminSelectedLessonId: selectedLesson.id,
-          adminMessage: 'Loaded locally cached lesson edits.',
-        ),
-      );
-    }
-
     try {
       final backendSections = await _api.fetchLessonSections();
       if (backendSections.isEmpty ||
@@ -504,8 +501,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         return;
       }
 
-      final mergedSections =
-          _mergeNonCoreLessons(backendSections, state.sections);
+      final mergedSections = backendSections;
 
       final previousLesson = state.selectedLesson;
       final selectedLesson =
@@ -577,7 +573,6 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
           adminMessage: 'Loaded cloud lesson records.',
         ),
       );
-      unawaited(_persistCachedLessonSections(updatedSections));
     } on BackendApiException catch (error) {
       emit(state.copyWith(adminMessage: error.message));
     } catch (_) {
@@ -1938,10 +1933,9 @@ def lesson_function(*args, **kwargs):
       state.copyWith(
         sections: sections,
         adminSelectedLessonId: draftId,
-        adminMessage: 'Draft lesson created and saved locally.',
+        adminMessage: 'Draft lesson created.',
       ),
     );
-    unawaited(_persistCachedLessonSections(sections));
     unawaited(_syncLessonToRegistry(draftLesson));
   }
 
@@ -2032,10 +2026,9 @@ def lesson_function(*args, **kwargs):
             ? updatedLesson.starterCode
             : state.code,
         adminSelectedLessonId: updatedLesson.id,
-        adminMessage: 'Saved "${updatedLesson.title}" locally.',
+        adminMessage: 'Saved "${updatedLesson.title}".',
       ),
     );
-    unawaited(_persistCachedLessonSections(updatedSections));
     unawaited(_syncLessonToRegistry(updatedLesson));
   }
 
@@ -2071,9 +2064,9 @@ def lesson_function(*args, **kwargs):
       return;
     }
 
-    final fallbackLesson = updatedSections.first.lessons.first;
+    final replacementLesson = updatedSections.first.lessons.first;
     final selectedLesson = state.selectedLesson.id == lessonId
-        ? fallbackLesson
+        ? replacementLesson
         : state.selectedLesson;
 
     emit(
@@ -2081,15 +2074,14 @@ def lesson_function(*args, **kwargs):
         sections: updatedSections,
         selectedLesson: selectedLesson,
         code: state.selectedLesson.id == lessonId
-            ? fallbackLesson.starterCode
+            ? replacementLesson.starterCode
             : state.code,
         adminSelectedLessonId: state.adminSelectedLessonId == lessonId
-            ? fallbackLesson.id
+            ? replacementLesson.id
             : state.adminSelectedLessonId,
-        adminMessage: 'Deleted lesson $lessonId from local authoring.',
+        adminMessage: 'Deleted lesson $lessonId.',
       ),
     );
-    unawaited(_persistCachedLessonSections(updatedSections));
     unawaited(_deleteAdminLessonRecordFromCloud(lessonId));
   }
 
@@ -2758,41 +2750,6 @@ def lesson_function(*args, **kwargs):
     return null;
   }
 
-  bool _isCoreLessonId(String lessonId) => false;
-
-  List<LessonSection> _mergeNonCoreLessons(
-    List<LessonSection> baseSections,
-    List<LessonSection> cachedSections,
-  ) {
-    var mergedSections = baseSections;
-    for (final section in cachedSections) {
-      for (final lesson in section.lessons) {
-        mergedSections = _upsertLessonInSections(mergedSections, lesson);
-      }
-    }
-    return mergedSections;
-  }
-
-  Future<List<LessonSection>> _loadCachedLessonSections() async {
-    try {
-      final preferences = await SharedPreferences.getInstance();
-      final rawValue = preferences.getString(_lessonEditsPrefsKey);
-      if (rawValue == null || rawValue.isEmpty) {
-        return const [];
-      }
-      final decoded = jsonDecode(rawValue);
-      if (decoded is! List) {
-        return const [];
-      }
-      return decoded
-          .whereType<Map<String, dynamic>>()
-          .map(LessonSection.fromJson)
-          .toList(growable: false);
-    } catch (_) {
-      return const [];
-    }
-  }
-
   Future<void> _syncLessonToRegistry(LessonDefinition lesson) async {
     if (!state.canAccessAuthoring) {
       return;
@@ -2809,7 +2766,6 @@ def lesson_function(*args, **kwargs):
           ),
         );
       }
-      unawaited(_persistCachedLessonSections(updatedSections));
     } on BackendApiException catch (error) {
       if (!isClosed) {
         emit(state.copyWith(adminMessage: error.message));
@@ -2818,7 +2774,7 @@ def lesson_function(*args, **kwargs):
       if (!isClosed) {
         emit(
           state.copyWith(
-            adminMessage: 'Saved locally, but registry sync failed.',
+            adminMessage: 'Registry sync failed.',
           ),
         );
       }
@@ -2839,44 +2795,9 @@ def lesson_function(*args, **kwargs):
       if (!isClosed) {
         emit(
           state.copyWith(
-            adminMessage: 'Deleted locally, but registry sync failed.',
+            adminMessage: 'Registry delete failed.',
           ),
         );
-      }
-    }
-  }
-
-  Future<void> _persistCachedLessonSections(
-    List<LessonSection> sections,
-  ) async {
-    final cachedSections = <LessonSection>[];
-    for (final section in sections) {
-      final cachedLessons = section.lessons
-          .where((lesson) => !_isCoreLessonId(lesson.id))
-          .toList(growable: false);
-      if (cachedLessons.isNotEmpty) {
-        cachedSections.add(
-          LessonSection(title: section.title, lessons: cachedLessons),
-        );
-      }
-    }
-
-    try {
-      final preferences = await SharedPreferences.getInstance();
-      if (cachedSections.isEmpty) {
-        await preferences.remove(_lessonEditsPrefsKey);
-        return;
-      }
-      await preferences.setString(
-        _lessonEditsPrefsKey,
-        jsonEncode(
-            cachedSections.map((section) => section.toJson()).toList()),
-      );
-    } catch (_) {
-      if (!isClosed) {
-        emit(state.copyWith(
-          adminMessage: 'Could not save lesson edits locally.',
-        ));
       }
     }
   }
