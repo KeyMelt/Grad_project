@@ -91,13 +91,19 @@ void main() {
       ),
     );
 
+    expect(
+        find.byKey(const ValueKey('trace-code-focus-line-0')), findsOneWidget);
+    await tester.tap(find.text('Math'));
+    await tester.pumpAndSettle();
     expect(find.text('SARSA numeric update'), findsOneWidget);
+    expect(find.textContaining('0.0 + 0.1'), findsOneWidget);
+    await tester.tap(find.text('Table'));
+    await tester.pumpAndSettle();
     expect(find.text('Q-table Inspector'), findsOneWidget);
     expect(find.text('active s1, a0'), findsOneWidget);
     expect(find.text('bootstrap s0, a1'), findsOneWidget);
-    expect(find.textContaining('0.0 + 0.1'), findsOneWidget);
-    expect(
-        find.byKey(const ValueKey('trace-code-focus-line-0')), findsOneWidget);
+    await tester.tap(find.text('Why'));
+    await tester.pumpAndSettle();
     expect(find.text('Why this update is correct'), findsOneWidget);
     expect(
       find.text('SARSA uses the sampled next action in the TD target.'),
@@ -192,11 +198,15 @@ void main() {
       ),
     );
 
+    await tester.tap(find.text('Math'));
+    await tester.pumpAndSettle();
     expect(find.text('Value iteration action comparison'), findsOneWidget);
     expect(find.text('Selected action'), findsOneWidget);
     expect(find.text('Left'), findsWidgets);
+    await tester.tap(find.text('Table'));
+    await tester.pumpAndSettle();
     expect(find.text('Value Table Inspector'), findsOneWidget);
-    expect(find.textContaining('1.00*(r 1.00 + V 1.00)'), findsOneWidget);
+    expect(find.text('V(0)'), findsWidgets);
   });
 
   testWidgets('renders MC Blackjack observation and return ladder',
@@ -307,7 +317,11 @@ void main() {
     );
 
     expect(find.text('Blackjack observation'), findsOneWidget);
+    await tester.tap(find.text('Math'));
+    await tester.pumpAndSettle();
     expect(find.text('First-visit return update'), findsOneWidget);
+    await tester.tap(find.text('Table'));
+    await tester.pumpAndSettle();
     expect(find.text('Monte Carlo Episode Inspector'), findsOneWidget);
     expect(find.text('Return ladder'), findsOneWidget);
     expect(find.textContaining('Player 15'), findsWidgets);
@@ -543,7 +557,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Equation'));
+    await tester.tap(find.text('Math'));
     await tester.pumpAndSettle();
 
     expect(find.text('First step math'), findsOneWidget);
@@ -579,20 +593,47 @@ void main() {
         expect(tester.takeException(), isNull, reason: 'breakpoint $size');
         expect(find.text('Generated Step Replay'), findsOneWidget);
         expect(find.textContaining('Episode 2'), findsOneWidget);
-        expect(find.text('Why this update is correct'), findsOneWidget,
-            reason: 'breakpoint $size');
-        if (size.width < 980) {
-          await tester.ensureVisible(find.text('Equation'));
-          await tester.tap(find.text('Equation'));
-          await tester.pumpAndSettle();
-        }
+        await tester.tap(find.text('Math'));
+        await tester.pumpAndSettle();
         expect(find.text('Q-learning numeric update'), findsOneWidget);
-        expect(find.bySemanticsLabel('Trace step slider'), findsOneWidget);
-        expect(find.bySemanticsLabel('Trace episode selector'), findsOneWidget);
+        expect(find.byType(DropdownButton<int>), findsOneWidget);
       }
     } finally {
       semantics.dispose();
     }
+  });
+
+  testWidgets('shows async replay render pending state without video',
+      (tester) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TraceReplayPanel(
+            runStatusLabel: 'Complete',
+            statusMessage: 'ok',
+            totalReward: -1,
+            averageReward: -1,
+            bestEpisodeReward: -1,
+            episodesCompleted: 1,
+            stepsRecorded: 1,
+            videoPath: '',
+            replayRenderStatus: 'rendering',
+            testResults: const [],
+            stepTrace: [_qLearningTraceStep()],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Video rendering'), findsOneWidget);
+    expect(find.text('Replay Video'), findsOneWidget);
+    expect(find.textContaining('rendering'), findsWidgets);
+    expect(find.text('Q-learning selects Up, observes reward -1, and applies the max-next-state bootstrap.'), findsWidgets);
   });
 }
 

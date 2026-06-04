@@ -30,6 +30,9 @@ DO_SPACES_SECRET_KEY: str = os.environ.get("DO_SPACES_SECRET_KEY", "")
 # Render quality: "l" (480p15 dev), "m" (720p30 final)
 RENDER_QUALITY: str = os.environ.get("RENDER_QUALITY", "l")
 
+# Hard cap for one trace clip render. Keeps worker subprocesses bounded.
+TRACE_RENDER_TIMEOUT_SECONDS: int = int(os.environ.get("TRACE_RENDER_TIMEOUT_SECONDS", "180"))
+
 # Queue backend: "memory" for MVP, "redis" for production
 QUEUE_BACKEND: str = os.environ.get("QUEUE_BACKEND", "memory")
 REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")

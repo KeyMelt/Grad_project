@@ -9,3 +9,6 @@ class VisualizationService:
 
     def generate_animation(self, log_data: list, lesson_id: str) -> str:
         return self._controller.generate_animation(log_data, lesson_id)
+
+    def enqueue_replay_render(self, log_data: list, lesson_id: str) -> dict:
+        return self._controller.enqueue_replay_render(log_data, lesson_id)

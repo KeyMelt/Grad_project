@@ -356,6 +356,12 @@ class HttpBackendApi extends BackendApi {
   }
 
   @override
+  Future<ReplayRenderStatus> getReplayRenderStatus(String jobId) async {
+    final responseJson = await _getJson('/visualization/replay-render/$jobId');
+    return ReplayRenderStatus.fromJson(responseJson);
+  }
+
+  @override
   Future<NGainMetricsExport> exportNGainMetrics() async {
     final response = await _client.get(
       Uri.parse('$baseUrl/admin/metrics/n-gain/export'),

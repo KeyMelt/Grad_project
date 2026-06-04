@@ -12,6 +12,8 @@ from manim_service.jobs.queue import Job, JobKind, JobStatus, MemoryJobQueue
 from manim_service.jobs.trace_renderer import (
     RenderError,
     _canonical_cache_path,
+    _canonical_clip_cache_path,
+    _compute_clip_hash,
     _compute_trace_hash,
     render_trace,
 )
@@ -205,3 +207,47 @@ class TestRenderTrace:
 
         # Job-specific path contains the job_id, not the hash
         assert job.job_id in result.name
+
+    def test_episode_clip_cache_reuses_hit_and_concats_ordered_clips(self, tmp_path):
+        storage.ensure_subdirs()
+        episode_hit = {
+            "episode_index": 0,
+            "role": "first",
+            "steps": STEPS,
+        }
+        episode_miss = {
+            "episode_index": 2,
+            "role": "last",
+            "steps": [
+                {
+                    "state": 2,
+                    "action": 1,
+                    "reward": 1.0,
+                    "next_state": 3,
+                }
+            ],
+        }
+        hit_hash = _compute_clip_hash(LESSON_ID, episode_hit)
+        hit_path = _canonical_clip_cache_path(LESSON_ID, "first", 0, hit_hash)
+        hit_path.parent.mkdir(parents=True, exist_ok=True)
+        hit_path.write_bytes(b"cached")
+
+        fake_render = tmp_path / "fake_clip.mp4"
+        fake_render.write_bytes(b"rendered")
+        job = _make_trace_job(lesson_id=LESSON_ID, steps=STEPS)
+        job.payload["episodes"] = [episode_hit, episode_miss]
+
+        with patch(
+            "manim_service.jobs.trace_renderer._invoke_trace_manim",
+            return_value=fake_render,
+        ) as mock_manim, patch(
+            "manim_service.jobs.trace_renderer._concat_clips",
+        ) as mock_concat:
+            result = render_trace(job)
+
+        mock_manim.assert_called_once()
+        mock_concat.assert_called_once()
+        ordered_paths = mock_concat.call_args.args[0]
+        assert ordered_paths[0] == hit_path
+        assert ordered_paths[1].is_file()
+        assert result.name == f"{job.job_id}.mp4"

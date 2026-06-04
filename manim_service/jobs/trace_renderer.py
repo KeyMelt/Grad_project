@@ -95,6 +95,25 @@ def _canonical_cache_path(lesson_id: str, trace_hash: str) -> Path:
     return settings.SHARED_MEDIA_DIR / storage.TRACES_SUBDIR / f"{lesson_id}_{trace_hash}.mp4"
 
 
+def _canonical_clip_cache_path(lesson_id: str, role: str, episode_index: int, clip_hash: str) -> Path:
+    safe_role = "".join(ch for ch in role if ch.isalnum() or ch in {"_", "-"}).strip() or "episode"
+    return (
+        settings.SHARED_MEDIA_DIR
+        / storage.TRACES_SUBDIR
+        / "clips"
+        / f"{lesson_id}_{safe_role}_{episode_index}_{clip_hash}.mp4"
+    )
+
+
+def _compute_clip_hash(lesson_id: str, episode: dict) -> str:
+    payload = (
+        lesson_id
+        + _source_signature()
+        + json.dumps(episode, sort_keys=True, default=str)
+    )
+    return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
@@ -128,14 +147,22 @@ def render_trace(job: Job) -> Path:
     lesson_id: str = job.payload.get("lesson_id", "")
     episode_trace: dict = job.payload.get("episode_trace", {})
     steps: list = episode_trace.get("steps", [])
+    episodes: list = job.payload.get("episodes") or []
     job_id: str = job.job_id
 
     if not lesson_id:
         raise RenderError("Trace job payload is missing 'lesson_id'.")
-    if not steps:
+    if not episodes and not steps:
         raise RenderError("Trace job has empty steps list — nothing to render.")
 
     storage.ensure_subdirs()
+
+    if episodes:
+        return _render_episode_clips(
+            lesson_id=lesson_id,
+            episodes=episodes,
+            job_id=job_id,
+        )
 
     # ------------------------------------------------------------------
     # 2. Content hash
@@ -198,11 +225,92 @@ def render_trace(job: Job) -> Path:
     return job_path
 
 
+def _render_episode_clips(*, lesson_id: str, episodes: list, job_id: str) -> Path:
+    clip_paths: list[Path] = []
+    job_path = storage.trace_video_path(job_id)
+
+    with tempfile.TemporaryDirectory(prefix="trace_render_") as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        for offset, episode in enumerate(episodes):
+            if not isinstance(episode, dict):
+                continue
+            clip_steps = episode.get("steps") or []
+            if not clip_steps:
+                continue
+            episode_index = int(episode.get("episode_index") or offset)
+            role = str(episode.get("role") or f"episode_{offset + 1}")
+            clip_hash = _compute_clip_hash(lesson_id, episode)
+            cached = _canonical_clip_cache_path(lesson_id, role, episode_index, clip_hash)
+            if cached.is_file():
+                logger.info("Trace clip cache hit for %s/%s:%s", lesson_id, role, episode_index)
+                clip_paths.append(cached)
+                continue
+
+            data_json = tmp_path / f"trace_clip_{offset}.json"
+            data_json.write_text(json.dumps(clip_steps, default=str), encoding="utf-8")
+            rendered = _invoke_trace_manim(
+                data_json,
+                episode_label=_episode_label(role, episode_index),
+            )
+            cached.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(rendered, cached)
+            clip_paths.append(cached)
+
+        if not clip_paths:
+            raise RenderError("Trace job has no non-empty episode clips to render.")
+
+        job_path.parent.mkdir(parents=True, exist_ok=True)
+        if len(clip_paths) == 1:
+            shutil.copy2(clip_paths[0], job_path)
+        else:
+            _concat_clips(clip_paths, job_path)
+        storage.publish_media_file(job_path)
+
+    return job_path
+
+
+def _episode_label(role: str, episode_index: int) -> str:
+    labels = {
+        "first": "First episode",
+        "middle": "Middle episode",
+        "last": "Final episode",
+    }
+    return f"{labels.get(role, 'Episode')} {episode_index + 1}"
+
+
+def _concat_clips(segment_mp4s: list[Path], out: Path) -> None:
+    listing = out.with_suffix(".concat.txt")
+    listing.write_text("".join(f"file '{path.resolve()}'\n" for path in segment_mp4s), encoding="utf-8")
+    try:
+        subprocess.run(
+            [
+                settings.FFMPEG_BIN,
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(listing),
+                "-c",
+                "copy",
+                str(out),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as error:
+        raise RenderError(f"ffmpeg trace concat failed: {error.stderr}") from error
+    finally:
+        listing.unlink(missing_ok=True)
+
+
 # ---------------------------------------------------------------------------
 # Manim invocation (mirrors _invoke_manim in worker.py)
 # ---------------------------------------------------------------------------
 
-def _invoke_trace_manim(data_json: Path) -> Path:
+def _invoke_trace_manim(data_json: Path, *, episode_label: str | None = None) -> Path:
     """Run the Manim CLI for TraceReplayScene and return the rendered MP4 path.
 
     Args:
@@ -252,13 +360,26 @@ def _invoke_trace_manim(data_json: Path) -> Path:
     )
     # Pass the data file path to the scene via environment variable
     env["TRACE_DATA_PATH"] = str(data_json)
+    if episode_label:
+        env["TRACE_EPISODE_LABEL"] = episode_label
 
     logger.info("Invoking Manim for trace render: %s", " ".join(cmd))
     try:
-        subprocess.run(cmd, check=True, cwd=str(ROOT), env=env)
+        subprocess.run(
+            cmd,
+            check=True,
+            cwd=str(ROOT),
+            env=env,
+            timeout=settings.TRACE_RENDER_TIMEOUT_SECONDS,
+        )
     except subprocess.CalledProcessError as error:
         raise RenderError(
             f"Manim trace render failed (exit code {error.returncode}) for "
+            f"{TRACE_SCENE_FILE.name}:{TRACE_SCENE_CLASS}"
+        ) from error
+    except subprocess.TimeoutExpired as error:
+        raise RenderError(
+            f"Manim trace render exceeded {settings.TRACE_RENDER_TIMEOUT_SECONDS}s for "
             f"{TRACE_SCENE_FILE.name}:{TRACE_SCENE_CLASS}"
         ) from error
 

@@ -98,6 +98,14 @@ class _FakeVisualizationService:
         del log_data, lesson_id
         return ""
 
+    def enqueue_replay_render(self, log_data, lesson_id):
+        del log_data, lesson_id
+        return {
+            "replay_render_job_id": "render-job",
+            "replay_render_status": "queued",
+            "replay_episode_indices": [0],
+        }
+
 
 def test_derived_submission_timeout_scales_but_remains_capped(monkeypatch):
     monkeypatch.delenv("RL_IDE_EXECUTION_TIMEOUT_BASE_SECONDS", raising=False)

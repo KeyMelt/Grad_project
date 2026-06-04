@@ -34,6 +34,9 @@ class WorkspaceTabs extends StatefulWidget {
   final int episodesCompleted;
   final int stepsRecorded;
   final String videoPath;
+  final String replayRenderStatus;
+  final String? replayRenderError;
+  final List<int> replayEpisodeIndices;
   final List<ExecutionTestCaseResult> testResults;
   final List<ExecutionTraceStep> stepTrace;
   final List<ExecutionTraceEpisode> traceEpisodes;
@@ -72,6 +75,9 @@ class WorkspaceTabs extends StatefulWidget {
     required this.episodesCompleted,
     required this.stepsRecorded,
     required this.videoPath,
+    required this.replayRenderStatus,
+    required this.replayRenderError,
+    required this.replayEpisodeIndices,
     required this.testResults,
     required this.stepTrace,
     required this.traceEpisodes,
@@ -233,6 +239,9 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
                         episodesCompleted: episodesCompleted,
                         stepsRecorded: stepsRecorded,
                         videoPath: videoPath,
+                        replayRenderStatus: widget.replayRenderStatus,
+                        replayRenderError: widget.replayRenderError,
+                        replayEpisodeIndices: widget.replayEpisodeIndices,
                         testResults: testResults,
                         stepTrace: stepTrace,
                         traceEpisodes: traceEpisodes,

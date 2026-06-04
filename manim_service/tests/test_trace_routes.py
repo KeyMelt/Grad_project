@@ -68,6 +68,23 @@ class TestEnqueueTrace:
         assert "job_id" in body
         assert body["status"] == "queued"
 
+    def test_multi_episode_payload_accepted(self, client):
+        resp = client.post(
+            "/render/trace",
+            json={
+                "lesson_id": "td_q_learning",
+                "episode_trace": {"steps": [RICH_STEP]},
+                "episodes": [
+                    {"episode_index": 0, "role": "first", "steps": [RICH_STEP]},
+                    {"episode_index": 2, "role": "last", "steps": [RICH_STEP]},
+                ],
+            },
+        )
+        assert resp.status_code == 202
+        body = resp.json()
+        assert "job_id" in body
+        assert body["status"] == "queued"
+
     def test_unknown_lesson_id_rejected(self, client):
         resp = client.post(
             "/render/trace",

@@ -101,6 +101,10 @@ abstract class BackendApi {
 
   Future<ExecutionTaskSnapshot> getTaskStatus(String taskId);
 
+  Future<ReplayRenderStatus> getReplayRenderStatus(String jobId) {
+    throw UnimplementedError();
+  }
+
   Future<NGainMetricsExport> exportNGainMetrics();
 
   Future<LearningAnalyticsExport> exportLearningAnalytics() {

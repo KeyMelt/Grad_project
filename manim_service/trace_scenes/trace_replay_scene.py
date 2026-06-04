@@ -68,6 +68,7 @@ ACTION_DIR: dict[int, str] = {0: "left", 1: "down", 2: "right", 3: "up"}
 # Environment data path from env var
 # ---------------------------------------------------------------------------
 DATA_PATH = os.environ.get("TRACE_DATA_PATH", "")
+EPISODE_LABEL = os.environ.get("TRACE_EPISODE_LABEL", "")
 
 
 # ---------------------------------------------------------------------------
@@ -328,7 +329,12 @@ class TraceReplayScene(Scene):
         # ------------------------------------------------------------------
         # Scene title
         # ------------------------------------------------------------------
-        title = Text("Agent Step → Bellman Update", font_size=28, color=TEXT)
+        title_text = (
+            f"{EPISODE_LABEL} - Agent Step to Bellman Update"
+            if EPISODE_LABEL
+            else "Agent Step to Bellman Update"
+        )
+        title = Text(title_text, font_size=28, color=TEXT)
         title.to_edge(UP, buff=0.22)
         self.play(FadeIn(title), run_time=0.4)
 

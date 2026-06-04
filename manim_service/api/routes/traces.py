@@ -45,9 +45,16 @@ class EpisodeTrace(BaseModel):
     q_table: dict[str, Any] | None = None
 
 
+class ReplayEpisodeTrace(BaseModel):
+    episode_index: int
+    role: str = "episode"
+    steps: list[TraceStep]
+
+
 class TraceRequest(BaseModel):
     lesson_id: str = Field(..., description="Canonical lesson id (e.g. td_q_learning)")
     episode_trace: EpisodeTrace
+    episodes: list[ReplayEpisodeTrace] | None = None
 
 
 class JobAccepted(BaseModel):
@@ -75,6 +82,11 @@ def enqueue_trace(request: TraceRequest) -> JobAccepted:
         {
             "lesson_id": request.lesson_id,
             "episode_trace": request.episode_trace.model_dump(),
+            "episodes": (
+                [episode.model_dump() for episode in request.episodes]
+                if request.episodes is not None
+                else None
+            ),
         },
     )
     return JobAccepted(job_id=job_id, status="queued")

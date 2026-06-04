@@ -217,12 +217,12 @@ def _package_results(
     submission_payload: dict[str, Any],
 ) -> dict[str, Any]:
     log_data = logger.get_logs()
-    video_path = visualizer.generate_animation(log_data, submission_payload["lesson_id"])
+    replay_render = visualizer.enqueue_replay_render(log_data, submission_payload["lesson_id"])
     return _build_success_response(
         lesson=lesson,
         log_data=log_data,
         validation_result=validation_result,
-        video_path=video_path,
+        replay_render=replay_render,
     )
 
 
@@ -316,7 +316,7 @@ def _build_success_response(
     lesson: Any,
     log_data: list[list[dict[str, Any]]],
     validation_result: Any,
-    video_path: str,
+    replay_render: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     episode_rewards = [sum(step.get("reward", 0) for step in episode) for episode in log_data]
     latest_episode = json.loads(json.dumps(log_data[-1], cls=NpEncoder)) if log_data else []
@@ -336,12 +336,17 @@ def _build_success_response(
         _episode_summary(index, episode, episode_rewards[index])
         for index, episode in enumerate(log_data)
     ]
+    replay_render = replay_render or {}
+    render_status = str(replay_render.get("replay_render_status") or "unavailable")
     return {
         "status": "success",
         "message": "Execution pipeline completed.",
         "lesson": {"id": lesson.id, "title": lesson.title},
-        "video_path": video_path,
-        "visualization_ready": bool(video_path),
+        "video_path": "",
+        "visualization_ready": False,
+        "replay_render_job_id": str(replay_render.get("replay_render_job_id") or ""),
+        "replay_render_status": render_status,
+        "replay_episode_indices": replay_render.get("replay_episode_indices") or [],
         "test_results": validation_result.test_results,
         "step_trace": latest_episode,
         "trace_episodes": trace_episodes,

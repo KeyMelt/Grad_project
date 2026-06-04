@@ -1081,6 +1081,9 @@ class ExecutionResult {
   final List<ExecutionTraceStep> stepTrace;
   final List<ExecutionTraceEpisode> traceEpisodes;
   final List<ExecutionEpisodeSummary> episodeSummaries;
+  final String replayRenderJobId;
+  final String replayRenderStatus;
+  final List<int> replayEpisodeIndices;
 
   const ExecutionResult({
     required this.message,
@@ -1092,6 +1095,9 @@ class ExecutionResult {
     required this.stepTrace,
     this.traceEpisodes = const [],
     this.episodeSummaries = const [],
+    this.replayRenderJobId = '',
+    this.replayRenderStatus = 'unavailable',
+    this.replayEpisodeIndices = const [],
   });
 
   factory ExecutionResult.fromJson(Map<String, dynamic> json) {
@@ -1125,6 +1131,41 @@ class ExecutionResult {
       stepTrace: stepTrace,
       traceEpisodes: traceEpisodes,
       episodeSummaries: episodeSummaries,
+      replayRenderJobId: json['replay_render_job_id'] as String? ?? '',
+      replayRenderStatus:
+          json['replay_render_status'] as String? ?? 'unavailable',
+      replayEpisodeIndices:
+          (json['replay_episode_indices'] as List<dynamic>? ?? const [])
+              .map((value) => (value as num?)?.toInt())
+              .whereType<int>()
+              .toList(growable: false),
+    );
+  }
+}
+
+class ReplayRenderStatus {
+  final String jobId;
+  final String status;
+  final String videoPath;
+  final String? error;
+
+  const ReplayRenderStatus({
+    required this.jobId,
+    required this.status,
+    required this.videoPath,
+    this.error,
+  });
+
+  bool get isComplete => status == 'complete' && videoPath.isNotEmpty;
+  bool get isFailed => status == 'failed';
+
+  factory ReplayRenderStatus.fromJson(Map<String, dynamic> json) {
+    return ReplayRenderStatus(
+      jobId: json['job_id'] as String? ?? '',
+      status: json['status'] as String? ?? 'unknown',
+      videoPath: (json['video_path'] as String?) ??
+          (json['video_url'] as String? ?? ''),
+      error: json['error'] as String?,
     );
   }
 }
