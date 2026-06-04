@@ -1,17 +1,14 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'backend_api.dart';
 import 'export_file_saver.dart';
 import 'http_backend_api.dart';
 import 'flashcard_catalog.dart';
 import 'lesson_models.dart';
-import 'local_lesson_catalog.dart';
 export 'lesson_models.dart';
 
 /// Current run lifecycle shown in the workspace controls and status strip.
@@ -26,7 +23,27 @@ const String _longRunningSubmissionStatusMessage =
 const String _sessionFeedbackReadyMessage =
     'Your feedback helps improve our services.';
 const Object _sentinel = Object();
-const String _authoredLessonsPrefsKey = 'rl_ide_authored_lessons_v1';
+const LessonDefinition _registryLoadingLesson = LessonDefinition(
+  id: '__registry_loading__',
+  title: 'Loading lessons',
+  description: 'Lesson records are loading from the backend registry.',
+  category: 'Lessons',
+  starterCode: '',
+  backendEnabled: false,
+  conceptVideo: LessonConceptVideo(
+    streamPath: '',
+    durationLabel: '',
+    summary: '',
+    highlights: [],
+  ),
+  exercise: LessonExerciseBrief(
+    title: '',
+    overview: '',
+    tasks: [],
+    successCriteria: [],
+    codeTip: '',
+  ),
+);
 
 bool _canUseGoogleSignInOnCurrentOrigin() {
   final uri = Uri.base;
@@ -73,6 +90,10 @@ class RLWorkbenchState {
   final double bestEpisodeReward;
   final String statusMessage;
   final String videoPath;
+  final String replayRenderJobId;
+  final String replayRenderStatus;
+  final String? replayRenderError;
+  final List<int> replayEpisodeIndices;
   final List<ExecutionTestCaseResult> testResults;
   final List<ExecutionTraceStep> stepTrace;
   final List<ExecutionTraceEpisode> traceEpisodes;
@@ -137,6 +158,10 @@ class RLWorkbenchState {
     required this.bestEpisodeReward,
     required this.statusMessage,
     required this.videoPath,
+    required this.replayRenderJobId,
+    required this.replayRenderStatus,
+    required this.replayRenderError,
+    required this.replayEpisodeIndices,
     required this.testResults,
     required this.stepTrace,
     required this.traceEpisodes,
@@ -168,9 +193,9 @@ class RLWorkbenchState {
   });
 
   factory RLWorkbenchState.initial() {
-    final selectedLesson = fallbackLessonSections.first.lessons.first;
+    const selectedLesson = _registryLoadingLesson;
     return RLWorkbenchState(
-      sections: fallbackLessonSections,
+      sections: const [],
       flashcards: studyFlashcards,
       currentSection: AppSection.home,
       learner: null,
@@ -179,7 +204,7 @@ class RLWorkbenchState {
       progress: const LearnerProgress.empty(),
       isSigningIn: false,
       isQuizLoading: false,
-      homeMessage: 'Sign in to save quiz results and lesson progress.',
+      homeMessage: 'Loading lessons from the registry...',
       authMessage: '',
       quizStatusMessage:
           'Take a randomized pre-test before you begin the lessons.',
@@ -203,8 +228,12 @@ class RLWorkbenchState {
       totalReward: 0.0,
       averageReward: 0.0,
       bestEpisodeReward: 0.0,
-      statusMessage: 'Ready to run ${selectedLesson.title}.',
+      statusMessage: 'Waiting for lesson registry.',
       videoPath: '',
+      replayRenderJobId: '',
+      replayRenderStatus: 'idle',
+      replayRenderError: null,
+      replayEpisodeIndices: const [],
       testResults: const [],
       stepTrace: const [],
       traceEpisodes: const [],
@@ -286,6 +315,10 @@ class RLWorkbenchState {
     double? bestEpisodeReward,
     String? statusMessage,
     String? videoPath,
+    String? replayRenderJobId,
+    String? replayRenderStatus,
+    Object? replayRenderError = _sentinel,
+    List<int>? replayEpisodeIndices,
     List<ExecutionTestCaseResult>? testResults,
     List<ExecutionTraceStep>? stepTrace,
     List<ExecutionTraceEpisode>? traceEpisodes,
@@ -364,6 +397,13 @@ class RLWorkbenchState {
       bestEpisodeReward: bestEpisodeReward ?? this.bestEpisodeReward,
       statusMessage: statusMessage ?? this.statusMessage,
       videoPath: videoPath ?? this.videoPath,
+      replayRenderJobId: replayRenderJobId ?? this.replayRenderJobId,
+      replayRenderStatus: replayRenderStatus ?? this.replayRenderStatus,
+      replayRenderError: identical(replayRenderError, _sentinel)
+          ? this.replayRenderError
+          : replayRenderError as String?,
+      replayEpisodeIndices:
+          replayEpisodeIndices ?? this.replayEpisodeIndices,
       testResults: testResults ?? this.testResults,
       stepTrace: stepTrace ?? this.stepTrace,
       traceEpisodes: traceEpisodes ?? this.traceEpisodes,
@@ -454,26 +494,6 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   BackendApi get api => _api;
 
   Future<void> loadBackendLessonCatalog() async {
-    final authoredSections = await _loadAuthoredLessonSections();
-    if (authoredSections.isNotEmpty) {
-      final sectionsWithAuthored =
-          _mergeNonCoreLessons(state.sections, authoredSections);
-      final selectedLesson =
-          _findLessonById(sectionsWithAuthored, state.selectedLesson.id) ??
-              sectionsWithAuthored.first.lessons.first;
-      emit(
-        state.copyWith(
-          sections: sectionsWithAuthored,
-          selectedLesson: selectedLesson,
-          code: state.code == state.selectedLesson.starterCode
-              ? selectedLesson.starterCode
-              : state.code,
-          adminSelectedLessonId: selectedLesson.id,
-          adminMessage: 'Loaded locally saved authored lessons.',
-        ),
-      );
-    }
-
     try {
       final backendSections = await _api.fetchLessonSections();
       if (backendSections.isEmpty ||
@@ -481,8 +501,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         return;
       }
 
-      final mergedSections =
-          _mergeNonCoreLessons(backendSections, state.sections);
+      final mergedSections = backendSections;
 
       final previousLesson = state.selectedLesson;
       final selectedLesson =
@@ -528,20 +547,18 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     }
   }
 
-  Future<void> loadCloudAuthoredLessons() async {
+  Future<void> loadCloudLessonRecords() async {
     if (!state.canAccessAuthoring) {
       return;
     }
     try {
-      final lessons = await _api.fetchAuthoredLessons();
+      final lessons = await _api.fetchAdminLessons();
       if (lessons.isEmpty) {
         return;
       }
       var updatedSections = state.sections;
       for (final lesson in lessons) {
-        if (!_isCoreLessonId(lesson.id)) {
-          updatedSections = _upsertLessonInSections(updatedSections, lesson);
-        }
+        updatedSections = _upsertLessonInSections(updatedSections, lesson);
       }
       final selectedLesson =
           _findLessonById(updatedSections, state.selectedLesson.id) ??
@@ -553,15 +570,14 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
           code: state.code == state.selectedLesson.starterCode
               ? selectedLesson.starterCode
               : state.code,
-          adminMessage: 'Loaded cloud-authored lessons.',
+          adminMessage: 'Loaded cloud lesson records.',
         ),
       );
-      unawaited(_persistAuthoredLessonSections(updatedSections));
     } on BackendApiException catch (error) {
       emit(state.copyWith(adminMessage: error.message));
     } catch (_) {
       emit(
-        state.copyWith(adminMessage: 'Could not load cloud-authored lessons.'),
+        state.copyWith(adminMessage: 'Could not load cloud lesson records.'),
       );
     }
   }
@@ -1078,6 +1094,10 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         averageReward: 0.0,
         bestEpisodeReward: 0.0,
         videoPath: '',
+        replayRenderJobId: '',
+        replayRenderStatus: 'idle',
+        replayRenderError: null,
+        replayEpisodeIndices: const [],
         testResults: const [],
         stepTrace: const [],
         traceEpisodes: const [],
@@ -1686,6 +1706,10 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         averageReward: 0.0,
         bestEpisodeReward: 0.0,
         videoPath: '',
+        replayRenderJobId: '',
+        replayRenderStatus: 'idle',
+        replayRenderError: null,
+        replayEpisodeIndices: const [],
         testResults: const [],
         stepTrace: const [],
         traceEpisodes: const [],
@@ -1735,6 +1759,10 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
           averageReward: 0.0,
           bestEpisodeReward: 0.0,
           videoPath: '',
+          replayRenderJobId: '',
+          replayRenderStatus: 'failed',
+          replayRenderError: null,
+          replayEpisodeIndices: const [],
           testResults: error.testResults,
           stepTrace: const [],
           traceEpisodes: const [],
@@ -1767,6 +1795,10 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
           averageReward: 0.0,
           bestEpisodeReward: 0.0,
           videoPath: '',
+          replayRenderJobId: '',
+          replayRenderStatus: 'failed',
+          replayRenderError: null,
+          replayEpisodeIndices: const [],
           testResults: const [],
           stepTrace: const [],
           traceEpisodes: const [],
@@ -1815,6 +1847,10 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         averageReward: 0.0,
         bestEpisodeReward: 0.0,
         videoPath: '',
+        replayRenderJobId: '',
+        replayRenderStatus: 'idle',
+        replayRenderError: null,
+        replayEpisodeIndices: const [],
         testResults: const [],
         stepTrace: const [],
         traceEpisodes: const [],
@@ -1897,11 +1933,10 @@ def lesson_function(*args, **kwargs):
       state.copyWith(
         sections: sections,
         adminSelectedLessonId: draftId,
-        adminMessage: 'Draft lesson created and saved locally.',
+        adminMessage: 'Draft lesson created.',
       ),
     );
-    unawaited(_persistAuthoredLessonSections(sections));
-    unawaited(_syncAuthoredLessonToCloud(draftLesson));
+    unawaited(_syncLessonToRegistry(draftLesson));
   }
 
   void saveAdminLesson({
@@ -1991,11 +2026,10 @@ def lesson_function(*args, **kwargs):
             ? updatedLesson.starterCode
             : state.code,
         adminSelectedLessonId: updatedLesson.id,
-        adminMessage: 'Saved "${updatedLesson.title}" locally.',
+        adminMessage: 'Saved "${updatedLesson.title}".',
       ),
     );
-    unawaited(_persistAuthoredLessonSections(updatedSections));
-    unawaited(_syncAuthoredLessonToCloud(updatedLesson));
+    unawaited(_syncLessonToRegistry(updatedLesson));
   }
 
   void deleteAdminLesson(String lessonId) {
@@ -2004,16 +2038,6 @@ def lesson_function(*args, **kwargs):
           adminMessage: 'Authoring requires instructor or admin access.'));
       return;
     }
-    if (_isCoreLessonId(lessonId)) {
-      emit(
-        state.copyWith(
-          adminMessage:
-              'Core lessons are locked and cannot be deleted from the studio.',
-        ),
-      );
-      return;
-    }
-
     var lessonFound = false;
     final updatedSections = <LessonSection>[];
 
@@ -2040,9 +2064,9 @@ def lesson_function(*args, **kwargs):
       return;
     }
 
-    final fallbackLesson = updatedSections.first.lessons.first;
+    final replacementLesson = updatedSections.first.lessons.first;
     final selectedLesson = state.selectedLesson.id == lessonId
-        ? fallbackLesson
+        ? replacementLesson
         : state.selectedLesson;
 
     emit(
@@ -2050,16 +2074,15 @@ def lesson_function(*args, **kwargs):
         sections: updatedSections,
         selectedLesson: selectedLesson,
         code: state.selectedLesson.id == lessonId
-            ? fallbackLesson.starterCode
+            ? replacementLesson.starterCode
             : state.code,
         adminSelectedLessonId: state.adminSelectedLessonId == lessonId
-            ? fallbackLesson.id
+            ? replacementLesson.id
             : state.adminSelectedLessonId,
-        adminMessage: 'Deleted lesson $lessonId from local authoring.',
+        adminMessage: 'Deleted lesson $lessonId.',
       ),
     );
-    unawaited(_persistAuthoredLessonSections(updatedSections));
-    unawaited(_deleteAuthoredLessonFromCloud(lessonId));
+    unawaited(_deleteAdminLessonRecordFromCloud(lessonId));
   }
 
   Future<void> uploadLectureNotes({
@@ -2419,7 +2442,7 @@ def lesson_function(*args, **kwargs):
       );
     }
     if (state.canAccessAuthoring) {
-      unawaited(loadCloudAuthoredLessons());
+      unawaited(loadCloudLessonRecords());
       unawaited(loadStaffProgressDirectory());
     }
     unawaited(refreshStudyBuddySummary(quiet: true));
@@ -2445,6 +2468,10 @@ def lesson_function(*args, **kwargs):
       averageReward: 0.0,
       bestEpisodeReward: 0.0,
       videoPath: '',
+      replayRenderJobId: '',
+      replayRenderStatus: 'idle',
+      replayRenderError: null,
+      replayEpisodeIndices: const [],
       testResults: const [],
       stepTrace: const [],
       traceEpisodes: const [],
@@ -2527,6 +2554,10 @@ def lesson_function(*args, **kwargs):
               averageReward: result.metrics.averageReward,
               bestEpisodeReward: result.metrics.bestEpisodeReward,
               videoPath: result.videoPath,
+              replayRenderJobId: result.replayRenderJobId,
+              replayRenderStatus: result.replayRenderStatus,
+              replayRenderError: null,
+              replayEpisodeIndices: result.replayEpisodeIndices,
               testResults: result.testResults,
               stepTrace: result.stepTrace,
               traceEpisodes: result.traceEpisodes,
@@ -2536,11 +2567,16 @@ def lesson_function(*args, **kwargs):
               studentFeedback: null,
               workspaceFeedbackDismissed: false,
               isSubmissionTakingLong: false,
-              statusMessage: result.visualizationReady
-                  ? '${result.message} Replay ready.'
-                  : '${result.message} No replay video generated.',
+              statusMessage: result.replayRenderJobId.isNotEmpty
+                  ? '${result.message} Replay video rendering.'
+                  : (result.visualizationReady
+                      ? '${result.message} Replay ready.'
+                      : '${result.message} Interactive replay ready.'),
             ),
           );
+          if (result.replayRenderJobId.isNotEmpty) {
+            unawaited(_pollReplayRender(result.replayRenderJobId));
+          }
           _recordTelemetry(
             'submission_result',
             {
@@ -2564,6 +2600,10 @@ def lesson_function(*args, **kwargs):
               averageReward: 0.0,
               bestEpisodeReward: 0.0,
               videoPath: '',
+              replayRenderJobId: '',
+              replayRenderStatus: 'failed',
+              replayRenderError: null,
+              replayEpisodeIndices: const [],
               testResults: snapshot.testResults,
               stepTrace: const [],
               traceEpisodes: const [],
@@ -2590,6 +2630,63 @@ def lesson_function(*args, **kwargs):
       }
 
       await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+  }
+
+  Future<void> _pollReplayRender(String jobId) async {
+    for (var attempt = 0; attempt < 240; attempt++) {
+      if (state.replayRenderJobId != jobId) {
+        return;
+      }
+      try {
+        final render = await _api.getReplayRenderStatus(jobId);
+        if (state.replayRenderJobId != jobId) {
+          return;
+        }
+        if (render.isComplete) {
+          emit(
+            state.copyWith(
+              videoPath: render.videoPath,
+              replayRenderStatus: render.status,
+              replayRenderError: null,
+              statusMessage: 'Execution pipeline completed. Replay video ready.',
+            ),
+          );
+          return;
+        }
+        if (render.isFailed) {
+          emit(
+            state.copyWith(
+              replayRenderStatus: render.status,
+              replayRenderError: render.error ?? 'Replay video render failed.',
+              statusMessage:
+                  'Execution pipeline completed. Interactive replay ready.',
+            ),
+          );
+          return;
+        }
+        emit(state.copyWith(replayRenderStatus: render.status));
+      } catch (error) {
+        if (state.replayRenderJobId != jobId) {
+          return;
+        }
+        emit(
+          state.copyWith(
+            replayRenderStatus: 'unavailable',
+            replayRenderError: error.toString(),
+          ),
+        );
+        return;
+      }
+      await Future<void>.delayed(const Duration(seconds: 1));
+    }
+    if (state.replayRenderJobId == jobId) {
+      emit(
+        state.copyWith(
+          replayRenderStatus: 'timeout',
+          replayRenderError: 'Replay video render is still running.',
+        ),
+      );
     }
   }
 
@@ -2653,69 +2750,22 @@ def lesson_function(*args, **kwargs):
     return null;
   }
 
-  bool _isCoreLessonId(String lessonId) {
-    for (final section in fallbackLessonSections) {
-      for (final lesson in section.lessons) {
-        if (lesson.id == lessonId) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  List<LessonSection> _mergeNonCoreLessons(
-    List<LessonSection> baseSections,
-    List<LessonSection> authoredSections,
-  ) {
-    var mergedSections = baseSections;
-    for (final section in authoredSections) {
-      for (final lesson in section.lessons) {
-        if (!_isCoreLessonId(lesson.id)) {
-          mergedSections = _upsertLessonInSections(mergedSections, lesson);
-        }
-      }
-    }
-    return mergedSections;
-  }
-
-  Future<List<LessonSection>> _loadAuthoredLessonSections() async {
-    try {
-      final preferences = await SharedPreferences.getInstance();
-      final rawValue = preferences.getString(_authoredLessonsPrefsKey);
-      if (rawValue == null || rawValue.isEmpty) {
-        return const [];
-      }
-      final decoded = jsonDecode(rawValue);
-      if (decoded is! List) {
-        return const [];
-      }
-      return decoded
-          .whereType<Map<String, dynamic>>()
-          .map(LessonSection.fromJson)
-          .toList(growable: false);
-    } catch (_) {
-      return const [];
-    }
-  }
-
-  Future<void> _syncAuthoredLessonToCloud(LessonDefinition lesson) async {
-    if (!state.canAccessAuthoring || _isCoreLessonId(lesson.id)) {
+  Future<void> _syncLessonToRegistry(LessonDefinition lesson) async {
+    if (!state.canAccessAuthoring) {
       return;
     }
     try {
-      final savedLesson = await _api.saveAuthoredLesson(lesson: lesson);
+      final savedLesson = await _api.saveAdminLessonRecord(lesson: lesson);
       final updatedSections =
           _upsertLessonInSections(state.sections, savedLesson);
       if (!isClosed) {
         emit(
           state.copyWith(
             sections: updatedSections,
-            adminMessage: 'Saved "${savedLesson.title}" to cloud authoring.',
+            adminMessage: 'Saved "${savedLesson.title}" to the lesson registry.',
           ),
         );
       }
-      unawaited(_persistAuthoredLessonSections(updatedSections));
     } on BackendApiException catch (error) {
       if (!isClosed) {
         emit(state.copyWith(adminMessage: error.message));
@@ -2724,19 +2774,19 @@ def lesson_function(*args, **kwargs):
       if (!isClosed) {
         emit(
           state.copyWith(
-            adminMessage: 'Saved locally, but cloud authoring sync failed.',
+            adminMessage: 'Registry sync failed.',
           ),
         );
       }
     }
   }
 
-  Future<void> _deleteAuthoredLessonFromCloud(String lessonId) async {
-    if (!state.canAccessAuthoring || _isCoreLessonId(lessonId)) {
+  Future<void> _deleteAdminLessonRecordFromCloud(String lessonId) async {
+    if (!state.canAccessAuthoring) {
       return;
     }
     try {
-      await _api.deleteAuthoredLesson(lessonId);
+      await _api.deleteAdminLessonRecord(lessonId);
     } on BackendApiException catch (error) {
       if (!isClosed && error.message.contains('not found') == false) {
         emit(state.copyWith(adminMessage: error.message));
@@ -2745,44 +2795,9 @@ def lesson_function(*args, **kwargs):
       if (!isClosed) {
         emit(
           state.copyWith(
-            adminMessage: 'Deleted locally, but cloud authoring sync failed.',
+            adminMessage: 'Registry delete failed.',
           ),
         );
-      }
-    }
-  }
-
-  Future<void> _persistAuthoredLessonSections(
-    List<LessonSection> sections,
-  ) async {
-    final authoredSections = <LessonSection>[];
-    for (final section in sections) {
-      final authoredLessons = section.lessons
-          .where((lesson) => !_isCoreLessonId(lesson.id))
-          .toList(growable: false);
-      if (authoredLessons.isNotEmpty) {
-        authoredSections.add(
-          LessonSection(title: section.title, lessons: authoredLessons),
-        );
-      }
-    }
-
-    try {
-      final preferences = await SharedPreferences.getInstance();
-      if (authoredSections.isEmpty) {
-        await preferences.remove(_authoredLessonsPrefsKey);
-        return;
-      }
-      await preferences.setString(
-        _authoredLessonsPrefsKey,
-        jsonEncode(
-            authoredSections.map((section) => section.toJson()).toList()),
-      );
-    } catch (_) {
-      if (!isClosed) {
-        emit(state.copyWith(
-          adminMessage: 'Could not save authored lessons locally.',
-        ));
       }
     }
   }

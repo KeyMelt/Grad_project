@@ -5,9 +5,8 @@ All MP4s live under `settings.SHARED_MEDIA_DIR` in two subdirectories:
     {SHARED_MEDIA_DIR}/concept_videos/{lesson_id}_concept.mp4
     {SHARED_MEDIA_DIR}/traces/{job_id}.mp4
 
-The naming convention preserves the legacy `backend/concept_videos/render.py`
-output filename (`{lesson_id}_concept.mp4`) so existing backend code that reads
-from the shared directory keeps working unchanged.
+The filenames are deterministic so gateway routes can redirect to the matching
+Spaces/CDN object key.
 """
 from __future__ import annotations
 
@@ -58,7 +57,7 @@ def publish_media_file(path: Path) -> str | None:
 
 
 def public_url_for_media_path(path: Path) -> str | None:
-    """Return the CDN URL for a local media path when Spaces is configured."""
+    """Return the Spaces/CDN URL for a rendered media file."""
     try:
         return spaces.public_url(media_object_key(path))
     except ValueError:
@@ -84,4 +83,3 @@ def resolve_safe_video_path(filename: str) -> Path | None:
         if candidate.is_file():
             return candidate
     return None
-

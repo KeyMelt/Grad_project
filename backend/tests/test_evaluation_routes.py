@@ -7,7 +7,6 @@ from backend.api_gateway.base import ServiceContainer, create_app
 from backend.auth.roles import AccountStatus, PlatformRole, Principal
 from backend.persistence import Database
 from backend.services.alei_export_service import ALEIExportService
-from backend.services.authored_lesson_service import AuthoredLessonService
 from backend.services.evaluation_session_service import EvaluationSessionService
 from backend.services.lesson_registry_service import LessonRegistryService
 from backend.services.prediction_probe_service import PredictionProbeService
@@ -63,7 +62,6 @@ def client(tmp_path):
         prediction_probe=PredictionProbeService(database=db),
         study_session_survey=StudySessionSurveyService(database=db),
         alei_export=ALEIExportService(database=db),
-        authored_lessons=AuthoredLessonService(database=db),
         lesson_registry=registry,
     )
     app = create_app(services=svc)
@@ -224,12 +222,12 @@ def test_export_alei_returns_xlsx_for_admin(client):
     assert response.content[:2] == b"PK"
 
 
-def test_admin_can_persist_and_delete_authored_lesson(client):
+def test_admin_can_persist_and_delete_lesson_record(client):
     lesson = {
         "id": "draft_cloud_lesson",
         "title": "Cloud Draft",
         "category": "Studio Drafts",
-        "description": "A deployable authored lesson.",
+        "description": "A deployable lesson.",
         "starter_code": "def lesson_function():\n    return None\n",
         "backend_enabled": False,
         "concept_video": {
@@ -272,3 +270,34 @@ def test_admin_can_persist_and_delete_authored_lesson(client):
     list_after = client.get("/admin/lessons", headers=_admin_headers())
     lesson_ids_after = [l["id"] for l in list_after.json()["lessons"]]
     assert "draft_cloud_lesson" not in lesson_ids_after
+
+
+def test_admin_lecture_notes_are_stored_on_lesson_record(client):
+    upload_response = client.put(
+        "/admin/lessons/dp_policy_eval/lecture-notes",
+        files={"file": ("notes.md", b"# Manim test notes\n", "text/markdown")},
+        headers=_admin_headers(),
+    )
+    assert upload_response.status_code == 200
+
+    notes_response = client.get(
+        "/admin/lessons/dp_policy_eval/lecture-notes",
+        headers=_admin_headers(),
+    )
+    assert notes_response.status_code == 200
+    assert notes_response.text == "# Manim test notes\n"
+
+    list_response = client.get("/admin/lessons", headers=_admin_headers())
+    assert list_response.status_code == 200
+    first_lesson = next(
+        lesson
+        for lesson in list_response.json()["lessons"]
+        if lesson["id"] == "dp_policy_eval"
+    )
+    assert first_lesson["concept_video"]["lecture_notes"] == "# Manim test notes\n"
+
+    delete_response = client.delete(
+        "/admin/lessons/dp_policy_eval/lecture-notes",
+        headers=_admin_headers(),
+    )
+    assert delete_response.status_code == 204

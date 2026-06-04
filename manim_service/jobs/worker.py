@@ -185,7 +185,8 @@ def _maybe_mux_narration(*, lesson_id: str, silent_mp4: Path) -> Path | None:
 def _invoke_manim(scene_file: Path, scene_class: str) -> Path:
     if not scene_file.is_file():
         raise RenderError(f"Scene file not found: {scene_file}")
-    if not Path(settings.MANIM_PYTHON).exists():
+    manim_python = settings.resolve_executable(settings.MANIM_PYTHON)
+    if manim_python is None:
         raise RenderError(f"Manim python interpreter not found: {settings.MANIM_PYTHON}")
 
     quality_flag = f"-q{settings.RENDER_QUALITY}"
@@ -200,7 +201,7 @@ def _invoke_manim(scene_file: Path, scene_class: str) -> Path:
     media_dir.mkdir(parents=True, exist_ok=True)
 
     cmd = [
-        settings.MANIM_PYTHON,
+        manim_python,
         "-m",
         "manim",
         quality_flag,

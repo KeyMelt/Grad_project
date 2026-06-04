@@ -13,6 +13,11 @@ RUN apt-get update && \
       libcairo2-dev \
       libpango1.0-dev \
       ffmpeg \
+      texlive-latex-base \
+      texlive-latex-recommended \
+      texlive-latex-extra \
+      texlive-fonts-recommended \
+      dvisvgm \
       curl \
       libsdl2-2.0-0 \
       libsdl2-ttf-2.0-0 \
@@ -35,7 +40,12 @@ RUN set -eux; \
 WORKDIR /app
 
 COPY backend/requirements.txt /tmp/requirements.txt
-RUN pip install --upgrade pip && pip install -r /tmp/requirements.txt
+RUN pip install --upgrade pip && \
+    pip install -r /tmp/requirements.txt && \
+    python -m manim --version && \
+    latex --version >/dev/null && \
+    dvisvgm --version >/dev/null && \
+    ffmpeg -version >/dev/null
 
 COPY backend /app/backend
 COPY manim_service /app/manim_service

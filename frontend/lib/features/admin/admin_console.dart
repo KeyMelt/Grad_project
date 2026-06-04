@@ -625,7 +625,7 @@ class _AdminConsoleState extends State<AdminConsole> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Edit lesson text, video metadata, and starter code. Drafts are saved locally.',
+              'Edit lesson text, video metadata, and starter code. Drafts sync through the lesson registry.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: AppTheme.textPrimary,
                     height: 1.45,
@@ -805,7 +805,7 @@ class _AdminConsoleState extends State<AdminConsole> {
                     const SizedBox(height: 4),
                     Text(
                       'Upload a Markdown (.md) file to accompany this lesson\'s concept video. '
-                      'Admin-uploaded notes override built-in generated notes.',
+                      'Notes are stored on the lesson record and publish with the rest of the lesson.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: AppTheme.textSecondary,
                             height: 1.4,

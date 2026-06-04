@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/backend_api.dart';
+import '../../core/theme.dart';
 
 class TraceReplayPanel extends StatefulWidget {
   final String runStatusLabel;
@@ -17,6 +18,9 @@ class TraceReplayPanel extends StatefulWidget {
   final int episodesCompleted;
   final int stepsRecorded;
   final String videoPath;
+  final String replayRenderStatus;
+  final String? replayRenderError;
+  final List<int> replayEpisodeIndices;
   final List<ExecutionTestCaseResult> testResults;
   final List<ExecutionTraceStep> stepTrace;
   final List<ExecutionTraceEpisode> traceEpisodes;
@@ -32,6 +36,9 @@ class TraceReplayPanel extends StatefulWidget {
     required this.episodesCompleted,
     required this.stepsRecorded,
     required this.videoPath,
+    this.replayRenderStatus = 'idle',
+    this.replayRenderError,
+    this.replayEpisodeIndices = const [],
     required this.testResults,
     required this.stepTrace,
     this.traceEpisodes = const [],
@@ -294,21 +301,20 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       onKeyEvent: _handleDebuggerKey,
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF020617),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFF1E293B)),
+          color: AppTheme.navyDeep,
+          borderRadius: BorderRadius.circular(14),
+          border:
+              Border.all(color: AppTheme.primaryBlue.withValues(alpha: 0.22)),
         ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
           child: LayoutBuilder(
-            builder: (context, constraints) {
-              return _buildDebuggerBody(
-                context,
-                hasTrace: hasTrace,
-                step: step,
-                isWide: constraints.maxWidth >= 980,
-              );
-            },
+            builder: (context, constraints) => _buildDebuggerBody(
+              context,
+              hasTrace: hasTrace,
+              step: step,
+              isWide: constraints.maxWidth >= 980,
+            ),
           ),
         ),
       ),
@@ -343,42 +349,356 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     required ExecutionTraceStep? step,
     required bool isWide,
   }) {
+    if (!hasTrace || step == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildCompactControlBar(context, hasTrace: false),
+          const SizedBox(height: 12),
+          Expanded(child: _buildWaitingPanel(context)),
+        ],
+      );
+    }
+    if (isWide) {
+      return _buildDesktopReplayDashboard(context, step);
+    }
+    return _buildMobileReplayDashboard(context, step);
+  }
+
+  Widget _buildDesktopReplayDashboard(
+    BuildContext context,
+    ExecutionTraceStep step,
+  ) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildHeader(context, hasTrace),
+        _buildCompactControlBar(context, hasTrace: true),
         const SizedBox(height: 12),
-        _buildReadGuide(context, hasTrace),
-        const SizedBox(height: 18),
-        if (hasTrace && step != null) ...[
-          _buildStepToolbar(context),
-          const SizedBox(height: 18),
-          if (isWide)
-            _buildDesktopDebugger(context, step)
-          else
-            _buildMobileDebuggerTabs(context, step),
-          const SizedBox(height: 18),
-          _buildBottomInspector(context, step, isWide: isWide),
-        ] else
-          _buildWaitingPanel(context),
-        const SizedBox(height: 18),
-        _buildMetricsPanel(context),
-        if (widget.videoPath.isNotEmpty) ...[
-          const SizedBox(height: 18),
-          _buildManimReplayPanel(context),
-        ],
-        if (widget.runStatusLabel == 'Failed') ...[
-          const SizedBox(height: 18),
-          _buildErrorPanel(context),
-        ],
-        if (widget.testResults.isNotEmpty) ...[
-          const SizedBox(height: 18),
-          _buildSampleTests(context),
-        ],
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                flex: 6,
+                child: Column(
+                  children: [
+                    Expanded(
+                        child:
+                            _scrollPane(_buildEnvironmentPanel(context, step))),
+                    const SizedBox(height: 10),
+                    SizedBox(height: 190, child: _buildTraceOutline(context)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(flex: 6, child: _buildDetailTabs(context, step)),
+              const SizedBox(width: 12),
+              SizedBox(width: 310, child: _buildSecondaryDrawer(context, step)),
+            ],
+          ),
+        ),
       ],
     );
   }
 
+  Widget _buildMobileReplayDashboard(
+    BuildContext context,
+    ExecutionTraceStep step,
+  ) {
+    return Column(
+      children: [
+        _buildCompactControlBar(context, hasTrace: true),
+        const SizedBox(height: 10),
+        Expanded(
+          child: DefaultTabController(
+            length: 5,
+            child: Column(
+              children: [
+                _buildReplayTabBar(
+                  const ['Env', 'Code', 'Math', 'Table', 'Video'],
+                ),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: TabBarView(
+                    children: [
+                      _scrollPane(_buildEnvironmentPanel(context, step)),
+                      _scrollPane(_buildCodePanel(context, step)),
+                      _scrollPane(_buildMathPanel(context, step)),
+                      _scrollPane(_buildTableInspector(context, step)),
+                      _scrollPane(_buildSecondaryDrawer(context, step)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactControlBar(
+    BuildContext context, {
+    required bool hasTrace,
+  }) {
+    final steps = _currentEpisodeSteps;
+    final step = hasTrace && steps.isNotEmpty ? steps[_currentStepIndex] : null;
+    final renderLabel = _renderStatusLabel();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.navy,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.primaryBlue.withValues(alpha: 0.25)),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 760;
+          final controls = Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton.outlined(
+                tooltip: 'Previous step',
+                onPressed: hasTrace && _currentStepIndex > 0
+                    ? () => _selectTraceStep(_currentStepIndex - 1)
+                    : null,
+                icon: const Icon(Icons.chevron_left_rounded),
+              ),
+              const SizedBox(width: 6),
+              IconButton.filled(
+                tooltip: _isTracePlaying ? 'Pause trace' : 'Play trace',
+                onPressed:
+                    hasTrace && steps.length > 1 ? _toggleTracePlayback : null,
+                icon: Icon(
+                  _isTracePlaying
+                      ? Icons.pause_rounded
+                      : Icons.play_arrow_rounded,
+                ),
+              ),
+              const SizedBox(width: 6),
+              IconButton.outlined(
+                tooltip: 'Next step',
+                onPressed: hasTrace && _currentStepIndex < steps.length - 1
+                    ? () => _selectTraceStep(_currentStepIndex + 1)
+                    : null,
+                icon: const Icon(Icons.chevron_right_rounded),
+              ),
+            ],
+          );
+          final chips = Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildTag(widget.runStatusLabel, AppTheme.primaryBlue),
+              if (hasTrace)
+                _buildTag('Step ${_currentStepIndex + 1} / ${steps.length}',
+                    AppTheme.light),
+              if (step != null)
+                _buildTag(
+                    'r ${step.reward.toStringAsFixed(2)}', AppTheme.amber),
+              _buildTag(renderLabel, _renderStatusColor()),
+            ],
+          );
+          final episodeSelector = _hasMultipleEpisodes
+              ? ConstrainedBox(
+                  constraints:
+                      BoxConstraints(maxWidth: compact ? double.infinity : 210),
+                  child: _buildEpisodeSelector(context, fillWidth: compact),
+                )
+              : _buildTag(
+                  'Episodes ${widget.episodesCompleted}', AppTheme.primaryBlue);
+
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Generated Step Replay',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppTheme.light,
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Row(children: [Expanded(child: episodeSelector), controls]),
+                const SizedBox(height: 8),
+                chips,
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Text(
+                'Generated Step Replay',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppTheme.light,
+                      fontWeight: FontWeight.w900,
+                    ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(width: 220, child: episodeSelector),
+              const SizedBox(width: 10),
+              controls,
+              const SizedBox(width: 10),
+              Expanded(child: chips),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildDetailTabs(BuildContext context, ExecutionTraceStep step) {
+    return DefaultTabController(
+      length: 4,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: AppTheme.navy,
+          borderRadius: BorderRadius.circular(10),
+          border:
+              Border.all(color: AppTheme.primaryBlue.withValues(alpha: 0.18)),
+        ),
+        child: Column(
+          children: [
+            _buildReplayTabBar(const ['Code', 'Math', 'Table', 'Why']),
+            const SizedBox(height: 10),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _scrollPane(_buildCodePanel(context, step)),
+                  _scrollPane(_buildMathPanel(context, step)),
+                  _scrollPane(_buildTableInspector(context, step)),
+                  _scrollPane(_buildCurrentStepSummary(context, step)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReplayTabBar(List<String> labels) {
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: AppTheme.navyDeep,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.primaryBlue.withValues(alpha: 0.18)),
+      ),
+      child: TabBar(
+        indicator: BoxDecoration(
+          color: AppTheme.primaryBlue.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        indicatorSize: TabBarIndicatorSize.tab,
+        dividerColor: Colors.transparent,
+        labelColor: AppTheme.primaryBlue,
+        unselectedLabelColor: AppTheme.light.withValues(alpha: 0.72),
+        labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+        tabs: labels.map((label) => Tab(text: label)).toList(growable: false),
+      ),
+    );
+  }
+
+  Widget _buildSecondaryDrawer(BuildContext context, ExecutionTraceStep step) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppTheme.navy,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.primaryBlue.withValues(alpha: 0.18)),
+      ),
+      child: ListView(
+        children: [
+          _buildRenderStatusPanel(context),
+          if (widget.videoPath.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _buildManimReplayPanel(context),
+          ],
+          const SizedBox(height: 10),
+          _buildMetricsPanel(context),
+          const SizedBox(height: 10),
+          _buildUpdatePanel(context, step),
+          if (widget.runStatusLabel == 'Failed') ...[
+            const SizedBox(height: 10),
+            _buildErrorPanel(context),
+          ],
+          if (widget.testResults.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _buildSampleTests(context),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRenderStatusPanel(BuildContext context) {
+    return _panelShell(
+      title: 'Replay Video',
+      child: Text(
+        widget.videoPath.isNotEmpty
+            ? 'Generated video is ready.'
+            : widget.replayRenderError ?? _renderStatusMessage(),
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppTheme.light,
+              height: 1.35,
+            ),
+      ),
+    );
+  }
+
+  Widget _scrollPane(Widget child) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: SingleChildScrollView(
+        child: child,
+      ),
+    );
+  }
+
+  String _renderStatusLabel() {
+    if (widget.videoPath.isNotEmpty) {
+      return 'Video ready';
+    }
+    return switch (widget.replayRenderStatus) {
+      'queued' => 'Video queued',
+      'rendering' => 'Video rendering',
+      'failed' => 'Video failed',
+      'timeout' => 'Video pending',
+      'unavailable' => 'Trace only',
+      _ => widget.replayRenderStatus == 'idle'
+          ? 'Trace only'
+          : widget.replayRenderStatus,
+    };
+  }
+
+  String _renderStatusMessage() {
+    return switch (widget.replayRenderStatus) {
+      'queued' =>
+        'The generated MP4 is queued. Use the interactive trace meanwhile.',
+      'rendering' =>
+        'The generated MP4 is rendering. Use the interactive trace meanwhile.',
+      'failed' =>
+        'The generated MP4 failed, but the interactive trace is ready.',
+      'timeout' => 'The generated MP4 is still running in the background.',
+      _ => 'Interactive replay is available. Generated video is not ready.',
+    };
+  }
+
+  Color _renderStatusColor() {
+    if (widget.videoPath.isNotEmpty) {
+      return AppTheme.successGreen;
+    }
+    return switch (widget.replayRenderStatus) {
+      'queued' || 'rendering' || 'timeout' => AppTheme.amber,
+      'failed' => const Color(0xFFEF4444),
+      _ => AppTheme.light,
+    };
+  }
+
+  // ignore: unused_element
   Widget _buildStepToolbar(BuildContext context) {
     final steps = _currentEpisodeSteps;
     final totalSteps = steps.length;
@@ -586,6 +906,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildDesktopDebugger(
     BuildContext context,
     ExecutionTraceStep step,
@@ -615,6 +936,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildMobileDebuggerTabs(
     BuildContext context,
     ExecutionTraceStep step,
@@ -686,6 +1008,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildBottomInspector(
     BuildContext context,
     ExecutionTraceStep step, {
@@ -710,6 +1033,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildHeader(BuildContext context, bool hasTrace) {
     return Container(
       padding: const EdgeInsets.all(18),
@@ -764,7 +1088,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: accent.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: accent.withValues(alpha: 0.35)),
       ),
       child: Text(
@@ -782,7 +1106,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     return _panelShell(
       title: 'Trace Outline',
       child: SizedBox(
-        height: 132,
+        height: 100,
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           itemCount: steps.length,
@@ -1067,8 +1391,8 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(12),
+        color: AppTheme.navyDeep,
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: accent.withValues(alpha: 0.2)),
       ),
       child: Column(
@@ -1078,17 +1402,16 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
           Text(
             label,
             style: const TextStyle(
-              color: Color(0xFF94A3B8),
+              color: AppTheme.light,
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              letterSpacing: 0.3,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             value,
             style: const TextStyle(
-              color: Colors.white,
+              color: AppTheme.light,
               fontSize: 16,
               fontWeight: FontWeight.bold,
             ),
@@ -1353,41 +1676,47 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
 
   Widget _buildMissingFramePlaceholder(String framePath) {
     return Container(
-      color: const Color(0xFF1E293B),
-      padding: const EdgeInsets.all(18),
+      color: AppTheme.navy,
+      padding: const EdgeInsets.all(10),
       child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.image_not_supported_outlined,
-              color: Color(0xFF94A3B8),
-              size: 42,
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Environment frame unavailable',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Color(0xFFE2E8F0),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            if (framePath.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                framePath,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Color(0xFF94A3B8),
-                  fontSize: 11,
-                  height: 1.3,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 240),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.image_not_supported_outlined,
+                  color: AppTheme.light,
+                  size: 30,
                 ),
-              ),
-            ],
-          ],
+                const SizedBox(height: 6),
+                const Text(
+                  'Environment frame unavailable',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppTheme.light,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (framePath.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    framePath,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppTheme.light.withValues(alpha: 0.68),
+                      fontSize: 10,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -2520,35 +2849,55 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
         : (_replayVideoError ?? 'Generated replay video is not ready.');
     return Container(
       alignment: Alignment.center,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_isReplayVideoLoading)
-            const CircularProgressIndicator(color: Color(0xFF38BDF8))
-          else
-            const Icon(
-              Icons.ondemand_video_outlined,
-              color: Color(0xFF94A3B8),
-              size: 42,
+      padding: const EdgeInsets.all(10),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final cramped = constraints.maxHeight < 140;
+          return FittedBox(
+            fit: BoxFit.scaleDown,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 240),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_isReplayVideoLoading)
+                    const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        color: AppTheme.primaryBlue,
+                        strokeWidth: 2.4,
+                      ),
+                    )
+                  else
+                    Icon(
+                      Icons.ondemand_video_outlined,
+                      color: AppTheme.light.withValues(alpha: 0.72),
+                      size: 30,
+                    ),
+                  const SizedBox(height: 6),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    maxLines: cramped ? 1 : 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppTheme.light,
+                        ),
+                  ),
+                  if (!_isReplayVideoLoading && !cramped) ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _initializeReplayVideo,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ],
+              ),
             ),
-          const SizedBox(height: 12),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFFE2E8F0),
-                ),
-          ),
-          if (!_isReplayVideoLoading) ...[
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: _initializeReplayVideo,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Retry'),
-            ),
-          ],
-        ],
+          );
+        },
       ),
     );
   }
@@ -2638,6 +2987,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     return '$minutes:$seconds';
   }
 
+  // ignore: unused_element
   Widget _buildReadGuide(BuildContext context, bool hasTrace) {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -2812,9 +3162,9 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        color: AppTheme.navy,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.primaryBlue.withValues(alpha: 0.18)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2822,7 +3172,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
           Text(
             title,
             style: const TextStyle(
-              color: Colors.white,
+              color: AppTheme.light,
               fontWeight: FontWeight.w700,
               fontSize: 18,
             ),

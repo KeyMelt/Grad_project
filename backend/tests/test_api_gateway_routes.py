@@ -513,25 +513,14 @@ def test_lessons_returns_grouped_frontend_catalog():
     assert lesson["exercise"]["success_criteria"]
 
 
-def test_concept_video_serves_backend_media(tmp_path, monkeypatch):
+def test_concept_video_requires_spaces(monkeypatch):
     monkeypatch.setenv("RL_IDE_MEDIA_STORAGE_BACKEND", "local")
-    monkeypatch.setenv("RL_IDE_CONCEPT_VIDEO_DIR", str(tmp_path))
-    video_path = tmp_path / "dp_policy_eval_concept.mp4"
-    video_path.write_bytes(b"mp4-data")
+    monkeypatch.delenv("DO_SPACES_CDN_URL", raising=False)
     client = _make_client()
 
     response = client.get("/media/concept-videos/dp_policy_eval_concept.mp4")
 
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("video/mp4")
-    assert response.content == b"mp4-data"
-
-    range_response = client.get(
-        "/media/concept-videos/dp_policy_eval_concept.mp4",
-        headers={"Range": "bytes=0-2"},
-    )
-    assert range_response.status_code == 206
-    assert range_response.content == b"mp4"
+    assert response.status_code == 503
 
 
 def test_concept_video_redirects_to_cdn_when_spaces_enabled(monkeypatch):

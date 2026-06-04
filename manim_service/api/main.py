@@ -18,7 +18,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status
 
 from manim_service import settings
 from manim_service.api.routes import concept_videos, traces
@@ -51,8 +51,17 @@ def create_app() -> FastAPI:
     app.include_router(traces.router)
 
     @app.get("/health")
-    def health() -> dict[str, str]:
-        return {"status": "ok", "queue_backend": settings.QUEUE_BACKEND}
+    def health(response: Response) -> dict[str, object]:
+        runtime = settings.render_runtime_status()
+        missing = [name for name, path in runtime.items() if path is None]
+        if missing:
+            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return {
+            "status": "ok" if not missing else "degraded",
+            "queue_backend": settings.QUEUE_BACKEND,
+            "render_runtime": runtime,
+            "missing": missing,
+        }
 
     return app
 

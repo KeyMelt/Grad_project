@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import textwrap
 from dataclasses import dataclass
 
 import backend.execution_runtime as execution_runtime
@@ -97,6 +98,14 @@ class _FakeVisualizationService:
     def generate_animation(self, log_data, lesson_id):
         del log_data, lesson_id
         return ""
+
+    def enqueue_replay_render(self, log_data, lesson_id):
+        del log_data, lesson_id
+        return {
+            "replay_render_job_id": "render-job",
+            "replay_render_status": "queued",
+            "replay_episode_indices": [0],
+        }
 
 
 def test_derived_submission_timeout_scales_but_remains_capped(monkeypatch):
@@ -205,3 +214,61 @@ def test_execution_runtime_initializes_registry_for_spawned_process(monkeypatch,
         if database is not None:
             database.close()
         execution_runtime._PROCESS_REGISTRY_DATABASE = previous_database
+
+
+def test_spawned_submission_returns_trace_before_timeout(monkeypatch, tmp_path):
+    database_path = tmp_path / "spawn_policy_eval.db"
+    monkeypatch.setenv("RL_IDE_DB_URL", f"sqlite:///{database_path}")
+    monkeypatch.setenv("RL_IDE_LOGGER_DIR", str(tmp_path / "logs"))
+    monkeypatch.setenv("RL_IDE_VISUALIZATION_OUTPUT_DIR", str(tmp_path / "visualizations"))
+    monkeypatch.setenv("RL_IDE_MANIM_SERVICE_URL", "http://127.0.0.1:9")
+    lesson_registry.set_registry(None)  # type: ignore[arg-type]
+
+    submitted_code = textwrap.dedent(
+        """
+        DISCOUNT_FACTOR = 0.95
+
+        def policy_evaluation(V, policy, env, gamma=DISCOUNT_FACTOR, theta=1e-8):
+            delta = float("inf")
+            while delta > theta:
+                delta = 0.0
+                for state in range(len(V)):
+                    old_value = V[state]
+                    new_value = 0.0
+                    for action, action_prob in enumerate(policy[state]):
+                        for prob, next_state, reward, done in env.P[state][action]:
+                            future = 0.0 if done else V[next_state]
+                            new_value += action_prob * prob * (reward + gamma * future)
+
+                    V[state] = new_value
+                    delta = max(delta, abs(old_value - V[state]))
+            return V
+        """
+    )
+
+    previous_database = execution_runtime._PROCESS_REGISTRY_DATABASE
+    execution_runtime._PROCESS_REGISTRY_DATABASE = None
+    try:
+        result = execution_runtime.run_submission_with_timeout(
+            {
+                "lesson_id": "dp_policy_eval",
+                "code": submitted_code,
+                "episode_count": 1,
+            },
+            timeout_seconds=15,
+        )
+
+        assert result["status"] == "success"
+        assert result["video_path"] == ""
+        assert result["visualization_ready"] is False
+        assert result["metrics"]["episodes_completed"] == 1
+        assert result["metrics"]["steps_recorded"] == 16
+        assert result["trace_episodes"][0]["episode_index"] == 0
+        assert result["step_trace"] == result["trace_episodes"][0]["steps"]
+        assert result["replay_render_status"] in {"queued", "unavailable"}
+    finally:
+        database = execution_runtime._PROCESS_REGISTRY_DATABASE
+        if database is not None:
+            database.close()
+        execution_runtime._PROCESS_REGISTRY_DATABASE = previous_database
+        lesson_registry.set_registry(None)  # type: ignore[arg-type]

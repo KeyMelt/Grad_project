@@ -2,15 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.auth.dependencies import build_current_principal_dependency, require_roles
 from backend.auth.roles import PlatformRole, Principal
-from backend.services.lesson_catalog_service import NOTES_UPLOAD_DIR
-
-
 class LessonUpsertRequest(BaseModel):
     lesson: dict[str, Any] = Field(default_factory=dict)
 
@@ -79,7 +76,7 @@ def build_admin_router(services: Any) -> APIRouter:
         )
 
     # ------------------------------------------------------------------
-    # Lesson CRUD  (unified registry — no core/authored distinction)
+    # Lesson CRUD
     # ------------------------------------------------------------------
 
     @router.get("/admin/lessons")
@@ -115,7 +112,7 @@ def build_admin_router(services: Any) -> APIRouter:
         return None
 
     # ------------------------------------------------------------------
-    # Lecture notes upload / read / delete
+    # Lecture notes stored on the lesson payload
     # ------------------------------------------------------------------
 
     @router.get(
@@ -126,10 +123,11 @@ def build_admin_router(services: Any) -> APIRouter:
         lesson_id: str,
         principal: Principal = Depends(authoring_principal),
     ):
-        """Return the current lecture notes markdown for a lesson, or 404."""
         del principal
-        from backend.services.lesson_catalog_service import load_lecture_notes
-        content = load_lecture_notes(lesson_id)
+        payload = _registry().get_lesson_payload(lesson_id)
+        if payload is None:
+            raise HTTPException(status_code=404, detail="Lesson not found.")
+        content = str((payload.get("concept_video") or {}).get("lecture_notes") or "")
         if not content:
             raise HTTPException(status_code=404, detail="No lecture notes found for this lesson.")
         return content
@@ -140,23 +138,23 @@ def build_admin_router(services: Any) -> APIRouter:
         file: UploadFile = File(...),
         principal: Principal = Depends(authoring_principal),
     ):
-        """Upload a Markdown file as the lecture notes for a lesson.
-
-        The uploaded file is written to the admin upload directory and takes
-        priority over any built-in generated notes for the same lesson.
-        """
-        del principal
         if not file.filename or not file.filename.endswith(".md"):
             raise HTTPException(status_code=422, detail="Only .md files are accepted.")
-        NOTES_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        dest = NOTES_UPLOAD_DIR / f"{lesson_id}_lecture_notes.md"
         content_bytes = await file.read()
         if not content_bytes:
             raise HTTPException(status_code=422, detail="Uploaded file is empty.")
         try:
-            dest.write_bytes(content_bytes)
-        except OSError as exc:
-            raise HTTPException(status_code=500, detail=f"Could not save file: {exc}") from exc
+            content = content_bytes.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise HTTPException(status_code=422, detail="Lecture notes must be UTF-8 text.") from exc
+        try:
+            _registry().set_lecture_notes(
+                lesson_id=lesson_id,
+                markdown=content,
+                actor_user_id=principal.id,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Lesson not found.") from exc
         return {"lesson_id": lesson_id, "bytes_written": len(content_bytes)}
 
     @router.delete("/admin/lessons/{lesson_id}/lecture-notes", status_code=204)
@@ -164,22 +162,15 @@ def build_admin_router(services: Any) -> APIRouter:
         lesson_id: str,
         principal: Principal = Depends(authoring_principal),
     ):
-        """Remove admin-uploaded lecture notes for a lesson.
-
-        Only deletes from the upload directory — built-in generated notes
-        in manim_service/concept_videos/ are never removed via this endpoint.
-        """
-        del principal
-        path = NOTES_UPLOAD_DIR / f"{lesson_id}_lecture_notes.md"
-        if not path.exists():
+        deleted = _registry().delete_lecture_notes(
+            lesson_id=lesson_id,
+            actor_user_id=principal.id,
+        )
+        if not deleted:
             raise HTTPException(
                 status_code=404,
-                detail="No admin-uploaded lecture notes found for this lesson.",
+                detail="No lecture notes found for this lesson.",
             )
-        try:
-            path.unlink()
-        except OSError as exc:
-            raise HTTPException(status_code=500, detail=f"Could not delete file: {exc}") from exc
         return None
 
     return router

@@ -1,13 +1,42 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rl_ide/core/backend_api.dart';
-import 'package:rl_ide/core/local_lesson_catalog.dart';
 import 'package:rl_ide/core/workbench_state.dart';
+
+const LessonDefinition _testLesson = LessonDefinition(
+  id: 'dp_policy_eval',
+  title: 'Backend Policy Evaluation',
+  description: 'Evaluate a fixed policy.',
+  category: 'Dynamic Programming',
+  starterCode: 'def policy_evaluation():\n    return []\n',
+  backendEnabled: true,
+  conceptVideo: LessonConceptVideo(
+    streamPath: '/media/concept-videos/dp_policy_eval_concept.mp4',
+    durationLabel: '03:30',
+    summary: 'Bellman expectation backup walkthrough.',
+    highlights: ['Policy weighting'],
+  ),
+  exercise: LessonExerciseBrief(
+    title: 'Implement iterative policy evaluation',
+    overview: 'Complete the Bellman update.',
+    tasks: ['Fill the backup loop.'],
+    templateBlanks: [],
+    successCriteria: ['The function returns values.'],
+    codeTip: 'Tune DISCOUNT_FACTOR in code.',
+  ),
+);
+
+const List<LessonSection> _testLessonSections = [
+  LessonSection(
+    title: 'Dynamic Programming',
+    lessons: [_testLesson],
+  ),
+];
 
 class _FakeBackendApi extends BackendApi {
   _FakeBackendApi({
     this.shouldFailRun = false,
     this.shouldFailLessonFetch = false,
-    this.lessonSections = const [],
+    this.lessonSections = _testLessonSections,
     this.restoredDashboard,
   });
 
@@ -313,20 +342,10 @@ class _FakeBackendApi extends BackendApi {
 }
 
 void main() {
-  test('cubit replaces fallback catalog with backend lesson sections',
-      () async {
-    final backendLesson = fallbackLessonSections.first.lessons.first.copyWith(
-      title: 'Backend Policy Evaluation',
-      starterCode: 'def policy_evaluation():\n    return []\n',
-    );
+  test('cubit loads backend lesson sections', () async {
     final cubit = RLWorkbenchCubit(
       api: _FakeBackendApi(
-        lessonSections: [
-          LessonSection(
-            title: 'Dynamic Programming',
-            lessons: [backendLesson],
-          ),
-        ],
+        lessonSections: _testLessonSections,
       ),
     );
 
@@ -340,7 +359,7 @@ void main() {
     await cubit.close();
   });
 
-  test('cubit keeps fallback lessons when backend lesson fetch fails',
+  test('cubit keeps registry placeholder when backend lesson fetch fails',
       () async {
     final cubit = RLWorkbenchCubit(
       api: _FakeBackendApi(shouldFailLessonFetch: true),
@@ -348,7 +367,8 @@ void main() {
 
     await cubit.loadBackendLessonCatalog();
 
-    expect(cubit.state.sections.first.lessons.first.id, 'dp_policy_eval');
+    expect(cubit.state.sections, isEmpty);
+    expect(cubit.state.selectedLesson.id, '__registry_loading__');
     expect(cubit.state.homeMessage, contains('Lesson sync is unavailable'));
 
     await cubit.close();
@@ -393,6 +413,7 @@ void main() {
   test('cubit workspace run lifecycle reaches terminal status', () async {
     final cubit = RLWorkbenchCubit(api: _FakeBackendApi());
 
+    await cubit.loadBackendLessonCatalog();
     await cubit.signIn('Maya', 'Password123!');
     cubit.openLesson(cubit.state.selectedLesson);
     await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -408,6 +429,7 @@ void main() {
   test('cubit submit lifecycle handles failure state', () async {
     final cubit = RLWorkbenchCubit(api: _FakeBackendApi(shouldFailRun: true));
 
+    await cubit.loadBackendLessonCatalog();
     await cubit.signIn('Maya', 'Password123!');
     await cubit.submit();
 
@@ -427,6 +449,7 @@ void main() {
     final api = _FakeBackendApi();
     final cubit = RLWorkbenchCubit(api: api);
 
+    await cubit.loadBackendLessonCatalog();
     await cubit.signIn('Maya', 'Password123!');
     await cubit.sendStudyBuddyChat('What should I inspect next?');
 

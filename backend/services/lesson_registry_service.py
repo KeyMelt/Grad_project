@@ -1,12 +1,9 @@
 """DB-backed lesson registry.
 
-All lessons — the nine built-in RL curriculum lessons and any
-instructor-authored additions — live in the AuthoredLesson table.
-This service is the single source of truth for lesson definitions.
-
-On first startup it seeds the nine core lessons so the system works
-out-of-the-box without manual data entry.  Subsequent restarts skip
-seeding if the rows already exist.
+Every lesson in the platform lives in the lesson table and is edited through
+the same registry API. Initial curriculum data is imported only to bootstrap an
+empty database; once a row exists, edits are database state and do not require
+rebuilding or redeploying the image.
 """
 
 from __future__ import annotations
@@ -17,18 +14,16 @@ from typing import Any
 
 from sqlmodel import select
 
-from backend.models.authored_lesson import AuthoredLesson
+from backend.models.lesson_record import LessonRecord
 from backend.models.lesson import LessonDefinition, TemplateBlank
 from backend.persistence import Database
 
 # ---------------------------------------------------------------------------
-# Core lesson seed data
-# Each entry is the canonical full payload stored in payload_json.
-# Fields mirror LessonDefinition plus the presentation/exercise metadata
-# previously split across PRESENTATION_METADATA in lesson_catalog_service.
+# Initial lesson import data. These rows are normal editable lesson records once
+# inserted into the database.
 # ---------------------------------------------------------------------------
 
-_CORE_LESSONS: list[dict[str, Any]] = [
+_INITIAL_LESSON_PAYLOADS: list[dict[str, Any]] = [
     {
         "id": "dp_policy_eval",
         "title": "Policy Evaluation",
@@ -496,13 +491,7 @@ def _payload_to_lesson(payload: dict[str, Any]) -> LessonDefinition:
 
 
 class LessonRegistryService:
-    """Single source of truth for all lesson definitions.
-
-    Core lessons are seeded automatically on first startup.  Instructor-
-    authored lessons are added/updated through the admin authoring API and
-    stored in the same table.  Both are served identically to the rest of
-    the application.
-    """
+    """Single source of truth for all lesson definitions."""
 
     SECTION_ORDER = _SECTION_ORDER
 
@@ -517,7 +506,7 @@ class LessonRegistryService:
 
     def get_lesson(self, lesson_id: str) -> LessonDefinition | None:
         with self._database.session() as session:
-            row = session.get(AuthoredLesson, lesson_id)
+            row = session.get(LessonRecord, lesson_id)
             if row is None:
                 return None
             payload = self._decode(row.payload_json)
@@ -526,8 +515,8 @@ class LessonRegistryService:
     def list_lessons(self) -> list[LessonDefinition]:
         with self._database.session() as session:
             rows = session.exec(
-                select(AuthoredLesson).order_by(
-                    AuthoredLesson.category, AuthoredLesson.title
+                select(LessonRecord).order_by(
+                    LessonRecord.category, LessonRecord.title
                 )
             ).all()
             lessons = []
@@ -540,7 +529,7 @@ class LessonRegistryService:
     def get_lesson_payload(self, lesson_id: str) -> dict[str, Any] | None:
         """Return the full raw payload (including presentation metadata)."""
         with self._database.session() as session:
-            row = session.get(AuthoredLesson, lesson_id)
+            row = session.get(LessonRecord, lesson_id)
             if row is None:
                 return None
             return self._decode(row.payload_json)
@@ -548,8 +537,8 @@ class LessonRegistryService:
     def list_lesson_payloads(self) -> list[dict[str, Any]]:
         with self._database.session() as session:
             rows = session.exec(
-                select(AuthoredLesson).order_by(
-                    AuthoredLesson.category, AuthoredLesson.title
+                select(LessonRecord).order_by(
+                    LessonRecord.category, LessonRecord.title
                 )
             ).all()
             return [p for row in rows if (p := self._decode(row.payload_json))]
@@ -583,9 +572,9 @@ class LessonRegistryService:
         now = datetime.now(timezone.utc)
         with self._lock:
             with self._database.session() as session:
-                row = session.get(AuthoredLesson, lesson_id)
+                row = session.get(LessonRecord, lesson_id)
                 if row is None:
-                    row = AuthoredLesson(
+                    row = LessonRecord(
                         id=lesson_id,
                         title=normalized["title"],
                         category=normalized["category"],
@@ -607,10 +596,50 @@ class LessonRegistryService:
                 session.commit()
         return normalized
 
+    def set_lecture_notes(
+        self,
+        *,
+        lesson_id: str,
+        markdown: str,
+        actor_user_id: str,
+    ) -> dict[str, Any]:
+        payload = self.get_lesson_payload(lesson_id)
+        if payload is None:
+            raise KeyError(lesson_id)
+        concept_video = dict(payload.get("concept_video") or {})
+        concept_video["lecture_notes"] = markdown
+        payload["concept_video"] = concept_video
+        return self.upsert_lesson(
+            lesson_id=lesson_id,
+            payload=payload,
+            actor_user_id=actor_user_id,
+        )
+
+    def delete_lecture_notes(
+        self,
+        *,
+        lesson_id: str,
+        actor_user_id: str,
+    ) -> bool:
+        payload = self.get_lesson_payload(lesson_id)
+        if payload is None:
+            return False
+        concept_video = dict(payload.get("concept_video") or {})
+        if "lecture_notes" not in concept_video:
+            return False
+        concept_video.pop("lecture_notes", None)
+        payload["concept_video"] = concept_video
+        self.upsert_lesson(
+            lesson_id=lesson_id,
+            payload=payload,
+            actor_user_id=actor_user_id,
+        )
+        return True
+
     def delete_lesson(self, lesson_id: str) -> bool:
         with self._lock:
             with self._database.session() as session:
-                row = session.get(AuthoredLesson, lesson_id)
+                row = session.get(LessonRecord, lesson_id)
                 if row is None:
                     return False
                 session.delete(row)
@@ -626,9 +655,9 @@ class LessonRegistryService:
             with self._database.session() as session:
                 existing_ids = {
                     row.id
-                    for row in session.exec(select(AuthoredLesson)).all()
+                    for row in session.exec(select(LessonRecord)).all()
                 }
-            for lesson_data in _CORE_LESSONS:
+            for lesson_data in _INITIAL_LESSON_PAYLOADS:
                 if lesson_data["id"] not in existing_ids:
                     self._seed_lesson(lesson_data)
 
@@ -637,7 +666,7 @@ class LessonRegistryService:
 
         now = datetime.now(timezone.utc)
         with self._database.session() as session:
-            row = AuthoredLesson(
+            row = LessonRecord(
                 id=lesson_data["id"],
                 title=lesson_data["title"],
                 category=lesson_data["category"],

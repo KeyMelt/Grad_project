@@ -1,16 +1,18 @@
 # Visualization Module
 
 This module converts RL execution traces into learner-facing replay artifacts.
-Pre-rendered concept videos now live under `backend/concept_videos/`.
+Concept-video and replay MP4 rendering is owned by `manim_service`; the API
+gateway serves media through Spaces/CDN URLs.
 
 ## Source Files
 
-- `controller.py`: writes a Manim scene from a logged episode and invokes Manim.
+- `controller.py`: submits trace render jobs to the Manim service and resolves
+  completed media URLs.
 
 ## Generated Output
 
-The following directories are generated at runtime or by local rendering scripts:
+The following directories are generated at runtime:
 
-- `animations/`
+- `../media/traces/`
 
 They are ignored by `.gitignore` and can be regenerated.
