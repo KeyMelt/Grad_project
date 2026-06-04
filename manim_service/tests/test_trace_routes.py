@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+from manim_service import settings as manim_settings
 from manim_service.api.main import app
 from manim_service.jobs.queue import MemoryJobQueue, reset_queue_for_tests
 
@@ -94,6 +95,43 @@ class TestEnqueueTrace:
             },
         )
         assert resp.status_code == 400
+
+
+class TestHealth:
+    def test_health_reports_runtime_ready(self, client, monkeypatch):
+        monkeypatch.setattr(
+            manim_settings,
+            "render_runtime_status",
+            lambda: {
+                "manim_python": "/usr/local/bin/python",
+                "ffmpeg": "/usr/bin/ffmpeg",
+                "latex": "/usr/bin/latex",
+                "dvisvgm": "/usr/bin/dvisvgm",
+            },
+        )
+
+        resp = client.get("/health")
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ok"
+
+    def test_health_fails_when_render_runtime_missing(self, client, monkeypatch):
+        monkeypatch.setattr(
+            manim_settings,
+            "render_runtime_status",
+            lambda: {
+                "manim_python": "/usr/local/bin/python",
+                "ffmpeg": "/usr/bin/ffmpeg",
+                "latex": None,
+                "dvisvgm": "/usr/bin/dvisvgm",
+            },
+        )
+
+        resp = client.get("/health")
+
+        assert resp.status_code == 503
+        assert resp.json()["status"] == "degraded"
+        assert resp.json()["missing"] == ["latex"]
 
     def test_missing_required_step_fields_rejected(self, client):
         resp = client.post(

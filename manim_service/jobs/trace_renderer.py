@@ -325,10 +325,10 @@ def _invoke_trace_manim(data_json: Path, *, episode_label: str | None = None) ->
     if not TRACE_SCENE_FILE.is_file():
         raise RenderError(f"Trace scene file not found: {TRACE_SCENE_FILE}")
 
-    manim_python = settings.MANIM_PYTHON
-    if not Path(manim_python).exists():
+    manim_python = settings.resolve_executable(settings.MANIM_PYTHON)
+    if manim_python is None:
         raise RenderError(
-            f"Manim python interpreter not found: {manim_python}"
+            f"Manim python interpreter not found: {settings.MANIM_PYTHON}"
         )
 
     quality = settings.RENDER_QUALITY

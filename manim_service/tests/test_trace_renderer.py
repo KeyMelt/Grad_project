@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from manim_service import settings as manim_settings
+import manim_service.jobs.trace_renderer as trace_renderer
 from manim_service.jobs.queue import Job, JobKind, JobStatus, MemoryJobQueue
 from manim_service.jobs.trace_renderer import (
     RenderError,
@@ -85,6 +86,36 @@ def test_trace_scene_parses_q_table_updated_values_as_source_state():
     parsed = _parse_updated_values({"Q(3, 1)": 0.42, "Q(7,2)": -0.5, "V(9)": 1.0})
 
     assert parsed == {3: 0.42, 7: -0.5, 9: 1.0}
+
+
+def test_trace_manim_accepts_interpreter_from_path(monkeypatch, tmp_path):
+    data_json = tmp_path / "trace.json"
+    data_json.write_text("[]")
+    scene_file = tmp_path / "trace_replay_scene.py"
+    scene_file.write_text("class TraceReplayScene: pass")
+    rendered = (
+        tmp_path
+        / "manim_service"
+        / "_manim_media"
+        / "videos"
+        / "trace_replay_scene"
+        / "480p15"
+        / "TraceReplayScene.mp4"
+    )
+    rendered.parent.mkdir(parents=True)
+    rendered.write_bytes(b"mp4")
+
+    monkeypatch.setattr(trace_renderer, "ROOT", tmp_path)
+    monkeypatch.setattr(trace_renderer, "TRACE_SCENE_FILE", scene_file)
+    monkeypatch.setattr(manim_settings, "MANIM_PYTHON", "python3")
+    monkeypatch.setattr(manim_settings, "RENDER_QUALITY", "l")
+    monkeypatch.setattr(manim_settings, "resolve_executable", lambda command: f"/bin/{command}")
+
+    with patch("manim_service.jobs.trace_renderer.subprocess.run") as mock_run:
+        result = trace_renderer._invoke_trace_manim(data_json)
+
+    assert result == rendered
+    assert mock_run.call_args.args[0][0] == "/bin/python3"
 
 
 LESSON_ID = "td_q_learning"

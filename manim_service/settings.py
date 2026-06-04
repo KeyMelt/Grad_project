@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -9,6 +10,14 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Path to the manim venv python binary
 MANIM_PYTHON: str = os.environ.get("MANIM_PYTHON", sys.executable)
+
+
+def resolve_executable(command: str) -> str | None:
+    """Return an executable path for either an absolute path or a PATH command."""
+    command_path = Path(command)
+    if command_path.exists():
+        return str(command_path)
+    return shutil.which(command)
 
 # Shared media output directory (backend reads from same path)
 SHARED_MEDIA_DIR: Path = Path(
@@ -63,6 +72,16 @@ DEFAULT_NARRATOR_SPEED: float = float(os.environ.get("DEFAULT_NARRATOR_SPEED", "
 
 # ffmpeg binary used for mixing/muxing audio with rendered MP4.
 FFMPEG_BIN: str = os.environ.get("FFMPEG_BIN", "ffmpeg")
+
+
+def render_runtime_status() -> dict[str, str | None]:
+    """Report external executables needed by Manim trace rendering."""
+    return {
+        "manim_python": resolve_executable(MANIM_PYTHON),
+        "ffmpeg": resolve_executable(FFMPEG_BIN),
+        "latex": resolve_executable("latex"),
+        "dvisvgm": resolve_executable("dvisvgm"),
+    }
 
 # Scratch directory for per-render synthesised audio segments. Safe to nuke
 # between runs; cache is per-render, not per-line.
