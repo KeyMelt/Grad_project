@@ -121,6 +121,8 @@ class _MainLayoutState extends State<MainLayout> {
               episodesCompleted: state.currentEpisode,
               stepsRecorded: state.currentStep,
               videoPath: state.videoPath,
+              replayRenderStatus: state.replayRenderStatus,
+              replayRenderError: state.replayRenderError,
               testResults: state.testResults,
               stepTrace: state.stepTrace,
               traceEpisodes: state.traceEpisodes,

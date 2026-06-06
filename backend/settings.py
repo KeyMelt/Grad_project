@@ -92,6 +92,7 @@ def require_configured_secret(name: str, purpose: str) -> str:
 
 @dataclass(frozen=True)
 class GatewaySettings:
+    environment: str
     user_service_mode: str
     user_service_url: str
     user_service_timeout_seconds: float
@@ -105,6 +106,7 @@ class GatewaySettings:
     concept_video_dir: Path
     media_storage_backend: str
     media_cdn_url: str
+    allow_local_media_fallback: bool
     cors_allowed_origins: list[str]
     cors_allow_local_regex: bool
     auth_token_secret: str
@@ -127,7 +129,10 @@ class GatewaySettings:
         explicit_origins_configured = bool(cors_origins)
         if not cors_origins:
             cors_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+        environment = env_str("RL_IDE_ENV", "development").lower()
+        is_production = environment in {"prod", "production"}
         return cls(
+            environment=environment,
             user_service_mode=env_str("RL_IDE_USER_SERVICE_MODE", "local").lower(),
             user_service_url=env_str(
                 "RL_IDE_USER_SERVICE_URL",
@@ -156,6 +161,10 @@ class GatewaySettings:
             ),
             media_storage_backend=env_str("RL_IDE_MEDIA_STORAGE_BACKEND", "local").lower(),
             media_cdn_url=env_str("DO_SPACES_CDN_URL").rstrip("/"),
+            allow_local_media_fallback=env_bool(
+                "RL_IDE_ALLOW_LOCAL_MEDIA_FALLBACK",
+                not is_production,
+            ),
             cors_allowed_origins=cors_origins,
             cors_allow_local_regex=not explicit_origins_configured,
             auth_token_secret=runtime_secret("RL_IDE_AUTH_TOKEN_SECRET"),
@@ -181,6 +190,10 @@ class GatewaySettings:
                 "Platform Admin",
             ),
         )
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment in {"prod", "production"}
 
 
 @dataclass(frozen=True)

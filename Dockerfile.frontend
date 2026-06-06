@@ -2,6 +2,7 @@
 FROM ghcr.io/cirruslabs/flutter:stable AS builder
 
 WORKDIR /build
+ARG RL_IDE_ALLOW_LOCAL_LESSON_FALLBACK=false
 
 # Copy frontend source
 COPY frontend/ .
@@ -12,7 +13,8 @@ RUN flutter pub get
 # Build Flutter web (BACKEND_BASE_URL left empty so runtime origin-fallback kicks in)
 RUN flutter build web --release \
     --pwa-strategy=none \
-    --dart-define=BACKEND_BASE_URL=""
+    --dart-define=BACKEND_BASE_URL="" \
+    --dart-define=RL_IDE_ALLOW_LOCAL_LESSON_FALLBACK=${RL_IDE_ALLOW_LOCAL_LESSON_FALLBACK}
 
 # Keep a cleanup worker at the legacy Flutter service-worker URL so browsers
 # with an older registered worker can clear stale Flutter caches.

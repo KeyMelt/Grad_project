@@ -39,6 +39,7 @@ from manim import (
     SurroundingRectangle,
     Text,
     VGroup,
+    VMobject,
     ValueTracker,
     Write,
     always_redraw,
@@ -440,7 +441,10 @@ def panel(
     Returns VGroup(background_rect, VGroup(title_mob, body)).
     """
     title_mob = Text(title, font_size=20, color=accent)
-    content = VGroup(title_mob, body).arrange(DOWN, buff=0.18, aligned_edge=LEFT)
+    # A body containing ImageMobjects (e.g. real Blackjack cards) is a non-vector
+    # Group; it cannot live in a VGroup. Pick the container class accordingly.
+    _Box = VGroup if isinstance(body, VMobject) else Group
+    content = _Box(title_mob, body).arrange(DOWN, buff=0.18, aligned_edge=LEFT)
     content_w = max(content.get_width() + padding * 2, width)
     content_h = max(content.get_height() + padding * 2, min_height)
 
@@ -454,7 +458,7 @@ def panel(
         stroke_width=1.5,
     )
     content.move_to(bg.get_center())
-    return VGroup(bg, content)
+    return (VGroup if isinstance(content, VMobject) else Group)(bg, content)
 
 
 def code_panel(
@@ -649,15 +653,16 @@ def blackjack_panel(
     dealer_label = Text("Dealer", font_size=15, color=GREY_A)
     player_label = Text("Player", font_size=15, color=GREY_A)
 
-    dealer_row = VGroup(dealer_label, dealer_cards).arrange(DOWN, buff=0.08)
-    player_row = VGroup(player_label, player_cards).arrange(DOWN, buff=0.08)
-    body = VGroup(dealer_row, player_row).arrange(DOWN, buff=0.22)
+    # Cards are ImageMobjects (non-vector) → rows/body must be Group, not VGroup.
+    dealer_row = Group(dealer_label, dealer_cards).arrange(DOWN, buff=0.08)
+    player_row = Group(player_label, player_cards).arrange(DOWN, buff=0.08)
+    body = Group(dealer_row, player_row).arrange(DOWN, buff=0.22)
 
     p = panel(title, body, accent, width=width)
     if caption:
         cap = Text(caption, font_size=17, color=GREY_A)
         cap.next_to(p, DOWN, buff=0.12)
-        return VGroup(p, cap)
+        return Group(p, cap)
     return p
 
 

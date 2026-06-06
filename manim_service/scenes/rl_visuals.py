@@ -1418,7 +1418,10 @@ class EnvironmentValueHeatmap(Group):
         sprite_path = self._asset_paths.get(sprite_key, self._asset_paths["elf_down"])
         elf = ImageMobject(str(sprite_path))
         elf.set_height(self._cell_h * 0.72)
-        elf.move_to(self._cell_center(r, c))
+        # Use cell_bbox (reflects the grid's current position) rather than
+        # _cell_center (origin-relative design coords) so the agent lands ON the
+        # grid even after the heatmap has been move_to'd.
+        elf.move_to(self.cell_bbox(r * self._cols + c).get_center())
         elf.set_z_index(40)
         self.agent = elf
         self._agent_state = r * self._cols + c
@@ -1456,7 +1459,7 @@ class EnvironmentValueHeatmap(Group):
                 self.agent = new_elf
                 self.add(new_elf)
         scene.play(
-            self.agent.animate.move_to(self._cell_center(r, c)),
+            self.agent.animate.move_to(self.cell_bbox(r * self._cols + c).get_center()),
             run_time=run_time,
         )
         self._agent_state = r * self._cols + c

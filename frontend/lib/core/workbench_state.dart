@@ -27,6 +27,31 @@ const String _sessionFeedbackReadyMessage =
     'Your feedback helps improve our services.';
 const Object _sentinel = Object();
 const String _authoredLessonsPrefsKey = 'rl_ide_authored_lessons_v1';
+const bool _allowLocalLessonFallback = bool.fromEnvironment(
+  'RL_IDE_ALLOW_LOCAL_LESSON_FALLBACK',
+  defaultValue: true,
+);
+const LessonDefinition _registryLoadingLesson = LessonDefinition(
+  id: '__registry_loading__',
+  title: 'Loading lessons',
+  description: 'Lesson records are loading from the backend registry.',
+  category: 'Lessons',
+  starterCode: '',
+  backendEnabled: false,
+  conceptVideo: LessonConceptVideo(
+    streamPath: '',
+    durationLabel: '',
+    summary: '',
+    highlights: [],
+  ),
+  exercise: LessonExerciseBrief(
+    title: '',
+    overview: '',
+    tasks: [],
+    successCriteria: [],
+    codeTip: '',
+  ),
+);
 
 bool _canUseGoogleSignInOnCurrentOrigin() {
   final uri = Uri.base;
@@ -73,6 +98,10 @@ class RLWorkbenchState {
   final double bestEpisodeReward;
   final String statusMessage;
   final String videoPath;
+  final String replayRenderJobId;
+  final String replayRenderStatus;
+  final String? replayRenderError;
+  final List<int> replayEpisodeIndices;
   final List<ExecutionTestCaseResult> testResults;
   final List<ExecutionTraceStep> stepTrace;
   final List<ExecutionTraceEpisode> traceEpisodes;
@@ -137,6 +166,10 @@ class RLWorkbenchState {
     required this.bestEpisodeReward,
     required this.statusMessage,
     required this.videoPath,
+    required this.replayRenderJobId,
+    required this.replayRenderStatus,
+    required this.replayRenderError,
+    required this.replayEpisodeIndices,
     required this.testResults,
     required this.stepTrace,
     required this.traceEpisodes,
@@ -168,9 +201,11 @@ class RLWorkbenchState {
   });
 
   factory RLWorkbenchState.initial() {
-    final selectedLesson = fallbackLessonSections.first.lessons.first;
+    final selectedLesson = _allowLocalLessonFallback
+        ? fallbackLessonSections.first.lessons.first
+        : _registryLoadingLesson;
     return RLWorkbenchState(
-      sections: fallbackLessonSections,
+      sections: _allowLocalLessonFallback ? fallbackLessonSections : const [],
       flashcards: studyFlashcards,
       currentSection: AppSection.home,
       learner: null,
@@ -179,7 +214,9 @@ class RLWorkbenchState {
       progress: const LearnerProgress.empty(),
       isSigningIn: false,
       isQuizLoading: false,
-      homeMessage: 'Sign in to save quiz results and lesson progress.',
+      homeMessage: _allowLocalLessonFallback
+          ? 'Sign in to save quiz results and lesson progress.'
+          : 'Loading lessons from the registry...',
       authMessage: '',
       quizStatusMessage:
           'Take a randomized pre-test before you begin the lessons.',
@@ -203,8 +240,14 @@ class RLWorkbenchState {
       totalReward: 0.0,
       averageReward: 0.0,
       bestEpisodeReward: 0.0,
-      statusMessage: 'Ready to run ${selectedLesson.title}.',
+      statusMessage: _allowLocalLessonFallback
+          ? 'Ready to run ${selectedLesson.title}.'
+          : 'Waiting for lesson registry.',
       videoPath: '',
+      replayRenderJobId: '',
+      replayRenderStatus: 'idle',
+      replayRenderError: null,
+      replayEpisodeIndices: const [],
       testResults: const [],
       stepTrace: const [],
       traceEpisodes: const [],
@@ -286,6 +329,10 @@ class RLWorkbenchState {
     double? bestEpisodeReward,
     String? statusMessage,
     String? videoPath,
+    String? replayRenderJobId,
+    String? replayRenderStatus,
+    Object? replayRenderError = _sentinel,
+    List<int>? replayEpisodeIndices,
     List<ExecutionTestCaseResult>? testResults,
     List<ExecutionTraceStep>? stepTrace,
     List<ExecutionTraceEpisode>? traceEpisodes,
@@ -364,6 +411,12 @@ class RLWorkbenchState {
       bestEpisodeReward: bestEpisodeReward ?? this.bestEpisodeReward,
       statusMessage: statusMessage ?? this.statusMessage,
       videoPath: videoPath ?? this.videoPath,
+      replayRenderJobId: replayRenderJobId ?? this.replayRenderJobId,
+      replayRenderStatus: replayRenderStatus ?? this.replayRenderStatus,
+      replayRenderError: identical(replayRenderError, _sentinel)
+          ? this.replayRenderError
+          : replayRenderError as String?,
+      replayEpisodeIndices: replayEpisodeIndices ?? this.replayEpisodeIndices,
       testResults: testResults ?? this.testResults,
       stepTrace: stepTrace ?? this.stepTrace,
       traceEpisodes: traceEpisodes ?? this.traceEpisodes,
@@ -454,7 +507,9 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   BackendApi get api => _api;
 
   Future<void> loadBackendLessonCatalog() async {
-    final authoredSections = await _loadAuthoredLessonSections();
+    final authoredSections = _allowLocalLessonFallback
+        ? await _loadAuthoredLessonSections()
+        : const <LessonSection>[];
     if (authoredSections.isNotEmpty) {
       final sectionsWithAuthored =
           _mergeNonCoreLessons(state.sections, authoredSections);
@@ -567,6 +622,21 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   }
 
   void _retainFallbackLessonCatalog() {
+    if (!_allowLocalLessonFallback) {
+      emit(
+        state.copyWith(
+          sections: const [],
+          selectedLesson: _registryLoadingLesson,
+          code:
+              state.code == state.selectedLesson.starterCode ? '' : state.code,
+          adminSelectedLessonId: _registryLoadingLesson.id,
+          homeMessage:
+              'Lesson registry is unavailable. Production builds do not use local lesson fallbacks.',
+          statusMessage: 'Lesson registry is unavailable.',
+        ),
+      );
+      return;
+    }
     if (state.learner != null) {
       return;
     }
@@ -1078,6 +1148,10 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         averageReward: 0.0,
         bestEpisodeReward: 0.0,
         videoPath: '',
+        replayRenderJobId: '',
+        replayRenderStatus: 'idle',
+        replayRenderError: null,
+        replayEpisodeIndices: const [],
         testResults: const [],
         stepTrace: const [],
         traceEpisodes: const [],
@@ -1686,6 +1760,10 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         averageReward: 0.0,
         bestEpisodeReward: 0.0,
         videoPath: '',
+        replayRenderJobId: '',
+        replayRenderStatus: 'idle',
+        replayRenderError: null,
+        replayEpisodeIndices: const [],
         testResults: const [],
         stepTrace: const [],
         traceEpisodes: const [],
@@ -1735,6 +1813,10 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
           averageReward: 0.0,
           bestEpisodeReward: 0.0,
           videoPath: '',
+          replayRenderJobId: '',
+          replayRenderStatus: 'failed',
+          replayRenderError: null,
+          replayEpisodeIndices: const [],
           testResults: error.testResults,
           stepTrace: const [],
           traceEpisodes: const [],
@@ -1767,6 +1849,10 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
           averageReward: 0.0,
           bestEpisodeReward: 0.0,
           videoPath: '',
+          replayRenderJobId: '',
+          replayRenderStatus: 'failed',
+          replayRenderError: null,
+          replayEpisodeIndices: const [],
           testResults: const [],
           stepTrace: const [],
           traceEpisodes: const [],
@@ -1815,6 +1901,10 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         averageReward: 0.0,
         bestEpisodeReward: 0.0,
         videoPath: '',
+        replayRenderJobId: '',
+        replayRenderStatus: 'idle',
+        replayRenderError: null,
+        replayEpisodeIndices: const [],
         testResults: const [],
         stepTrace: const [],
         traceEpisodes: const [],
@@ -2445,6 +2535,10 @@ def lesson_function(*args, **kwargs):
       averageReward: 0.0,
       bestEpisodeReward: 0.0,
       videoPath: '',
+      replayRenderJobId: '',
+      replayRenderStatus: 'idle',
+      replayRenderError: null,
+      replayEpisodeIndices: const [],
       testResults: const [],
       stepTrace: const [],
       traceEpisodes: const [],
@@ -2460,6 +2554,47 @@ def lesson_function(*args, **kwargs):
 
   int _nonEmptyLineCount(String source) {
     return source.split('\n').where((line) => line.trim().isNotEmpty).length;
+  }
+
+  Future<void> _pollReplayRender(String jobId) async {
+    for (var attempt = 0; attempt < 30 && !isClosed; attempt += 1) {
+      await Future<void>.delayed(const Duration(seconds: 2));
+      if (isClosed || state.replayRenderJobId != jobId) {
+        return;
+      }
+      try {
+        final status = await _api.getReplayRenderStatus(jobId);
+        if (isClosed || state.replayRenderJobId != jobId) {
+          return;
+        }
+        emit(
+          state.copyWith(
+            replayRenderStatus: status.status,
+            replayRenderError: status.error,
+            videoPath: status.isComplete ? status.videoPath : state.videoPath,
+            statusMessage: status.isComplete
+                ? 'Execution pipeline completed. Replay ready.'
+                : state.statusMessage,
+          ),
+        );
+        if (status.isComplete || status.isFailed) {
+          return;
+        }
+      } catch (_) {
+        if (!isClosed && state.replayRenderJobId == jobId) {
+          emit(
+            state.copyWith(
+              replayRenderStatus: 'unavailable',
+              replayRenderError: 'Replay render status could not be fetched.',
+            ),
+          );
+        }
+        return;
+      }
+    }
+    if (!isClosed && state.replayRenderJobId == jobId) {
+      emit(state.copyWith(replayRenderStatus: 'timeout'));
+    }
   }
 
   Future<void> _pollUntilComplete(String taskId) async {
@@ -2527,6 +2662,10 @@ def lesson_function(*args, **kwargs):
               averageReward: result.metrics.averageReward,
               bestEpisodeReward: result.metrics.bestEpisodeReward,
               videoPath: result.videoPath,
+              replayRenderJobId: result.replayRenderJobId,
+              replayRenderStatus: result.replayRenderStatus,
+              replayRenderError: null,
+              replayEpisodeIndices: result.replayEpisodeIndices,
               testResults: result.testResults,
               stepTrace: result.stepTrace,
               traceEpisodes: result.traceEpisodes,
@@ -2538,7 +2677,9 @@ def lesson_function(*args, **kwargs):
               isSubmissionTakingLong: false,
               statusMessage: result.visualizationReady
                   ? '${result.message} Replay ready.'
-                  : '${result.message} No replay video generated.',
+                  : result.replayRenderJobId.isNotEmpty
+                      ? '${result.message} Replay video is rendering.'
+                      : '${result.message} No replay video generated.',
             ),
           );
           _recordTelemetry(
@@ -2551,6 +2692,9 @@ def lesson_function(*args, **kwargs):
             },
             flushAfter: true,
           );
+          if (result.replayRenderJobId.isNotEmpty && result.videoPath.isEmpty) {
+            unawaited(_pollReplayRender(result.replayRenderJobId));
+          }
           await refreshDashboard(quiet: true);
           return;
         case ExecutionTaskStatus.failed:
@@ -2564,6 +2708,10 @@ def lesson_function(*args, **kwargs):
               averageReward: 0.0,
               bestEpisodeReward: 0.0,
               videoPath: '',
+              replayRenderJobId: '',
+              replayRenderStatus: 'failed',
+              replayRenderError: null,
+              replayEpisodeIndices: const [],
               testResults: snapshot.testResults,
               stepTrace: const [],
               traceEpisodes: const [],

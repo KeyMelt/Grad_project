@@ -9,6 +9,7 @@ import ast
 import json
 import multiprocessing
 import os
+import time
 import uuid
 from typing import Any
 
@@ -41,18 +42,31 @@ def run_submission_with_timeout(
     lesson = get_lesson_definition(submission_payload["lesson_id"])
     feedback_service = StudentFeedbackService()
     ctx = multiprocessing.get_context("spawn")
-    queue: multiprocessing.Queue = ctx.Queue()
+    parent_conn, child_conn = ctx.Pipe(duplex=False)
     process = ctx.Process(
         target=_execution_worker,
-        args=(submission_payload, queue),
+        args=(submission_payload, child_conn),
         daemon=True,
     )
     process.start()
-    process.join(effective_timeout)
+    child_conn.close()
 
-    if process.is_alive():
+    deadline = time.monotonic() + effective_timeout
+    outcome: dict[str, Any] | None = None
+    while time.monotonic() < deadline:
+        if parent_conn.poll(0.1):
+            outcome = parent_conn.recv()
+            break
+        if not process.is_alive():
+            break
+
+    if outcome is None and parent_conn.poll():
+        outcome = parent_conn.recv()
+
+    if outcome is None and process.is_alive():
         process.terminate()
         process.join()
+        parent_conn.close()
         issues = [
             f"The lesson execution exceeded the {effective_timeout}-second limit.",
         ]
@@ -68,7 +82,13 @@ def run_submission_with_timeout(
             ),
         )
 
-    if queue.empty():
+    process.join(timeout=1.0)
+    if process.is_alive():
+        process.terminate()
+        process.join()
+    parent_conn.close()
+
+    if outcome is None:
         raise ExecutionPipelineError(
             status_code=500,
             detail=_failure_detail(
@@ -81,7 +101,6 @@ def run_submission_with_timeout(
             ),
         )
 
-    outcome = queue.get()
     if outcome["ok"]:
         return outcome["result"]
     raise ExecutionPipelineError(
@@ -90,19 +109,19 @@ def run_submission_with_timeout(
     )
 
 
-def _execution_worker(submission_payload: dict[str, Any], queue: multiprocessing.Queue) -> None:
+def _execution_worker(submission_payload: dict[str, Any], result_conn: Any) -> None:
     _ensure_process_lesson_registry()
     lesson = get_lesson_definition(submission_payload["lesson_id"])
     feedback_service = StudentFeedbackService()
     try:
-        queue.put(
+        result_conn.send(
             {
                 "ok": True,
                 "result": _run_execution_pipeline(submission_payload),
             },
         )
     except ExecutionPipelineError as error:
-        queue.put(
+        result_conn.send(
             {
                 "ok": False,
                 "status_code": error.status_code,
@@ -110,7 +129,7 @@ def _execution_worker(submission_payload: dict[str, Any], queue: multiprocessing
             },
         )
     except Exception as error:
-        queue.put(
+        result_conn.send(
             {
                 "ok": False,
                 "status_code": 500,
@@ -124,6 +143,8 @@ def _execution_worker(submission_payload: dict[str, Any], queue: multiprocessing
                 ),
             },
         )
+    finally:
+        result_conn.close()
 
 
 def _ensure_process_lesson_registry() -> None:
@@ -217,13 +238,35 @@ def _package_results(
     submission_payload: dict[str, Any],
 ) -> dict[str, Any]:
     log_data = logger.get_logs()
-    video_path = visualizer.generate_animation(log_data, submission_payload["lesson_id"])
+    replay_render = _enqueue_replay_render(
+        visualizer,
+        log_data,
+        submission_payload["lesson_id"],
+    )
     return _build_success_response(
         lesson=lesson,
         log_data=log_data,
         validation_result=validation_result,
-        video_path=video_path,
+        replay_render=replay_render,
     )
+
+
+def _enqueue_replay_render(
+    visualizer: VisualizationService,
+    log_data: list[list[dict[str, Any]]],
+    lesson_id: str,
+) -> dict[str, Any]:
+    enqueue = getattr(visualizer, "enqueue_replay_render", None)
+    if callable(enqueue):
+        return enqueue(log_data, lesson_id)
+
+    video_path = visualizer.generate_animation(log_data, lesson_id)
+    return {
+        "video_path": video_path,
+        "replay_render_job_id": "",
+        "replay_render_status": "complete" if video_path else "unavailable",
+        "replay_episode_indices": [],
+    }
 
 
 def _create_environment_adapter(
@@ -316,7 +359,7 @@ def _build_success_response(
     lesson: Any,
     log_data: list[list[dict[str, Any]]],
     validation_result: Any,
-    video_path: str,
+    replay_render: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     episode_rewards = [sum(step.get("reward", 0) for step in episode) for episode in log_data]
     latest_episode = json.loads(json.dumps(log_data[-1], cls=NpEncoder)) if log_data else []
@@ -336,12 +379,17 @@ def _build_success_response(
         _episode_summary(index, episode, episode_rewards[index])
         for index, episode in enumerate(log_data)
     ]
+    replay_render = replay_render or {}
+    render_status = str(replay_render.get("replay_render_status") or "unavailable")
     return {
         "status": "success",
         "message": "Execution pipeline completed.",
         "lesson": {"id": lesson.id, "title": lesson.title},
-        "video_path": video_path,
-        "visualization_ready": bool(video_path),
+        "video_path": str(replay_render.get("video_path") or ""),
+        "visualization_ready": bool(replay_render.get("video_path")),
+        "replay_render_job_id": str(replay_render.get("replay_render_job_id") or ""),
+        "replay_render_status": render_status,
+        "replay_episode_indices": replay_render.get("replay_episode_indices") or [],
         "test_results": validation_result.test_results,
         "step_trace": latest_episode,
         "trace_episodes": trace_episodes,

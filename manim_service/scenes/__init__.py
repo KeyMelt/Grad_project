@@ -101,3 +101,5 @@ __all__ = [
     "zoom_to", "zoom_reset",
     "EnvironmentPanel", "env_panel",
 ]
+
+from .equation_tools import TexEquation

@@ -93,9 +93,11 @@ class HttpBackendApi extends BackendApi {
     required List<int> bytes,
     required String filename,
   }) async {
-    final uri = Uri.parse('$baseUrl/admin/lessons/${Uri.encodeComponent(lessonId)}/lecture-notes');
+    final uri = Uri.parse(
+        '$baseUrl/admin/lessons/${Uri.encodeComponent(lessonId)}/lecture-notes');
     final request = http.MultipartRequest('PUT', uri)
-      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+      ..files
+          .add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
     if (accessToken != null) {
       request.headers['Authorization'] = 'Bearer $accessToken';
     }
@@ -353,6 +355,12 @@ class HttpBackendApi extends BackendApi {
   Future<ExecutionTaskSnapshot> getTaskStatus(String taskId) async {
     final responseJson = await _getJson('/tasks/$taskId');
     return ExecutionTaskSnapshot.fromJson(responseJson);
+  }
+
+  @override
+  Future<ReplayRenderStatus> getReplayRenderStatus(String jobId) async {
+    final responseJson = await _getJson('/visualization/replay-render/$jobId');
+    return ReplayRenderStatus.fromJson(responseJson);
   }
 
   @override

@@ -12,11 +12,41 @@ def _concept_video_root() -> Path:
     return GatewaySettings.from_env().concept_video_dir.resolve()
 
 
-def _cdn_concept_video_url(filename: str) -> str | None:
-    settings = GatewaySettings.from_env()
+def _cdn_concept_video_url(filename: str, settings: GatewaySettings) -> str | None:
     if settings.media_storage_backend != "spaces" or not settings.media_cdn_url:
         return None
     return f"{settings.media_cdn_url}/concept_videos/{filename}"
+
+
+def _ensure_production_media_available(settings: GatewaySettings) -> None:
+    if not settings.is_production:
+        return
+    if settings.media_storage_backend != "spaces":
+        raise HTTPException(
+            status_code=503,
+            detail="Production media storage must be DigitalOcean Spaces.",
+        )
+    if not settings.media_cdn_url:
+        raise HTTPException(
+            status_code=503,
+            detail="Production concept-video CDN URL is not configured.",
+        )
+
+
+def _allow_local_media_fallback(settings: GatewaySettings) -> bool:
+    return settings.allow_local_media_fallback and not settings.is_production
+
+
+def _validate_concept_video_filename(filename: str) -> str:
+    if "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid concept video filename.")
+    suffix = Path(filename).suffix.lower()
+    if suffix not in _ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail="Only MP4 video and VTT caption files can be served.",
+        )
+    return suffix
 
 
 _ALLOWED_EXTENSIONS: dict[str, str] = {
@@ -26,15 +56,8 @@ _ALLOWED_EXTENSIONS: dict[str, str] = {
 
 
 def _resolve_concept_video(filename: str) -> tuple[Path, str]:
-    if "/" in filename or "\\" in filename:
-        raise HTTPException(status_code=400, detail="Invalid concept video filename.")
-    suffix = Path(filename).suffix.lower()
-    media_type = _ALLOWED_EXTENSIONS.get(suffix)
-    if media_type is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Only MP4 video and VTT caption files can be served.",
-        )
+    suffix = _validate_concept_video_filename(filename)
+    media_type = _ALLOWED_EXTENSIONS[suffix]
 
     file_path = (_concept_video_root() / filename).resolve()
     try:
@@ -55,9 +78,17 @@ def build_concept_videos_router() -> APIRouter:
 
     @router.get("/media/concept-videos/{filename}")
     def concept_video(filename: str):
-        cdn_url = _cdn_concept_video_url(filename)
+        settings = GatewaySettings.from_env()
+        _validate_concept_video_filename(filename)
+        _ensure_production_media_available(settings)
+        cdn_url = _cdn_concept_video_url(filename, settings)
         if cdn_url is not None:
             return RedirectResponse(cdn_url, status_code=302)
+        if not _allow_local_media_fallback(settings):
+            raise HTTPException(
+                status_code=503,
+                detail="Concept-video media is not configured for this environment.",
+            )
         file_path, media_type = _resolve_concept_video(filename)
         headers = {"Cache-Control": "public, max-age=3600"}
         if media_type == "text/vtt":

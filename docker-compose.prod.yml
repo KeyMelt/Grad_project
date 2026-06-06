@@ -11,6 +11,8 @@ x-common-environment: &common-environment
   #   RL_IDE_FRONTEND_IMAGE - Docker image for the nginx/Flutter frontend (default: rl-platform-frontend:latest)
   #   RL_IDE_HTTP_BIND      - Host:port binding for the public HTTP port (default: 0.0.0.0:80)
   RL_IDE_BACKEND_HOST: 0.0.0.0
+  RL_IDE_ENV: production
+  RL_IDE_ALLOW_LOCAL_MEDIA_FALLBACK: "0"
   RL_IDE_INTERNAL_TOKEN: ${RL_IDE_INTERNAL_TOKEN:?Set RL_IDE_INTERNAL_TOKEN to a generated secret}
   RL_IDE_AUTH_TOKEN_SECRET: ${RL_IDE_AUTH_TOKEN_SECRET:?Set RL_IDE_AUTH_TOKEN_SECRET to a generated secret}
   RL_IDE_AUTH_TOKEN_TTL_SECONDS: ${RL_IDE_AUTH_TOKEN_TTL_SECONDS:-43200}
@@ -148,6 +150,7 @@ services:
       - no-new-privileges:true
     environment:
       SERVICE_NAME: manim-service
+      RL_IDE_ENV: production
       RL_IDE_BACKEND_HOST: 0.0.0.0
       RL_IDE_MANIM_SERVICE_PORT: "8300"
       MANIM_PYTHON: python3
@@ -155,11 +158,11 @@ services:
       RENDER_QUALITY: ${RL_IDE_MANIM_RENDER_QUALITY:-l}
       QUEUE_BACKEND: memory
       FFMPEG_BIN: ffmpeg
-      RL_IDE_MEDIA_STORAGE_BACKEND: ${RL_IDE_MEDIA_STORAGE_BACKEND:-local}
+      RL_IDE_MEDIA_STORAGE_BACKEND: ${RL_IDE_MEDIA_STORAGE_BACKEND:-spaces}
       DO_SPACES_REGION: ${DO_SPACES_REGION:-fra1}
-      DO_SPACES_BUCKET: ${DO_SPACES_BUCKET:-}
+      DO_SPACES_BUCKET: ${DO_SPACES_BUCKET:-grad-project-prod-media-fra1}
       DO_SPACES_ENDPOINT: ${DO_SPACES_ENDPOINT:-https://fra1.digitaloceanspaces.com}
-      DO_SPACES_CDN_URL: ${DO_SPACES_CDN_URL:-}
+      DO_SPACES_CDN_URL: ${DO_SPACES_CDN_URL:-https://grad-project-prod-media-fra1.fra1.cdn.digitaloceanspaces.com}
       DO_SPACES_ACCESS_KEY: ${DO_SPACES_ACCESS_KEY:-}
       DO_SPACES_SECRET_KEY: ${DO_SPACES_SECRET_KEY:-}
     volumes:
@@ -181,6 +184,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      args:
+        RL_IDE_ALLOW_LOCAL_LESSON_FALLBACK: "false"
     image: ${RL_IDE_FRONTEND_IMAGE:-rl-platform-frontend:latest}
     restart: unless-stopped
     init: true

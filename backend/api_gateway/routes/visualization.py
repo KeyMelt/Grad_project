@@ -30,6 +30,21 @@ def _manim_service_netloc() -> str:
     return parsed.netloc or parsed.path  # fallback for edge cases
 
 
+def _manim_service_base_url() -> str:
+    return os.environ.get("RL_IDE_MANIM_SERVICE_URL", "http://localhost:8200").rstrip("/")
+
+
+def _get_manim_job(job_id: str) -> dict[str, Any]:
+    url = f"{_manim_service_base_url()}/jobs/{job_id}"
+    if _HTTPX_AVAILABLE:
+        resp = _httpx.get(url, timeout=10, follow_redirects=True)
+        resp.raise_for_status()
+        return resp.json()
+    resp = _requests.get(url, timeout=10, allow_redirects=True)
+    resp.raise_for_status()
+    return resp.json()
+
+
 def _proxy_manim_video(url: str) -> Response:
     """Fetch an MP4 from the manim service and stream it back."""
     if _HTTPX_AVAILABLE:
@@ -165,5 +180,35 @@ def build_visualization_router(services: Any) -> APIRouter:
         # Case 1: local filesystem path — existing behaviour.
         video_path = _resolve_visualization_path(path, suffix=".mp4", label="Video")
         return FileResponse(video_path, media_type="video/mp4")
+
+    @router.get("/visualization/replay-render/{job_id}")
+    def replay_render_status(
+        job_id: str,
+        principal: Principal | None = Depends(optional_principal),
+    ):
+        _resolve_principal(principal=principal)
+        try:
+            data = _get_manim_job(job_id)
+        except Exception as error:  # noqa: BLE001
+            raise HTTPException(
+                status_code=502,
+                detail=f"Could not fetch replay render status: {error}",
+            ) from error
+
+        video_url = data.get("video_url") or ""
+        video_path = ""
+        if isinstance(video_url, str) and video_url:
+            video_path = (
+                f"{_manim_service_base_url()}{video_url}"
+                if video_url.startswith("/")
+                else video_url
+            )
+        return {
+            "job_id": data.get("job_id") or job_id,
+            "status": data.get("status") or "unknown",
+            "video_path": video_path,
+            "video_url": video_path,
+            "error": data.get("error"),
+        }
 
     return router
