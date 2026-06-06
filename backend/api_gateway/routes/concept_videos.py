@@ -13,7 +13,7 @@ def _concept_video_root() -> Path:
 
 
 def _cdn_concept_video_url(filename: str, settings: GatewaySettings) -> str | None:
-    if settings.media_storage_backend != "spaces" or not settings.media_cdn_url:
+    if not settings.media_cdn_url:
         return None
     return f"{settings.media_cdn_url}/concept_videos/{filename}"
 
@@ -21,11 +21,6 @@ def _cdn_concept_video_url(filename: str, settings: GatewaySettings) -> str | No
 def _ensure_production_media_available(settings: GatewaySettings) -> None:
     if not settings.is_production:
         return
-    if settings.media_storage_backend != "spaces":
-        raise HTTPException(
-            status_code=503,
-            detail="Production media storage must be DigitalOcean Spaces.",
-        )
     if not settings.media_cdn_url:
         raise HTTPException(
             status_code=503,
