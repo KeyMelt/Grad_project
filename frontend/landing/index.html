@@ -3,7 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reinfource | AI-Powered RL Platform</title>
+  <title>Reinfource — AI-Powered RL Education</title>
+
+  <script>
+    /*
+     * Auth Session Redirect
+     * Checks if the user is already authenticated via a session cookie.
+     * If logged in, they are immediately redirected to the main application.
+     * 
+     * Note for Integration: 
+     * Update 'reinfource_session=' to match your exact auth cookie name.
+     * Update '/app' to the correct route of the Flutter homepage.
+     */
+    if (document.cookie.split(';').some((item) => item.trim().startsWith('reinfource_session='))) {
+      window.location.replace('/app');
+    }
+  </script>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">

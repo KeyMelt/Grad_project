@@ -20,6 +20,10 @@ RUN flutter build web --release \
 # with an older registered worker can clear stale Flutter caches.
 RUN cp web/flutter_service_worker.js build/web/flutter_service_worker.js
 
+# Merge standalone landing page
+RUN mv build/web/index.html build/web/app.html
+COPY frontend/landing/ build/web/
+
 # Stage 2: Serve with Nginx
 FROM nginx:1.27-alpine
 
