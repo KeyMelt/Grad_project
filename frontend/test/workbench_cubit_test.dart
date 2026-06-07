@@ -24,6 +24,14 @@ class _FakeBackendApi extends BackendApi {
   String? get accessToken => _token;
 
   @override
+  Future<LearnerDashboard> updateProfile({
+    required String displayName,
+    required String rlExperience,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   void clearAuthToken() {
     _token = null;
   }

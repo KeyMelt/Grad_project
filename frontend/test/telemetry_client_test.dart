@@ -13,6 +13,14 @@ class _TelemetryApi extends BackendApi {
   String? get accessToken => null;
 
   @override
+  Future<LearnerDashboard> updateProfile({
+    required String displayName,
+    required String rlExperience,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   void clearAuthToken() {}
 
   @override
