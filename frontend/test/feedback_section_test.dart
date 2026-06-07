@@ -22,6 +22,7 @@ void main() {
               id: 'student-1',
               displayName: 'Maya',
               platformRole: 'student',
+              rlExperience: 'Beginner',
             ),
             isSubmitting: false,
             isComplete: false,

@@ -67,6 +67,7 @@ void main() {
               id: 'student-1',
               displayName: 'Maya',
               platformRole: 'student',
+              rlExperience: 'Beginner',
             ),
             progress: const LearnerProgress.empty(),
             studyBuddySummary: const StudyBuddySummary(

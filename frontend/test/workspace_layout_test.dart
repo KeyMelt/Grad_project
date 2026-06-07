@@ -97,6 +97,7 @@ class _WorkspaceLayoutApi extends BackendApi {
         id: 'student-1',
         displayName: 'Maya',
         platformRole: 'student',
+        rlExperience: 'Beginner',
       ),
       progress: LearnerProgress.empty(),
     );
@@ -220,6 +221,7 @@ class _WorkspaceLayoutApi extends BackendApi {
         id: 'student-1',
         displayName: displayName,
         platformRole: 'student',
+        rlExperience: 'Beginner',
       ),
       progress: const LearnerProgress.empty(),
     );

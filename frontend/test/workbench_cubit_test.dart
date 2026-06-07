@@ -61,6 +61,7 @@ class _FakeBackendApi extends BackendApi {
         id: 'student-1',
         displayName: displayName,
         platformRole: 'student',
+        rlExperience: 'Beginner',
       ),
       progress: const LearnerProgress.empty(),
     );
@@ -79,6 +80,7 @@ class _FakeBackendApi extends BackendApi {
         id: studentId,
         displayName: 'Maya',
         platformRole: 'student',
+        rlExperience: 'Beginner',
       ),
       progress: LearnerProgress.empty(),
     );
@@ -103,6 +105,7 @@ class _FakeBackendApi extends BackendApi {
         id: studentId,
         displayName: 'Maya',
         platformRole: 'student',
+        rlExperience: 'Beginner',
       ),
       progress: const LearnerProgress.empty(),
     );
@@ -382,6 +385,7 @@ void main() {
         id: 'student-1',
         displayName: 'Maya',
         platformRole: 'student',
+        rlExperience: 'Beginner',
       ),
       progress: LearnerProgress.empty(),
     );

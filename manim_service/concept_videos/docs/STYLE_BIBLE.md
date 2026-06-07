@@ -1490,3 +1490,86 @@ This supersedes "read the equation token by token" as the *centrepiece*. Token
 highlighting (§35) still applies to the dissection, but the heart of any equation
 beat is the **expand → ground → collapse** morph plus the synchronized grid
 animation — never a static recitation of symbols.
+
+---
+
+## 39. Visual-First Teaching — Use the Whole Toolbox (mandatory, from V-03)
+
+Equations and numbers are the *last* resort, not the first. Explain with the
+environment, arrows, sprites, tables, and camera moves; reach for symbols only
+once the picture is in the viewer's head. Assume the viewer knows nothing — make
+every abstract object concrete before you operate on it.
+
+### 39.1 Expand the *specific* sub-sum, in place (not the whole equation)
+
+When a summation/expectation is the thing being taught, expand **only that one
+operator** into its explicit terms while the rest of the equation stays put, then
+fold it back. Use `manim_service.scenes.TexEquation`:
+
+    eq  = TexEquation([("v","v(s)"), ("eq","="), ("sum","\\sum_a \\pi(a\\mid s)\\,q(s,a)")])
+    eq2 = eq.expand(self, "sum", [("t0","\\tfrac14 q(s,L)"), ("p0","+"), ...])  # only Σ_a unfolds
+    eq2.collapse(self, ("sum","\\sum_a \\pi(a\\mid s)\\,q(s,a)"), replacing=[...])
+
+Whole-equation re-writes are banned for this beat — morph the **sub-part** the
+narration is talking about. Each expanded term is grounded on the grid the instant
+it appears (§38.1 step 3), with an **arrow** from the term to its cell.
+
+### 39.2 One numeric channel, never two
+
+Do NOT explain the same quantity twice numerically (e.g. a value on the grid AND
+the same value in a side list). Pick ONE place the number lives — usually the cell
+it belongs to — and carry the rest of the meaning with arrows, motion, and colour.
+Redundant number panels read as a spreadsheet, not a lesson.
+
+### 39.3 Put the agent in the world
+
+Use the environment's real sprite (the FrozenLake **elf** via
+`heatmap.place_agent / move_agent`). Let it walk the path you're describing, slip
+when you discuss slipping, sit on the state under analysis. A moving character
+holds attention far better than a highlighted rectangle.
+
+### 39.4 Make abstractions concrete before using them (don't assume understanding)
+
+Before an abstract object appears in an equation, show it as a picture:
+- a **policy** → a state→action arrow grid (or a small table) the viewer can read,
+  not just the symbol `π`;
+- a **transition** → an arrow (or three, for slipping) on the grid;
+- a **return / value** → a number that grows on a cell.
+If a beat introduces a symbol the viewer hasn't *seen* as a concrete thing, it's
+incomplete.
+
+### 39.5 Use the full toolbox
+
+Tables, labelled figures, arrows, sprite motion, and **camera moves** (zoom to the
+cell under discussion, pan along a path) are all preferred to a static wall of
+symbols. Pick the tool that makes the idea obvious to someone seeing it for the
+first time.
+
+### 39.6 Value grids: FLAT 2D grid, numbers that FLOAT above it
+
+Keep the grid a **crisp, undistorted, top-down 2D grid** — the proven
+`EnvironmentValueHeatmap` (real `ice/hole/goal` sprites). Show value as a **number
+that floats above its cell**, with a soft drop shadow on the tile to sell the height.
+Get the dimensional feel from the float + shadow, **not** from tilting the camera.
+
+Hard-won rules (do not relitigate these — each was an explicit user rejection):
+- **No camera tilt / no isometric 3D for the grid.** The gymnasium tiles are
+  top-down art; under a `ThreeDScene` perspective they shear into ugly parallelograms.
+  "The grid elements must stay 2D." A real 3D `ThreeDScene` iso grid was tried and
+  rejected — do not revive `IsoValueGrid` / `DPE3DSegmentScene` for value grids.
+- **No bars.** Bar-height encoding reads ambiguously at low values; rejected twice.
+  The number is the signal.
+- **Numbers float, they don't sit flat on the tile.** Flat-on-the-tile "looks cheap."
+  Use `manim_service.scenes.FloatingValues` (binds to an `EnvironmentValueHeatmap`):
+  `reveal_value` rises one chip into place (goal-backward fill, S2); `set_values`
+  morphs the whole field (iteration/convergence, S4). Each chip is a dark `#0B1220`
+  rounded backing + number, lifted above the cell with an elliptical drop shadow
+  below it. It hides the heatmap's own flat labels automatically.
+- **The agent moves; it never just stands there.** Drive the elf along the policy /
+  the path being explained (`heatmap.place_agent` / `move_agent`). Fade it out before
+  a value-fill if it would sit under a number.
+- **Make the policy concrete.** Don't assume the viewer knows what "the policy" is —
+  show it as a table (state → action probabilities) and let the agent actually run it.
+
+These segments are plain 2D `BaseConceptScene`s, so the deterministic layout gate
+covers them — keep them gate-clean.

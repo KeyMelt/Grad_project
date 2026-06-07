@@ -54,6 +54,7 @@ class FakeBackendApi extends BackendApi {
       id: 'student-123',
       displayName: displayName,
       platformRole: 'student',
+      rlExperience: 'Beginner',
     );
     _token = 'fake-token';
     return LearnerDashboard(student: _student!, progress: _progress);
@@ -86,6 +87,7 @@ class FakeBackendApi extends BackendApi {
         id: studentId,
         displayName: 'student-123',
         platformRole: 'student',
+        rlExperience: 'Beginner',
       ),
       progress: _progress,
     );
