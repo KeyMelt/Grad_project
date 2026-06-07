@@ -23,7 +23,7 @@ x-common-environment: &common-environment
   RL_IDE_FIREBASE_CREDENTIALS_PATH: /run/secrets/firebase_admin_key
   RL_IDE_FIREBASE_APP_NAME: ${RL_IDE_FIREBASE_APP_NAME:-rl-ide-backend}
   RL_IDE_ALLOWED_ORIGINS: ${RL_IDE_ALLOWED_ORIGINS:?Set RL_IDE_ALLOWED_ORIGINS to the deployed frontend origin}
-  RL_IDE_OPEN_PROVISIONING: "0"
+  RL_IDE_OPEN_PROVISIONING: "1"
   RL_IDE_ALLOW_LEGACY_PASSWORD_SIGN_IN: "0"
   RL_IDE_DB_URL: sqlite:////srv/rl-platform/data/rl_learning_platform.db
   RL_IDE_VISUALIZATION_OUTPUT_DIR: /srv/rl-platform/animations
