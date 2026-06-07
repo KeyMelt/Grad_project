@@ -37,6 +37,11 @@ abstract class BackendApi {
     String? firebaseIdToken,
   });
 
+  Future<LearnerDashboard> updateProfile({
+    required String displayName,
+    required String rlExperience,
+  });
+
   Future<LearnerDashboard?> restoreSession() async {
     return null;
   }

@@ -13,6 +13,7 @@ from backend.auth.roles import PlatformRole, Principal
 from backend.api_gateway.schemas import (
     AuthRoleUpdateRequest,
     AuthStatusUpdateRequest,
+    ProfileUpdateRequest,
     StudentSignInRequest,
 )
 from backend.settings import GatewaySettings
@@ -104,6 +105,24 @@ def build_auth_router(services: Any) -> APIRouter:
             )
         dashboard["student"]["role"] = principal.role.value
         return dashboard
+
+    @router.patch("/me/profile")
+    def update_my_profile(
+        request: ProfileUpdateRequest,
+        principal: Principal = Depends(current_principal),
+    ):
+        try:
+            dashboard = services.auth.update_user_profile(
+                principal=principal,
+                display_name=request.display_name,
+                rl_experience=request.rl_experience,
+            )
+            dashboard["student"]["role"] = principal.role.value
+            return dashboard
+        except Exception as error:  # noqa: BLE001
+            if hasattr(error, "status_code") and hasattr(error, "detail"):
+                raise HTTPException(status_code=error.status_code, detail=error.detail) from error
+            raise HTTPException(status_code=500, detail=str(error)) from error
 
     @router.get("/admin/students/{student_id}/dashboard")
     def get_student_dashboard(

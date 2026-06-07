@@ -79,11 +79,13 @@ class LearnerProfile {
   final String id;
   final String displayName;
   final String platformRole;
+  final String? rlExperience;
 
   const LearnerProfile({
     required this.id,
     required this.displayName,
     required this.platformRole,
+    this.rlExperience,
   });
 
   factory LearnerProfile.fromJson(Map<String, dynamic> json) {
@@ -91,6 +93,7 @@ class LearnerProfile {
       id: json['id'] as String? ?? '',
       displayName: json['display_name'] as String? ?? 'Student',
       platformRole: (json['role'] as String? ?? 'student').toLowerCase(),
+      rlExperience: json['rl_experience'] as String?,
     );
   }
 }

@@ -12,6 +12,7 @@ class AuthUser(SQLModel, table=True):
     firebase_uid: str | None = Field(default=None, index=True, unique=True)
     display_name: str = Field(default="Student", index=True)
     normalized_display_name: str = Field(default="", index=True)
+    rl_experience: str | None = Field(default=None)
     role: str = Field(default="student", index=True)
     status: str = Field(default="active", index=True)
     revocation_time: datetime | None = Field(default=None)

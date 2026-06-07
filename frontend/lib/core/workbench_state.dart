@@ -971,6 +971,34 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     );
   }
 
+  Future<void> updateProfile({
+    required String displayName,
+    required String rlExperience,
+  }) async {
+    final learner = state.learner;
+    if (learner == null) return;
+
+    emit(state.copyWith(homeMessage: 'Updating profile...'));
+    try {
+      final dashboard = await _api.updateProfile(
+        displayName: displayName,
+        rlExperience: rlExperience,
+      );
+      emit(
+        state.copyWith(
+          learner: dashboard.student,
+          currentRole: dashboard.student.platformRole,
+          progress: dashboard.progress,
+          homeMessage: 'Profile updated successfully.',
+        ),
+      );
+    } on BackendApiException catch (error) {
+      emit(state.copyWith(homeMessage: error.message));
+    } catch (_) {
+      emit(state.copyWith(homeMessage: 'Failed to update profile.'));
+    }
+  }
+
   Future<void> refreshDashboard({bool quiet = false}) async {
     final learner = state.learner;
     if (learner == null) {

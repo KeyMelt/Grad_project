@@ -217,6 +217,53 @@ class AuthService:
             except Exception:  # pragma: no cover - defensive fallback
                 pass
 
+    def update_user_profile(
+        self,
+        *,
+        principal: Principal,
+        display_name: str,
+        rl_experience: str,
+    ) -> dict[str, Any]:
+        normalized_name = _normalize_display_name(display_name)
+        with self._lock:
+            with self._database.session() as session:
+                user = session.get(AuthUser, principal.id)
+                if user is None:
+                    raise AuthError(status_code=404, detail="Unknown user.")
+                user.display_name = normalized_name
+                user.normalized_display_name = normalized_name.casefold()
+                user.rl_experience = rl_experience
+                user.updated_at = datetime.now(timezone.utc)
+                session.add(user)
+                session.commit()
+                session.refresh(user)
+
+        dashboard = None
+        if hasattr(self._progress_service, "update_profile"):
+            dashboard = self._progress_service.update_profile(
+                student_id=principal.id,
+                display_name=normalized_name,
+                rl_experience=rl_experience,
+            )
+        elif hasattr(self._progress_service, "progress_service") and hasattr(
+            self._progress_service.progress_service, "update_profile"
+        ):
+            dashboard = self._progress_service.progress_service.update_profile(
+                student_id=principal.id,
+                display_name=normalized_name,
+                rl_experience=rl_experience,
+            )
+
+        self._record_audit(
+            actor_user_id=principal.id,
+            action="profile_update",
+            resource_type="auth_user",
+            resource_id=principal.id,
+            outcome="success",
+            metadata={"rl_experience": rl_experience},
+        )
+        return dashboard or {"student": {"id": principal.id, "display_name": normalized_name, "rl_experience": rl_experience}}
+
     def list_users(self) -> list[dict[str, Any]]:
         with self._database.session() as session:
             users = session.exec(select(AuthUser).order_by(AuthUser.created_at)).all()

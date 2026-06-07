@@ -22,6 +22,11 @@ class StudentSignInRequest(BaseModel):
     firebase_id_token: str | None = None
 
 
+class ProfileUpdateRequest(BaseModel):
+    display_name: str = Field(min_length=1, max_length=80)
+    rl_experience: str = Field(min_length=1, max_length=50)
+
+
 class QuizStartRequest(BaseModel):
     phase: str
 

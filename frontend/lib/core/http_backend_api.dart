@@ -145,6 +145,21 @@ class HttpBackendApi extends BackendApi {
   }
 
   @override
+  Future<LearnerDashboard> updateProfile({
+    required String displayName,
+    required String rlExperience,
+  }) async {
+    final responseJson = await _patchJson(
+      '/me/profile',
+      {
+        'display_name': displayName,
+        'rl_experience': rlExperience,
+      },
+    );
+    return LearnerDashboard.fromJson(responseJson);
+  }
+
+  @override
   Future<void> signOut() async {
     try {
       await _postJson('/auth/sign-out', const {});
@@ -543,6 +558,21 @@ class HttpBackendApi extends BackendApi {
     final uri = Uri.parse('$baseUrl$path');
     final response = await _client
         .put(
+          uri,
+          headers: _authorizedHeaders(_jsonHeaders),
+          body: jsonEncode(body),
+        )
+        .timeout(AppConstants.backendRequestTimeout);
+    return _decodeAndValidateResponse(response);
+  }
+
+  Future<Map<String, dynamic>> _patchJson(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final response = await _client
+        .patch(
           uri,
           headers: _authorizedHeaders(_jsonHeaders),
           body: jsonEncode(body),

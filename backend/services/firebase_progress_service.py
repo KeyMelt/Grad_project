@@ -220,6 +220,26 @@ class FirebaseProgressService:
         user_ref.set(payload)
         return self._dashboard_payload(student_id, payload)
 
+    def update_profile(
+        self,
+        student_id: str,
+        display_name: str,
+        rl_experience: str,
+    ) -> Optional[dict[str, Any]]:
+        normalized_name = " ".join((display_name or "").split()) or "Student"
+        user_ref = self._users.document(student_id)
+        snapshot = user_ref.get()
+        if snapshot.exists:
+            payload = snapshot.to_dict() or {}
+        else:
+            payload = {}
+
+        payload["display_name"] = normalized_name
+        payload["rl_experience"] = rl_experience
+        payload["updated_at_utc"] = datetime.now(timezone.utc).isoformat()
+        user_ref.set(payload)
+        return self._dashboard_payload(student_id, payload)
+
     def close(self) -> None:
         return None
 
@@ -264,6 +284,7 @@ class FirebaseProgressService:
             "student": {
                 "id": student_id,
                 "display_name": payload.get("display_name", "Student"),
+                "rl_experience": payload.get("rl_experience"),
             },
             "progress": {
                 "completed_lesson_ids": sorted(

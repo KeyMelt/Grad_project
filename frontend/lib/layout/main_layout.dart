@@ -11,6 +11,7 @@ import '../features/flashcards/flashcards_section.dart';
 import '../features/home/home_dashboard.dart';
 import '../features/lessons/lesson_browser.dart';
 import '../features/onboarding/onboarding_tutorial.dart';
+import '../features/onboarding/profile_completion_dialog.dart';
 import '../features/quiz/quiz_section.dart';
 import '../features/study_buddy/study_buddy_panel.dart';
 import '../features/workspace/workspace_tabs.dart';
@@ -37,6 +38,7 @@ class _MainLayoutState extends State<MainLayout> {
   late final RLWorkbenchCubit _cubit;
   bool _onboardingShown = false;
   bool _studyBuddyDrawerOpen = false;
+  bool _profileDialogShowing = false;
 
   @override
   void initState() {
@@ -63,6 +65,12 @@ class _MainLayoutState extends State<MainLayout> {
       value: _cubit,
       child: BlocBuilder<RLWorkbenchCubit, RLWorkbenchState>(
         builder: (context, state) {
+          if (state.learner != null && state.learner!.rlExperience == null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _showProfileCompletionDialog();
+            });
+          }
+
           return Scaffold(
             appBar: _buildAppBar(context, state),
             body: _buildCurrentSection(context, state),
@@ -70,6 +78,22 @@ class _MainLayoutState extends State<MainLayout> {
         },
       ),
     );
+  }
+
+  Future<void> _showProfileCompletionDialog() async {
+    if (!mounted || _profileDialogShowing) return;
+    _profileDialogShowing = true;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => BlocProvider.value(
+        value: _cubit,
+        child: const ProfileCompletionDialog(),
+      ),
+    );
+    if (mounted) {
+      _profileDialogShowing = false;
+    }
   }
 
   Widget _buildCurrentSection(BuildContext context, RLWorkbenchState state) {
