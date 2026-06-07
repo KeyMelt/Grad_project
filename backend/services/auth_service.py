@@ -113,6 +113,14 @@ class AuthService:
         self._lock = Lock()
         self._database.create_schema()
 
+        # Temporary SQLite migration for new rl_experience column
+        try:
+            from sqlalchemy import text
+            with self._database.engine.begin() as conn:
+                conn.execute(text("ALTER TABLE auth_users ADD COLUMN rl_experience VARCHAR"))
+        except Exception:
+            pass
+
     def bootstrap_admin(
         self,
         *,
