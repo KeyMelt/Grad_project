@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reinfource | AI-Powered RL Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="script.js" defer></script>
+</head>
+<body>
+  <div class="animated-grid-bg">
+    <canvas id="grid-canvas"></canvas>
+  </div>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <div class="brand">
+        <div class="app-logo">
+          <div class="app-logo-inner">
+            <svg viewBox="-3 -3 106 106" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" overflow="visible"><defs><filter id="glow-brand" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="5" result="b1"/><feGaussianBlur stdDeviation="2" result="b2"/><feMerge><feMergeNode in="b1"/><feMergeNode in="b2"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><g transform="rotate(-2.5,50,50)"><rect x="6.0" y="4.0" width="10" height="10" rx="2.5" fill="#F4F7FC" opacity="0.65"/><rect x="24.6" y="3.6" width="10.8" height="10.8" rx="2.5" fill="#F4F7FC" opacity="0.69"/><rect x="44.3" y="3.3" width="11.4" height="11.4" rx="2.5" fill="#F4F7FC" opacity="0.73"/><rect x="63.9" y="2.9" width="12.2" height="12.2" rx="2.5" fill="#F4F7FC" opacity="0.77"/><circle cx="89" cy="9" r="1.8" fill="#F4F7FC" opacity="0.21"/><rect x="5.6" y="19.6" width="10.8" height="10.8" rx="2.5" fill="#F4F7FC" opacity="0.69"/><circle cx="30" cy="25" r="1.5" fill="#F4F7FC" opacity="0.18"/><circle cx="50" cy="25" r="1.7" fill="#F4F7FC" opacity="0.19"/><circle cx="70" cy="25" r="1.8" fill="#F4F7FC" opacity="0.21"/><rect x="82.2" y="18.2" width="13.6" height="13.6" rx="2.5" fill="#F4F7FC" opacity="0.84"/><rect x="5.3" y="35.3" width="11.4" height="11.4" rx="2.5" fill="#F4F7FC" opacity="0.73"/><circle cx="30" cy="41" r="1.7" fill="#F4F7FC" opacity="0.19"/><circle cx="50" cy="41" r="1.8" fill="#F4F7FC" opacity="0.21"/><circle cx="70" cy="41" r="2.0" fill="#F4F7FC" opacity="0.23"/><rect x="81.9" y="33.9" width="14.2" height="14.2" rx="2.5" fill="#F4F7FC" opacity="0.88"/><rect x="4.9" y="50.9" width="12.2" height="12.2" rx="2.5" fill="#F4F7FC" opacity="0.77"/><rect x="23.6" y="50.6" width="12.8" height="12.8" rx="2.5" fill="#F4F7FC" opacity="0.81"/><rect x="43.2" y="50.2" width="13.6" height="13.6" rx="2.5" fill="#F4F7FC" opacity="0.84"/><circle cx="70" cy="57" r="2.1" fill="#F4F7FC" opacity="0.25"/><circle cx="89" cy="57" r="2.3" fill="#e9f5f8" opacity="0.26"/><rect x="4.6" y="66.6" width="12.8" height="12.8" rx="2.5" fill="#F4F7FC" opacity="0.81"/><circle cx="30" cy="73" r="2.0" fill="#F4F7FC" opacity="0.23"/><circle cx="50" cy="73" r="2.1" fill="#F4F7FC" opacity="0.25"/><rect x="62.5" y="65.5" width="15" height="15" rx="2.5" fill="#c7efec" opacity="0.92"/><circle cx="89" cy="73" r="2.4" fill="#d2f1f0" opacity="0.28"/><rect x="4.2" y="82.2" width="13.6" height="13.6" rx="2.5" fill="#F4F7FC" opacity="0.84"/><circle cx="30" cy="89" r="2.1" fill="#F4F7FC" opacity="0.25"/><circle cx="50" cy="89" r="2.3" fill="#e9f5f8" opacity="0.26"/><circle cx="70" cy="89" r="2.4" fill="#d2f1f0" opacity="0.28"/><rect x="75.25" y="75.25" width="27.5" height="27.5" rx="5.5" fill="none" stroke="#00C9A7" stroke-width="1.4" opacity="0.4"/><rect x="78" y="78" width="22" height="22" rx="4.2" fill="#00C9A7" filter="url(#glow-brand)"/></g></svg>
+          </div>
+        </div>
+        <span class="brand-text">Re<span class="brand-i">i</span>nfource</span>
+      </div>
+      <div class="nav-links">
+        <a href="https://reinfource.app/" class="btn btn-secondary">Sign In</a>
+        <a href="https://reinfource.app/" class="btn btn-primary">Start Learning for Free</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-content">
+      <h1 class="hero-title">Master Reinforcement Learning with Deterministic AI</h1>
+      <p class="hero-subtitle">Execute code, visualize traces, and receive instant pedagogical feedback in a unified browser environment.</p>
+      <div class="hero-cta">
+        <a href="https://reinfource.app/" class="btn btn-primary btn-large">Join the Platform</a>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="glass-placeholder hero-glass">
+        <div class="glass-header">
+          <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+        </div>
+        <div class="glass-body">
+          <div class="skeleton-line w-70"></div>
+          <div class="skeleton-line w-90"></div>
+          <div class="skeleton-line w-60"></div>
+          <div class="skeleton-box"></div>
+        </div>
+        <div class="glass-label">Platform Dashboard Placeholder</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Scrollytelling Features Section -->
+  <section class="features">
+    <div class="feature-row scroller">
+      <div class="feature-text animated-element">
+        <h2>Interactive Workspace</h2>
+        <p>A complete cloud-based IDE tailored for Reinforcement Learning. Write, debug, and execute your agents without leaving the browser.</p>
+      </div>
+      <div class="feature-image animated-element">
+        <div class="glass-placeholder feature-glass">
+          <div class="glass-header"><span class="header-title">IDE Layout</span></div>
+          <div class="glass-body split-body">
+            <div class="skeleton-col sidebar"></div>
+            <div class="skeleton-col editor">
+              <div class="skeleton-line"></div>
+              <div class="skeleton-line w-80"></div>
+              <div class="skeleton-line w-60"></div>
+            </div>
+          </div>
+          <div class="glass-label">Workspace Image Area</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature-row scroller reverse">
+      <div class="feature-text animated-element">
+        <h2>Execution & Trace Replay</h2>
+        <p>Inspect every frame. The deterministic execution engine captures complete traces, letting you scrub through state transitions to see exactly what your agent learned.</p>
+      </div>
+      <div class="feature-image animated-element">
+        <div class="glass-placeholder feature-glass">
+          <div class="glass-header"><span class="header-title">Replay Engine</span></div>
+          <div class="glass-body">
+            <div class="skeleton-box large"></div>
+            <div class="skeleton-timeline"></div>
+          </div>
+          <div class="glass-label">Trace Image Area</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature-row scroller">
+      <div class="feature-text animated-element">
+        <h2>StudyBuddy Coach</h2>
+        <p>Get unstuck instantly. The context-aware LLM acts as your personal coach, offering hints and structured feedback without giving away the answer.</p>
+      </div>
+      <div class="feature-image animated-element">
+        <div class="glass-placeholder feature-glass">
+          <div class="glass-header"><span class="header-title">AI Assistant</span></div>
+          <div class="glass-body chat-body">
+            <div class="skeleton-chat user"></div>
+            <div class="skeleton-chat ai"></div>
+            <div class="skeleton-chat ai-long"></div>
+          </div>
+          <div class="glass-label">StudyBuddy Image Area</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Final CTA -->
+  <section class="cta-section">
+    <h2>Ready to transform how you learn RL?</h2>
+    <a href="https://reinfource.app/" class="btn btn-primary btn-large">Sign Up Now</a>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-content">
+      <div class="brand">
+        <div class="app-logo">
+          <div class="app-logo-inner">
+            <svg viewBox="-3 -3 106 106" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" overflow="visible"><defs><filter id="glow-brand" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="5" result="b1"/><feGaussianBlur stdDeviation="2" result="b2"/><feMerge><feMergeNode in="b1"/><feMergeNode in="b2"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><g transform="rotate(-2.5,50,50)"><rect x="6.0" y="4.0" width="10" height="10" rx="2.5" fill="#F4F7FC" opacity="0.65"/><rect x="24.6" y="3.6" width="10.8" height="10.8" rx="2.5" fill="#F4F7FC" opacity="0.69"/><rect x="44.3" y="3.3" width="11.4" height="11.4" rx="2.5" fill="#F4F7FC" opacity="0.73"/><rect x="63.9" y="2.9" width="12.2" height="12.2" rx="2.5" fill="#F4F7FC" opacity="0.77"/><circle cx="89" cy="9" r="1.8" fill="#F4F7FC" opacity="0.21"/><rect x="5.6" y="19.6" width="10.8" height="10.8" rx="2.5" fill="#F4F7FC" opacity="0.69"/><circle cx="30" cy="25" r="1.5" fill="#F4F7FC" opacity="0.18"/><circle cx="50" cy="25" r="1.7" fill="#F4F7FC" opacity="0.19"/><circle cx="70" cy="25" r="1.8" fill="#F4F7FC" opacity="0.21"/><rect x="82.2" y="18.2" width="13.6" height="13.6" rx="2.5" fill="#F4F7FC" opacity="0.84"/><rect x="5.3" y="35.3" width="11.4" height="11.4" rx="2.5" fill="#F4F7FC" opacity="0.73"/><circle cx="30" cy="41" r="1.7" fill="#F4F7FC" opacity="0.19"/><circle cx="50" cy="41" r="1.8" fill="#F4F7FC" opacity="0.21"/><circle cx="70" cy="41" r="2.0" fill="#F4F7FC" opacity="0.23"/><rect x="81.9" y="33.9" width="14.2" height="14.2" rx="2.5" fill="#F4F7FC" opacity="0.88"/><rect x="4.9" y="50.9" width="12.2" height="12.2" rx="2.5" fill="#F4F7FC" opacity="0.77"/><rect x="23.6" y="50.6" width="12.8" height="12.8" rx="2.5" fill="#F4F7FC" opacity="0.81"/><rect x="43.2" y="50.2" width="13.6" height="13.6" rx="2.5" fill="#F4F7FC" opacity="0.84"/><circle cx="70" cy="57" r="2.1" fill="#F4F7FC" opacity="0.25"/><circle cx="89" cy="57" r="2.3" fill="#e9f5f8" opacity="0.26"/><rect x="4.6" y="66.6" width="12.8" height="12.8" rx="2.5" fill="#F4F7FC" opacity="0.81"/><circle cx="30" cy="73" r="2.0" fill="#F4F7FC" opacity="0.23"/><circle cx="50" cy="73" r="2.1" fill="#F4F7FC" opacity="0.25"/><rect x="62.5" y="65.5" width="15" height="15" rx="2.5" fill="#c7efec" opacity="0.92"/><circle cx="89" cy="73" r="2.4" fill="#d2f1f0" opacity="0.28"/><rect x="4.2" y="82.2" width="13.6" height="13.6" rx="2.5" fill="#F4F7FC" opacity="0.84"/><circle cx="30" cy="89" r="2.1" fill="#F4F7FC" opacity="0.25"/><circle cx="50" cy="89" r="2.3" fill="#e9f5f8" opacity="0.26"/><circle cx="70" cy="89" r="2.4" fill="#d2f1f0" opacity="0.28"/><rect x="75.25" y="75.25" width="27.5" height="27.5" rx="5.5" fill="none" stroke="#00C9A7" stroke-width="1.4" opacity="0.4"/><rect x="78" y="78" width="22" height="22" rx="4.2" fill="#00C9A7" filter="url(#glow-brand)"/></g></svg>
+          </div>
+        </div>
+        <span class="brand-text">Re<span class="brand-i">i</span>nfource</span>
+      </div>
+      <p>&copy; 2026 Reinfource. All rights reserved.</p>
+    </div>
+  </footer>
+
+</body>
+</html>
