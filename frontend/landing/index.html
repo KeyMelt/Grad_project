@@ -11,9 +11,7 @@
      * Checks if the user is already authenticated via a session cookie.
      * If logged in, they are immediately redirected to the main application.
      * 
-     * Note for Integration: 
-     * Update 'reinfource_session=' to match your exact auth cookie name.
-     * Update '/app' to the correct route of the Flutter homepage.
+     * The production Nginx config serves the Flutter shell from /app.
      */
     if (document.cookie.split(';').some((item) => item.trim().startsWith('reinfource_session='))) {
       window.location.replace('/app');

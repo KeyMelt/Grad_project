@@ -3,9 +3,7 @@
 This directory contains the standalone HTML/CSS/JS landing page for `reinfource.app`.
 
 ## Auth Redirect Logic
-The `index.html` file includes an inline `<script>` in the `<head>` that checks for an authentication cookie (`reinfource_session`). If the cookie exists, it automatically redirects the user to `/app` (the main Flutter application).
-
-*Note: Update the cookie name and redirect route in `index.html` to match the platform's exact production auth architecture before deploying.*
+The `index.html` file includes an inline `<script>` in the `<head>` that checks for the authentication cookie (`reinfource_session`). If the cookie exists, it redirects the user to `/app`, which is served by the production Nginx config as the Flutter application shell.
 
 ## Integrating Screenshots
 Currently, the landing page uses CSS-based glassmorphism "skeletons" as placeholders for the actual platform screenshots. Once you have the screenshots, follow these steps to integrate them:
