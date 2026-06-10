@@ -21,6 +21,11 @@ SAFE_BUILTINS = {
     "zip": zip,
 }
 
+PYTHON_OPERATOR_ALIASES = {
+    "\u00d7": "*",
+    "\u2217": "*",
+}
+
 FORBIDDEN_NODES = (
     ast.Import,
     ast.ImportFrom,
@@ -54,6 +59,7 @@ FORBIDDEN_NAMES = {
 
 def load_user_context(submitted_code: str) -> dict[str, Any]:
     """Parse, validate, and execute a user program in a restricted namespace."""
+    submitted_code = normalize_submitted_code(submitted_code)
     _validate_user_code(submitted_code)
 
     local_context = {"__builtins__": SAFE_BUILTINS}
@@ -86,3 +92,10 @@ def _validate_user_code(submitted_code: str) -> None:
 
         if isinstance(node, ast.Attribute) and node.attr.startswith("__"):
             raise ValueError("Dunder attribute access is not allowed in submitted code.")
+
+
+def normalize_submitted_code(submitted_code: str) -> str:
+    """Normalize common pasted math glyphs into valid Python operators."""
+    for alias, operator in PYTHON_OPERATOR_ALIASES.items():
+        submitted_code = submitted_code.replace(alias, operator)
+    return submitted_code

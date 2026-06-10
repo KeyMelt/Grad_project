@@ -12,6 +12,17 @@ class LessonTestCaseResult:
     actual: str = ""
 
 
+class ActionValueRow(list):
+    """List row that also supports dict-style values() from common Q-table examples."""
+
+    def values(self) -> list[float]:
+        return list(self)
+
+
+def _q_table(rows: list[list[float]]) -> list[ActionValueRow]:
+    return [ActionValueRow(row) for row in rows]
+
+
 def run_lesson_tests(
     lesson_id: str,
     lesson_function: Callable[..., Any],
@@ -41,10 +52,10 @@ def run_lesson_tests(
 
 
 def _test_q_learning(lesson_function: Callable[..., Any]) -> list[LessonTestCaseResult]:
-    q_table = [
+    q_table = _q_table([
         [0.0, 0.0],
         [1.0, 3.0],
-    ]
+    ])
     lesson_function(
         q_table,
         0,
@@ -69,10 +80,10 @@ def _test_q_learning(lesson_function: Callable[..., Any]) -> list[LessonTestCase
 
 
 def _test_sarsa(lesson_function: Callable[..., Any]) -> list[LessonTestCaseResult]:
-    q_table = [
+    q_table = _q_table([
         [0.0, 0.0],
         [4.0, 1.0],
-    ]
+    ])
     lesson_function(
         q_table,
         0,
@@ -85,14 +96,54 @@ def _test_sarsa(lesson_function: Callable[..., Any]) -> list[LessonTestCaseResul
     )
     updated_value = q_table[0][1]
     expected = 2.0
-    passed = math.isclose(updated_value, expected, rel_tol=1e-6, abs_tol=1e-6)
+    terminal_q_table = _q_table([
+        [0.0, 0.0],
+        [4.0, 1.0],
+    ])
+    terminal_error = ""
+    try:
+        lesson_function(
+            terminal_q_table,
+            0,
+            1,
+            2.0,
+            1,
+            None,
+            0.5,
+            0.5,
+        )
+    except Exception as error:  # pragma: no cover - message is reported in result
+        terminal_error = f"{type(error).__name__}: {error}"
+
+    terminal_expected = 1.0
+    terminal_updated_value = terminal_q_table[0][1]
+    passed = (
+        math.isclose(updated_value, expected, rel_tol=1e-6, abs_tol=1e-6)
+        and not terminal_error
+        and math.isclose(
+            terminal_updated_value,
+            terminal_expected,
+            rel_tol=1e-6,
+            abs_tol=1e-6,
+        )
+    )
+    actual = f"Q[0][1] = {round(updated_value, 6)}"
+    if terminal_error:
+        actual = f"{actual}; terminal transition raised {terminal_error}"
+    else:
+        actual = (
+            f"{actual}; terminal Q[0][1] = {round(terminal_updated_value, 6)}"
+        )
     return [
         LessonTestCaseResult(
             name="sarsa_update_rule",
             passed=passed,
-            message="Updates the selected Q-value using the sampled next action in the TD target.",
-            expected=f"Q[0][1] = {expected}",
-            actual=f"Q[0][1] = {round(updated_value, 6)}",
+            message=(
+                "Updates the selected Q-value using the sampled next action and "
+                "uses zero bootstrap on terminal transitions."
+            ),
+            expected=f"Q[0][1] = {expected}; terminal Q[0][1] = {terminal_expected}",
+            actual=actual,
         ),
     ]
 

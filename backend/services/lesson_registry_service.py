@@ -428,7 +428,7 @@ _CORE_LESSONS: list[dict[str, Any]] = [
             {
                 "blank_id": "q_learning_best_next",
                 "kind": "expression",
-                "prompt": "Select the greedy bootstrap value from the next-state row of Q.",
+                "prompt": "Select the greedy bootstrap value from the next-state row of the list-backed Q-table.",
                 "expected_concept": "max next-state bootstrap",
                 "approx_line_anchor": 7,
             },
@@ -460,7 +460,7 @@ _CORE_LESSONS: list[dict[str, Any]] = [
             "title": "Implement the Q-learning update rule",
             "overview": "Complete the one-step TD update that adjusts a single Q-value from a sampled transition.",
             "tasks": [
-                "Replace the bootstrap placeholder with the greedy next-state value.",
+                "Replace the bootstrap placeholder with the greedy next-state value from the list-backed Q row.",
                 "Fill the TODO block that performs the incremental TD update.",
                 "Keep the TD target expression that combines reward and discounted bootstrap.",
             ],
@@ -469,7 +469,7 @@ _CORE_LESSONS: list[dict[str, Any]] = [
                 "The chosen Q-value is updated incrementally toward the TD target.",
                 "The function returns the updated Q-table and passes the sample lesson test.",
             ],
-            "code_tip": "LEARNING_RATE, DISCOUNT_FACTOR, EXPLORATION_RATE, and EPISODE_COUNT are read from the submitted code.",
+            "code_tip": "Q is list-backed in the backend, so max(Q[next_state]) is the direct bootstrap expression. LEARNING_RATE, DISCOUNT_FACTOR, EXPLORATION_RATE, and EPISODE_COUNT are read from the submitted code.",
         },
     },
 ]
@@ -624,13 +624,16 @@ class LessonRegistryService:
     def _ensure_seeded(self) -> None:
         with self._lock:
             with self._database.session() as session:
-                existing_ids = {
-                    row.id
+                existing_rows = {
+                    row.id: row
                     for row in session.exec(select(AuthoredLesson)).all()
                 }
             for lesson_data in _CORE_LESSONS:
-                if lesson_data["id"] not in existing_ids:
+                row = existing_rows.get(lesson_data["id"])
+                if row is None:
                     self._seed_lesson(lesson_data)
+                elif row.created_by_user_id == "system":
+                    self._refresh_system_lesson(lesson_data)
 
     def _seed_lesson(self, lesson_data: dict[str, Any]) -> None:
         from datetime import datetime, timezone
@@ -648,6 +651,23 @@ class LessonRegistryService:
                 created_at_utc=now,
                 updated_at_utc=now,
             )
+            session.add(row)
+            session.commit()
+
+    def _refresh_system_lesson(self, lesson_data: dict[str, Any]) -> None:
+        from datetime import datetime, timezone
+
+        now = datetime.now(timezone.utc)
+        with self._database.session() as session:
+            row = session.get(AuthoredLesson, lesson_data["id"])
+            if row is None or row.created_by_user_id != "system":
+                return
+            row.title = lesson_data["title"]
+            row.category = lesson_data["category"]
+            row.description = lesson_data["description"]
+            row.payload_json = json.dumps(lesson_data, sort_keys=True)
+            row.updated_by_user_id = "system"
+            row.updated_at_utc = now
             session.add(row)
             session.commit()
 

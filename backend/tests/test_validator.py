@@ -40,6 +40,47 @@ class CodeValidatorTest(unittest.TestCase):
         self.assertTrue(all(test["passed"] for test in result.test_results))
         self.assertEqual(result.unresolved_blanks, [])
 
+    def test_accepts_q_learning_dict_style_values_on_q_rows(self):
+        result = self.validator.validate_code(
+            (
+                "def q_learning_update(Q, state, action, reward, next_state, alpha, gamma):\n"
+                "    best_next_value = max(Q[next_state].values()) if Q[next_state] else 0.0\n"
+                "    td_target = reward + gamma * best_next_value\n"
+                "    Q[state][action] = Q[state][action] + alpha * (td_target - Q[state][action])\n"
+                "    return Q\n"
+            ),
+            "td_q_learning",
+        )
+
+        self.assertTrue(result.is_valid)
+        self.assertEqual(result.errors, [])
+        self.assertTrue(all(test["passed"] for test in result.test_results))
+
+    def test_normalizes_pasted_multiplication_glyphs(self):
+        result = self.validator.validate_code(
+            (
+                "def mc_first_visit_prediction(episode, V, returns, gamma=0.95):\n"
+                "    visited_states = set()\n"
+                "    for index, (state, _action, _reward) in enumerate(episode):\n"
+                "        if state in visited_states:\n"
+                "            continue\n"
+                "        visited_states.add(state)\n"
+                "        G = 0.0\n"
+                "        discount = 1.0\n"
+                "        for _, _, reward in episode[index:]:\n"
+                "            G += discount × reward\n"
+                "            discount ×= gamma\n"
+                "        returns.setdefault(state, []).append(G)\n"
+                "        V[state] = sum(returns[state]) / len(returns[state])\n"
+                "    return V\n"
+            ),
+            "mc_first_visit",
+        )
+
+        self.assertTrue(result.is_valid)
+        self.assertEqual(result.errors, [])
+        self.assertTrue(all(test["passed"] for test in result.test_results))
+
     def test_rejects_forbidden_imports(self):
         result = self.validator.validate_code(
             "import os\n\ndef q_learning_update(*args):\n    return []\n",
@@ -154,6 +195,22 @@ class CodeValidatorTest(unittest.TestCase):
         self.assertTrue(result.is_valid)
         self.assertEqual(result.errors, [])
         self.assertTrue(all(test["passed"] for test in result.test_results))
+
+    def test_rejects_sarsa_without_terminal_bootstrap_guard(self):
+        result = self.validator.validate_code(
+            (
+                "def sarsa_update(Q, state, action, reward, next_state, next_action, alpha=0.1, gamma=0.9):\n"
+                "    bootstrap = Q[next_state][next_action]\n"
+                "    td_target = reward + gamma * bootstrap\n"
+                "    Q[state][action] = Q[state][action] + alpha * (td_target - Q[state][action])\n"
+                "    return Q\n"
+            ),
+            "td_sarsa",
+        )
+
+        self.assertFalse(result.is_valid)
+        self.assertEqual(result.failure_kind, "test_failure")
+        self.assertIn("terminal transition raised", result.test_results[0]["actual"])
 
 
 if __name__ == "__main__":

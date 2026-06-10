@@ -8,6 +8,13 @@ from backend.lesson_registry import get_lesson_definition
 from backend.user_code import load_user_function
 
 
+class ActionValueRow(list):
+    """List-backed action values with dict-style values() compatibility."""
+
+    def values(self) -> list[float]:
+        return list(self)
+
+
 class EnvironmentAdapter:
     """Manages Gymnasium environments and exports render frames for visualization."""
 
@@ -315,6 +322,14 @@ class RLEngine:
 
     def _rounded_table(self, table: list[list[float]]) -> list[list[float]]:
         return [[round(float(value), 4) for value in row] for row in table]
+
+    def _empty_q_table(self) -> list[ActionValueRow]:
+        state_count = self.adapter.env.observation_space.n
+        action_count = self.adapter.env.action_space.n
+        return [
+            ActionValueRow([0.0 for _ in range(action_count)])
+            for _ in range(state_count)
+        ]
 
     def _rounded_vector_table(self, values: list[float]) -> list[list[float]]:
         return [[round(float(value), 4)] for value in values]
@@ -956,9 +971,8 @@ class RLEngine:
     def _run_q_learning(
         self, lesson_function, num_episodes: int, hyperparameters: Dict[str, float]
     ):
-        state_count = self.adapter.env.observation_space.n
         action_count = self.adapter.env.action_space.n
-        q_table = [[0.0 for _ in range(action_count)] for _ in range(state_count)]
+        q_table = self._empty_q_table()
 
         for episode_index in range(num_episodes):
             state, _ = self.adapter.reset(seed=episode_index)
@@ -1078,9 +1092,8 @@ class RLEngine:
             self.logger.end_episode()
 
     def _run_sarsa(self, lesson_function, num_episodes: int, hyperparameters: Dict[str, float]):
-        state_count = self.adapter.env.observation_space.n
         action_count = self.adapter.env.action_space.n
-        q_table = [[0.0 for _ in range(action_count)] for _ in range(state_count)]
+        q_table = self._empty_q_table()
 
         for episode_index in range(num_episodes):
             state, _ = self.adapter.reset(seed=episode_index)
