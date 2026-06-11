@@ -7,7 +7,6 @@ from backend.api_gateway.base import ServiceContainer, create_app
 from backend.auth.roles import AccountStatus, PlatformRole, Principal
 from backend.persistence import Database
 from backend.services.alei_export_service import ALEIExportService
-from backend.services.authored_lesson_service import AuthoredLessonService
 from backend.services.evaluation_session_service import EvaluationSessionService
 from backend.services.lesson_registry_service import LessonRegistryService
 from backend.services.prediction_probe_service import PredictionProbeService
@@ -63,7 +62,6 @@ def client(tmp_path):
         prediction_probe=PredictionProbeService(database=db),
         study_session_survey=StudySessionSurveyService(database=db),
         alei_export=ALEIExportService(database=db),
-        authored_lessons=AuthoredLessonService(database=db),
         lesson_registry=registry,
     )
     app = create_app(services=svc)

@@ -1,0 +1,452 @@
+{
+  "default_quiz_length": 8,
+  "default_category_quiz_length": 5,
+  "category_section_label": "Equation family quizzes",
+  "category_section_description": "Practice one concept family at a time with focused equation and code-reading questions.",
+  "assessment_phases": [
+    {
+      "id": "pretest",
+      "label": "Pre-test",
+      "description": "Check your starting understanding before practice.",
+      "shows_n_gain": true
+    },
+    {
+      "id": "posttest",
+      "label": "Post-test",
+      "description": "Measure progress after completing at least one successful lesson run.",
+      "requires_successful_run": true,
+      "triggers_post_study_survey": true,
+      "shows_n_gain": true
+    }
+  ],
+  "category_quizzes": [
+    {
+      "id": "bellman_equations",
+      "label": "Bellman Equations",
+      "description": "Policy evaluation, Bellman expectation, Bellman optimality, and terminal backups.",
+      "concepts": ["Bellman Equations", "Dynamic Programming", "Environment Model"]
+    },
+    {
+      "id": "policy_improvement",
+      "label": "Policy Improvement",
+      "description": "Greedy improvement, value iteration, and action-value comparisons.",
+      "concepts": ["Policy Improvement", "Value Iteration"]
+    },
+    {
+      "id": "monte_carlo_returns",
+      "label": "Monte Carlo Returns",
+      "description": "First-visit returns, complete episodes, and sample-average updates.",
+      "concepts": ["Monte Carlo Returns", "Monte Carlo Methods"]
+    },
+    {
+      "id": "td_control",
+      "label": "TD Control",
+      "description": "TD targets, Q-learning, SARSA, terminal guards, and bootstrapping.",
+      "concepts": ["TD Control", "Temporal Difference"]
+    },
+    {
+      "id": "exploration_schedules",
+      "label": "Exploration Schedules",
+      "description": "Epsilon-greedy behavior, decay, and exploration/exploitation tradeoffs.",
+      "concepts": ["Exploration Schedules", "Core RL"]
+    }
+  ],
+  "questions": [
+    {
+      "id": "q_bellman_expectation",
+      "concept": "Dynamic Programming",
+      "prompt": "What does policy evaluation repeatedly update for each state?",
+      "options": [
+        "The expected return under the current policy",
+        "The number of available actions",
+        "The exploration rate schedule",
+        "The animation playback speed"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_value_iteration",
+      "concept": "Dynamic Programming",
+      "prompt": "Which operation makes value iteration different from policy evaluation?",
+      "options": [
+        "Taking the maximum over action values",
+        "Averaging rewards across every episode",
+        "Sampling only the first state in an episode",
+        "Replacing gamma with alpha"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_policy_improvement",
+      "concept": "Dynamic Programming",
+      "prompt": "What does policy improvement do after state values have been estimated?",
+      "options": [
+        "It chooses the greedy action for each state using the current value table",
+        "It averages returns over complete episodes",
+        "It replaces the value table with transition probabilities",
+        "It resets every Q-value to zero before the next episode"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_transition_probability",
+      "concept": "Environment Model",
+      "prompt": "What does a transition probability describe in FrozenLake?",
+      "options": [
+        "How likely the environment is to move to a next state after an action",
+        "How many times a state has been visited",
+        "The reward assigned to every terminal state",
+        "The number of frames rendered per episode"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_terminal_state",
+      "concept": "Environment Model",
+      "prompt": "How is a terminal state typically handled in value updates?",
+      "options": [
+        "Its future value contribution is treated as zero",
+        "Its reward is ignored completely",
+        "Its transition probabilities are set equal to epsilon",
+        "Its action space doubles in size"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_bellman_eval_equation",
+      "concept": "Bellman Equations",
+      "prompt": "Which expression matches a one-step Bellman expectation backup for V_pi(s)?",
+      "options": [
+        "Sum over actions and next states of pi(a|s) P(s'|s,a) [r + gamma V(s')]",
+        "Max over actions of alpha times the previous Q-value",
+        "Average all rewards in the replay buffer without discounting",
+        "Reward minus gamma times the previous state value"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_bellman_optimality_equation",
+      "concept": "Bellman Equations",
+      "prompt": "What changes when moving from the Bellman expectation equation to the Bellman optimality equation?",
+      "options": [
+        "The policy-weighted action average becomes a max over actions",
+        "The discount factor is removed",
+        "Transition probabilities are ignored",
+        "Terminal rewards are always set to zero"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_bellman_code_policy_eval",
+      "concept": "Bellman Equations",
+      "prompt": "Read the policy-evaluation backup:\n\nvalue += action_prob * transition_prob * (reward + gamma * V[next_state])\n\nWhat does multiplying by both probabilities do?",
+      "options": [
+        "It weights each successor contribution by how likely the policy and environment make it",
+        "It forces the update to choose the greedy action",
+        "It prevents terminal states from contributing rewards",
+        "It converts V into a Q-table"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_bellman_terminal_backup",
+      "concept": "Bellman Equations",
+      "prompt": "In a Bellman backup, why should a terminal successor contribute no discounted future value?",
+      "options": [
+        "There are no future decisions after termination, so only the immediate reward remains",
+        "Terminal states always have negative rewards",
+        "The transition probability is always zero",
+        "The learning rate becomes one at terminal states"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_policy_iteration_sequence",
+      "concept": "Policy Improvement",
+      "prompt": "Which sequence describes policy iteration?",
+      "options": [
+        "Evaluate the current policy, then improve it greedily from the value estimates",
+        "Choose random actions forever, then average final rewards",
+        "Update Q with the sampled next action, then lower epsilon",
+        "Render an episode, then copy its frames into the next policy"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_policy_improvement_code_argmax",
+      "concept": "Policy Improvement",
+      "prompt": "A policy-improvement loop computes action_values for a state and then runs:\n\nbest_action = max(range(action_count), key=lambda action: action_values[action])\n\nWhat policy does this produce for that state?",
+      "options": [
+        "A greedy policy that chooses the action with the largest backed-up value",
+        "A uniformly random policy over all actions",
+        "A first-visit Monte Carlo policy",
+        "A policy that always chooses the action with the lowest reward"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_value_iteration_in_place",
+      "concept": "Value Iteration",
+      "prompt": "Why does value iteration repeatedly sweep over states?",
+      "options": [
+        "Value information has to propagate backward through successor-state backups",
+        "Every state must be visited exactly once and then frozen",
+        "The transition model changes after every sweep",
+        "The discount factor increases after each state"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_value_iteration_code_max",
+      "concept": "Value Iteration",
+      "prompt": "In value iteration, this line appears inside a state update:\n\nnew_values[state] = max(action_values)\n\nWhat does this line represent?",
+      "options": [
+        "The Bellman optimality backup selecting the best action value",
+        "The policy expectation over all action probabilities",
+        "A Monte Carlo average over full episode returns",
+        "The epsilon-greedy behavior action"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_mc_update_timing",
+      "concept": "Monte Carlo Methods",
+      "prompt": "When does first-visit Monte Carlo prediction update a state's value?",
+      "options": [
+        "After the episode is complete and the first-visit return is known",
+        "Immediately after every action",
+        "Only when the agent reaches the start state again",
+        "Before the environment is reset"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_mc_first_visit",
+      "concept": "Monte Carlo Methods",
+      "prompt": "Why does first-visit Monte Carlo ignore repeated visits to the same state in one episode?",
+      "options": [
+        "It only keeps the return from the first occurrence of that state",
+        "It assumes repeated states are impossible",
+        "It wants to maximize the exploration rate",
+        "It replaces returns with transition probabilities"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_mc_return_definition",
+      "concept": "Monte Carlo Returns",
+      "prompt": "What is the return G_t in Monte Carlo prediction?",
+      "options": [
+        "The discounted sum of rewards from time t to the end of the episode",
+        "The immediate reward only",
+        "The maximum Q-value in the next state",
+        "The probability of selecting the greedy action"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_mc_no_bootstrap",
+      "concept": "Monte Carlo Returns",
+      "prompt": "Why is first-visit Monte Carlo not a bootstrapping method?",
+      "options": [
+        "It waits for complete returns instead of using a current value estimate in the target",
+        "It updates before any reward is observed",
+        "It always uses max_a Q(s,a)",
+        "It requires a transition probability table"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_mc_code_discount_loop",
+      "concept": "Monte Carlo Returns",
+      "prompt": "Read this return calculation:\n\nG = 0.0\ndiscount = 1.0\nfor _, _, reward in episode[index:]:\n    G += discount * reward\n    discount *= gamma\n\nWhat does discount *= gamma do?",
+      "options": [
+        "It makes later rewards count by progressively higher powers of gamma",
+        "It increases the learning rate after every reward",
+        "It makes every reward count equally",
+        "It selects the next action from the policy"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_mc_incremental_mean",
+      "concept": "Monte Carlo Returns",
+      "prompt": "After appending a new first-visit return for a state, why is V[state] set to the mean of returns[state]?",
+      "options": [
+        "The value estimate is the sample average of observed returns from that state",
+        "The largest observed return is always unbiased",
+        "The latest reward replaces all prior evidence",
+        "The state transition probability must sum to one"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_td_target",
+      "concept": "Temporal Difference",
+      "prompt": "What is the TD target used by Q-learning?",
+      "options": [
+        "Reward plus discounted best next-state action value",
+        "Reward plus the current state's maximum value",
+        "Average episode reward minus epsilon",
+        "Discount factor times the previous action probability"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_q_learning_off_policy",
+      "concept": "Temporal Difference",
+      "prompt": "Why is Q-learning considered off-policy?",
+      "options": [
+        "It learns from the greedy target even when behavior includes exploration",
+        "It requires complete episodes before every update",
+        "It evaluates only a fixed stochastic policy",
+        "It cannot be used with discrete state spaces"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_sarsa_on_policy",
+      "concept": "Temporal Difference",
+      "prompt": "Why is SARSA considered on-policy?",
+      "options": [
+        "Its TD target uses the next action that the behavior policy actually sampled",
+        "It waits for the end of the episode before every update",
+        "It computes a maximum over all next-state actions",
+        "It ignores the discount factor during bootstrapping"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_td_target_equation",
+      "concept": "TD Control",
+      "prompt": "Which target is used by one-step TD prediction for V(s)?",
+      "options": [
+        "r + gamma V(s')",
+        "max_a pi(a|s)",
+        "The average of every return in the episode",
+        "epsilon / action_count"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_td_error_equation",
+      "concept": "TD Control",
+      "prompt": "What is the TD error in the update V(s) <- V(s) + alpha [target - V(s)]?",
+      "options": [
+        "target - V(s)",
+        "V(s) - reward",
+        "alpha * gamma",
+        "epsilon + reward"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_td_code_q_learning",
+      "concept": "TD Control",
+      "prompt": "Read this Q-learning target:\n\nbest_next = max(Q[next_state])\ntd_target = reward + gamma * best_next\n\nWhy does it use max(Q[next_state])?",
+      "options": [
+        "Q-learning learns the greedy target policy even if behavior was exploratory",
+        "SARSA requires the largest next action",
+        "Monte Carlo methods need a next-state bootstrap",
+        "It averages over the behavior policy"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_td_code_sarsa",
+      "concept": "TD Control",
+      "prompt": "Read this SARSA target:\n\nbootstrap = 0.0 if next_action is None else Q[next_state][next_action]\ntd_target = reward + gamma * bootstrap\n\nWhy is next_action used instead of max(Q[next_state])?",
+      "options": [
+        "SARSA is on-policy and backs up the action actually sampled by the behavior policy",
+        "SARSA ignores the behavior policy",
+        "SARSA cannot handle terminal states",
+        "SARSA is a complete-episode Monte Carlo method"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_td_terminal_code_guard",
+      "concept": "TD Control",
+      "prompt": "A TD update sets bootstrap = 0.0 when terminated is true. What bug does this prevent?",
+      "options": [
+        "Adding discounted future value after the episode has already ended",
+        "Using too small a learning rate",
+        "Choosing greedy actions too often",
+        "Recording a reward in the trace"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_discount_factor",
+      "concept": "Core RL",
+      "prompt": "What does the discount factor gamma primarily control?",
+      "options": [
+        "How much future rewards influence the current estimate",
+        "How many episodes are stored in memory",
+        "How often the policy is rendered",
+        "How many actions the environment exposes"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_value_function",
+      "concept": "Core RL",
+      "prompt": "What does a state-value function estimate?",
+      "options": [
+        "The expected long-term return from a state",
+        "The immediate reward of the previous action only",
+        "The probability that the episode will never end",
+        "The number of code lines executed in the update step"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_epsilon_greedy",
+      "concept": "Temporal Difference",
+      "prompt": "What is the role of epsilon in epsilon-greedy action selection?",
+      "options": [
+        "It controls how often the agent explores instead of exploiting",
+        "It controls the Bellman residual threshold",
+        "It scales the animation frame size",
+        "It replaces the reward function"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_exploration_epsilon_probability",
+      "concept": "Exploration Schedules",
+      "prompt": "With epsilon-greedy action selection, what happens as epsilon decreases?",
+      "options": [
+        "The agent chooses random exploratory actions less often",
+        "The discount factor increases",
+        "The TD target becomes a Monte Carlo return",
+        "The reward function becomes deterministic"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_exploration_code_branch",
+      "concept": "Exploration Schedules",
+      "prompt": "Read this action-selection code:\n\nif random.random() < epsilon:\n    return env.action_space.sample()\nreturn argmax(Q[state])\n\nWhich branch is exploration?",
+      "options": [
+        "The random action sampled when random.random() < epsilon",
+        "The argmax action after the if statement",
+        "Both branches are always greedy",
+        "Neither branch changes behavior"
+      ],
+      "correct_index": 0
+    },
+    {
+      "id": "q_exploration_decay_floor",
+      "concept": "Exploration Schedules",
+      "prompt": "Why do many epsilon schedules keep a minimum epsilon floor?",
+      "options": [
+        "To preserve some exploration instead of becoming permanently greedy too early",
+        "To make gamma larger than one",
+        "To force every terminal state to be revisited",
+        "To convert Q-learning into policy evaluation"
+      ],
+      "correct_index": 0
+    }
+  ]
+}

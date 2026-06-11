@@ -145,6 +145,19 @@ class QuizServiceTest(unittest.TestCase):
 
         self.assertTrue(first_question_ids.isdisjoint(second_question_ids))
 
+    def test_category_quiz_uses_catalog_concepts(self):
+        session = self.quiz_service.start_session(self.student_id, "td_control")
+
+        self.assertEqual(session["phase"], "td_control")
+        self.assertEqual(session["phase_label"], "TD Control")
+        self.assertGreater(len(session["questions"]), 0)
+        self.assertTrue(
+            all(
+                question["concept"] in {"TD Control", "Temporal Difference"}
+                for question in session["questions"]
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -154,8 +154,6 @@ class LocalEvalProgressService:
         percentage: float,
         question_ids: list[str],
     ) -> Optional[dict[str, Any]]:
-        if phase not in {"pretest", "posttest"}:
-            raise ValueError(f"Unsupported quiz phase '{phase}'.")
         with self._lock:
             row = self._fetch(student_id)
             if row is None:
@@ -173,7 +171,7 @@ class LocalEvalProgressService:
 
             if phase == "pretest":
                 progress["pretest_score"] = percentage
-            else:
+            elif phase == "posttest":
                 progress["posttest_score"] = percentage
                 progress["n_gain"] = self._compute_n_gain(
                     progress.get("pretest_score"),
@@ -296,6 +294,11 @@ class LocalEvalProgressService:
     ) -> dict[str, Any]:
         progress = payload.get("progress", {})
         attempts = progress.get("quiz_attempts", {"pretest": 0, "posttest": 0})
+        normalized_attempts = {
+            str(key): int(value) for key, value in attempts.items()
+        }
+        normalized_attempts.setdefault("pretest", 0)
+        normalized_attempts.setdefault("posttest", 0)
         return {
             "student": {
                 "id": student_id,
@@ -310,10 +313,7 @@ class LocalEvalProgressService:
                 "pretest_score": progress.get("pretest_score"),
                 "posttest_score": progress.get("posttest_score"),
                 "n_gain": progress.get("n_gain"),
-                "quiz_attempts": {
-                    "pretest": int(attempts.get("pretest", 0)),
-                    "posttest": int(attempts.get("posttest", 0)),
-                },
+                "quiz_attempts": normalized_attempts,
                 "total_submission_attempts": int(
                     progress.get("total_submission_attempts", 0)
                 ),

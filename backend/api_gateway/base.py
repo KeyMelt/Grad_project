@@ -19,6 +19,7 @@ from backend.api_gateway.routes import (
     build_concept_videos_router,
     build_evaluation_router,
     build_execution_router,
+    build_flashcards_router,
     build_lessons_router,
     build_quiz_router,
     build_study_buddy_router,
@@ -26,14 +27,17 @@ from backend.api_gateway.routes import (
     build_visualization_router,
     build_workspace_router,
 )
+from backend.api_gateway.routes.surveys import build_surveys_router
 from backend.persistence import Database
 from backend.services.alei_export_service import ALEIExportService
-from backend.services.authored_lesson_service import AuthoredLessonService
 from backend.services.lesson_registry_service import LessonRegistryService
 from backend.services.auth_service import AuthService
 from backend.services.evaluation_session_service import EvaluationSessionService
+from backend.services.flashcard_service import FlashcardService
 from backend.services.prediction_probe_service import PredictionProbeService
 from backend.services.study_session_survey_service import StudySessionSurveyService
+from backend.services.survey_management_service import SurveyManagementService
+from backend.services.survey_response_service import SurveyResponseService
 from backend.services.execution_service import ExecutionService as LocalExecutionService
 from backend.services.firebase_progress_service import FirebaseProgressService
 from backend.services.local_eval_progress_service import LocalEvalProgressService
@@ -80,8 +84,10 @@ class ServiceContainer:
     prediction_probe: PredictionProbeService | None = None
     study_session_survey: StudySessionSurveyService | None = None
     alei_export: ALEIExportService | None = None
-    authored_lessons: AuthoredLessonService | None = None
     lesson_registry: LessonRegistryService | None = None
+    survey_management: SurveyManagementService | None = None
+    survey_response: SurveyResponseService | None = None
+    flashcards: FlashcardService | None = None
 
 
 def _build_services() -> ServiceContainer:
@@ -97,7 +103,7 @@ def _build_services() -> ServiceContainer:
         telemetry_service=telemetry,
         database=telemetry.database,
     )
-    user_evaluation, local_progress_service = _build_user_evaluation(settings)
+    user_evaluation, local_progress_service = _build_user_evaluation(settings, database=database)
     firebase_client = _build_firebase_admin_client(settings)
 
     import os as _os
@@ -130,8 +136,11 @@ def _build_services() -> ServiceContainer:
     prediction_probe_svc = PredictionProbeService(database=database)
     study_session_survey_svc = StudySessionSurveyService(database=database)
     alei_export_svc = ALEIExportService(database=database)
-    authored_lesson_svc = AuthoredLessonService(database=database)
     lesson_registry_svc = LessonRegistryService(database=database)
+    survey_management_svc = SurveyManagementService(database=database)
+    survey_management_svc.seed_defaults()
+    survey_response_svc = SurveyResponseService(database=database)
+    flashcard_svc = FlashcardService(database=database)
 
     import backend.lesson_registry as _lr
     _lr.set_registry(lesson_registry_svc)
@@ -160,8 +169,10 @@ def _build_services() -> ServiceContainer:
         prediction_probe=prediction_probe_svc,
         study_session_survey=study_session_survey_svc,
         alei_export=alei_export_svc,
-        authored_lessons=authored_lesson_svc,
         lesson_registry=lesson_registry_svc,
+        survey_management=survey_management_svc,
+        survey_response=survey_response_svc,
+        flashcards=flashcard_svc,
     )
 
 
@@ -184,7 +195,9 @@ def _build_firebase_admin_client(settings: GatewaySettings) -> FirebaseAdminClie
 
 def _build_user_evaluation(
     settings: GatewaySettings,
-) -> tuple[UserEvaluationService | RemoteUserEvaluationService, FirebaseProgressService | None]:
+    database: Database | None = None,
+) -> tuple[UserEvaluationService | RemoteUserEvaluationService, FirebaseProgressService | LocalEvalProgressService | None]:
+    import os as _os
     if settings.user_service_mode == "remote":
         return (
             RemoteUserEvaluationService(
@@ -195,6 +208,18 @@ def _build_user_evaluation(
             None,
         )
 
+    # When local password auth is enabled (eval harness), use the SQLite-backed
+    # progress service so Firebase credentials are not required.
+    if _os.environ.get("RL_IDE_ALLOW_LOCAL_PASSWORD_AUTH", "0").strip() == "1":
+        local_progress = LocalEvalProgressService()
+        return (
+            UserEvaluationService(
+                progress_service=local_progress,
+                quiz_service=QuizService(local_progress, database=database),
+            ),
+            local_progress,
+        )
+
     progress = FirebaseProgressService(
         credentials_path=settings.firebase_credentials_path,
         app_name=settings.firebase_app_name,
@@ -203,7 +228,7 @@ def _build_user_evaluation(
     return (
         UserEvaluationService(
             progress_service=progress,
-            quiz_service=QuizService(progress),
+            quiz_service=QuizService(progress, database=database),
         ),
         progress,
     )
@@ -285,6 +310,7 @@ def create_app(services: ServiceContainer | None = None) -> FastAPI:
         return {"status": "ready"}
 
     app.include_router(build_lessons_router(svc))
+    app.include_router(build_flashcards_router(svc))
     app.include_router(build_concept_videos_router())
     app.include_router(build_workspace_router(svc))
     app.include_router(build_visualization_router(svc))
@@ -297,4 +323,6 @@ def create_app(services: ServiceContainer | None = None) -> FastAPI:
         app.include_router(build_study_buddy_router(svc))
     app.include_router(build_admin_router(svc))
     app.include_router(build_evaluation_router(svc))
+    if svc.survey_management is not None:
+        app.include_router(build_surveys_router(svc))
     return app

@@ -421,6 +421,9 @@ class AuthService:
                         .where(AuthUser.firebase_uid.is_(None))
                         .where(AuthUser.normalized_display_name == lookup)
                     ).first()
+                    if user is not None and user.role != PlatformRole.STUDENT.value:
+                        user = None
+                    
                     if user is not None:
                         user.firebase_uid = uid
                         user.display_name = display_name

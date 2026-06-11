@@ -41,6 +41,9 @@ class UserEvaluationService:
     def start_quiz(self, student_id: str, phase: str) -> dict[str, Any]:
         return self._quiz_service.start_session(student_id=student_id, phase=phase)
 
+    def quiz_catalog(self) -> dict[str, Any]:
+        return self._quiz_service.catalog_payload()
+
     def submit_quiz(
         self,
         student_id: str,

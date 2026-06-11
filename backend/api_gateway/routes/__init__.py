@@ -3,6 +3,7 @@ from backend.api_gateway.routes.auth import build_auth_router
 from backend.api_gateway.routes.evaluation import build_evaluation_router
 from backend.api_gateway.routes.concept_videos import build_concept_videos_router
 from backend.api_gateway.routes.execution import build_execution_router
+from backend.api_gateway.routes.flashcards import build_flashcards_router
 from backend.api_gateway.routes.lessons import build_lessons_router
 from backend.api_gateway.routes.quiz import build_quiz_router
 from backend.api_gateway.routes.study_buddy import build_study_buddy_router
@@ -16,6 +17,7 @@ __all__ = [
     "build_evaluation_router",
     "build_concept_videos_router",
     "build_execution_router",
+    "build_flashcards_router",
     "build_lessons_router",
     "build_quiz_router",
     "build_study_buddy_router",

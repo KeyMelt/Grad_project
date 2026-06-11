@@ -119,9 +119,6 @@ class FirebaseProgressService:
         percentage: float,
         question_ids: list[str],
     ) -> Optional[dict[str, Any]]:
-        if phase not in {"pretest", "posttest"}:
-            raise ValueError(f"Unsupported quiz phase '{phase}'.")
-
         user_ref = self._users.document(student_id)
         snapshot = user_ref.get()
         if not snapshot.exists:
@@ -135,7 +132,7 @@ class FirebaseProgressService:
 
         if phase == "pretest":
             progress["pretest_score"] = percentage
-        else:
+        elif phase == "posttest":
             progress["posttest_score"] = percentage
 
         question_history = list(progress.get("question_history", []))
@@ -280,6 +277,11 @@ class FirebaseProgressService:
     def _dashboard_payload(self, student_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         progress = payload.get("progress", {})
         attempts = progress.get("quiz_attempts", {"pretest": 0, "posttest": 0})
+        normalized_attempts = {
+            str(key): int(value) for key, value in attempts.items()
+        }
+        normalized_attempts.setdefault("pretest", 0)
+        normalized_attempts.setdefault("posttest", 0)
         return {
             "student": {
                 "id": student_id,
@@ -295,10 +297,7 @@ class FirebaseProgressService:
                 "pretest_score": progress.get("pretest_score"),
                 "posttest_score": progress.get("posttest_score"),
                 "n_gain": progress.get("n_gain"),
-                "quiz_attempts": {
-                    "pretest": int(attempts.get("pretest", 0)),
-                    "posttest": int(attempts.get("posttest", 0)),
-                },
+                "quiz_attempts": normalized_attempts,
                 "total_submission_attempts": int(progress.get("total_submission_attempts", 0)),
                 "passed_submission_attempts": int(progress.get("passed_submission_attempts", 0)),
                 "validation_failures": int(progress.get("validation_failures", 0)),

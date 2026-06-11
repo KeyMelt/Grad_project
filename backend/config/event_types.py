@@ -29,6 +29,10 @@ CONCEPT_CHECK_ATTEMPT = "concept_check_attempt"
 CONCEPT_CHECK_CORRECT = "concept_check_correct"
 CONCEPT_CHECK_WRONG = "concept_check_wrong"
 
+# Component micro-surveys
+VIDEO_MICRO_SURVEY_SUBMITTED = "video_micro_survey_submitted"
+REPLAY_MICRO_SURVEY_SUBMITTED = "replay_micro_survey_submitted"
+
 ALL_EVENT_TYPES: frozenset[str] = frozenset({
     PRE_TEST_START,
     PRE_TEST_COMPLETE,
@@ -49,4 +53,6 @@ ALL_EVENT_TYPES: frozenset[str] = frozenset({
     CONCEPT_CHECK_ATTEMPT,
     CONCEPT_CHECK_CORRECT,
     CONCEPT_CHECK_WRONG,
+    VIDEO_MICRO_SURVEY_SUBMITTED,
+    REPLAY_MICRO_SURVEY_SUBMITTED,
 })

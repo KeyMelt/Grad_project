@@ -54,6 +54,24 @@ def build_study_buddy_router(services: Any) -> APIRouter:
         request: StudyBuddyChatRequest,
         principal: Principal = Depends(student_or_admin),
     ):
+        import os as _os
+        if _os.environ.get("RL_IDE_ALLOW_LOCAL_PASSWORD_AUTH", "0").strip() == "1":
+            # Eval harness stub — returns a deterministic guidance response so
+            # agent simulations can record study-buddy usage without an LLM key.
+            _stub = (
+                "Good question! Think about how the discount factor affects "
+                "long-horizon value estimates. Review your loop bounds and the "
+                "Bellman update formula in the trace panel."
+            )
+            return {
+                "message": {"role": "assistant", "content": _stub},
+                "reply": _stub,
+                "suggested_next_step": "Review the Bellman backup equation in the trace panel.",
+                "concept_ids": ["policy_evaluation", "bellman_backup"],
+                "solution_leakage_risk": False,
+                "used_fallback": True,
+                "observability": {"model": "eval_stub", "prompt_version": "v0", "latency_ms": 0, "used_fallback": True},
+            }
         try:
             return services.study_buddy.chat(
                 student_id=principal.id,
