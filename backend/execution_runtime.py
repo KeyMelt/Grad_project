@@ -286,6 +286,7 @@ def _create_environment_adapter(
         return EnvironmentAdapter(
             env_name=lesson.environment_name,
             frame_dir=capture_dir,
+            env_params=getattr(lesson, "env_params", {}),
         )
     except Exception as error:
         raise ExecutionPipelineError(status_code=400, detail=str(error)) from error

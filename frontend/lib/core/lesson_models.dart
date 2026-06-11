@@ -44,6 +44,14 @@ class StudyFlashcard {
     required this.category,
     required this.explanation,
   });
+
+  factory StudyFlashcard.fromJson(Map<String, dynamic> json) {
+    return StudyFlashcard(
+      term: json['term'] as String? ?? '',
+      category: json['category'] as String? ?? '',
+      explanation: json['explanation'] as String? ?? '',
+    );
+  }
 }
 
 @immutable

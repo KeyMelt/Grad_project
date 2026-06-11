@@ -1,7 +1,9 @@
+import os
 import requests
 import time
 
-submit_url = "http://127.0.0.1:8000/submit"
+_gateway_url = os.environ.get("RL_IDE_GATEWAY_URL", "http://127.0.0.1:8000").rstrip("/")
+submit_url = f"{_gateway_url}/submit"
 payload = {
     "lesson_id": "td_q_learning",
     "code": (
@@ -22,7 +24,7 @@ try:
     task_id = submit_response.json()["task_id"]
 
     while True:
-        status_response = requests.get(f"http://127.0.0.1:8000/tasks/{task_id}")
+        status_response = requests.get(f"{_gateway_url}/tasks/{task_id}")
         status_response.raise_for_status()
         task = status_response.json()
         print(task)

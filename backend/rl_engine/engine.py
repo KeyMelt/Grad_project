@@ -23,10 +23,12 @@ class EnvironmentAdapter:
         env_name: str,
         frame_dir: str | None = None,
         render_mode: str = "rgb_array",
+        env_params: dict | None = None,
     ):
         self.env_name = env_name
         self.render_mode = render_mode
         self.frame_dir = frame_dir
+        self.env_params: dict = env_params or {}
         self._frame_index = 0
         if self.frame_dir is not None:
             os.makedirs(self.frame_dir, exist_ok=True)
@@ -45,14 +47,14 @@ class EnvironmentAdapter:
             return gym.make(
                 "FrozenLake-v1",
                 desc=None,
-                map_name="4x4",
-                is_slippery=True,
+                map_name=self.env_params.get("map_name", "4x4"),
+                is_slippery=self.env_params.get("is_slippery", True),
                 render_mode=self.render_mode,
             )
         if self.env_name == "Blackjack":
             return gym.make(
                 "Blackjack-v1",
-                sab=True,
+                sab=self.env_params.get("sab", True),
                 render_mode=self.render_mode,
             )
         if self.env_name == "CliffWalking":

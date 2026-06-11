@@ -26,6 +26,7 @@ class LessonDefinition:
     template_kind: str = "guided_fill_in"
     template_blanks: list[TemplateBlank] = field(default_factory=list)
     success_criteria: list[str] = field(default_factory=list)
+    env_params: dict = field(default_factory=dict)
 
 
 def serialize_lesson(lesson: LessonDefinition) -> dict:

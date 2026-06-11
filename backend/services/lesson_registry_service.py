@@ -36,6 +36,7 @@ _CORE_LESSONS: list[dict[str, Any]] = [
         "category": "Dynamic Programming",
         "required_function": "policy_evaluation",
         "environment_name": "FrozenLake",
+        "env_params": {"map_name": "4x4", "is_slippery": True},
         "template_kind": "guided_fill_in",
         "backend_enabled": True,
         "starter_code": (
@@ -109,6 +110,7 @@ _CORE_LESSONS: list[dict[str, Any]] = [
         "category": "Dynamic Programming",
         "required_function": "value_iteration",
         "environment_name": "FrozenLake",
+        "env_params": {"map_name": "4x4", "is_slippery": True},
         "template_kind": "guided_fill_in",
         "backend_enabled": True,
         "starter_code": (
@@ -185,6 +187,7 @@ _CORE_LESSONS: list[dict[str, Any]] = [
         "category": "Dynamic Programming",
         "required_function": "policy_improvement",
         "environment_name": "FrozenLake",
+        "env_params": {"map_name": "4x4", "is_slippery": True},
         "template_kind": "guided_fill_in",
         "backend_enabled": True,
         "starter_code": (
@@ -258,6 +261,7 @@ _CORE_LESSONS: list[dict[str, Any]] = [
         "category": "Monte Carlo Methods",
         "required_function": "mc_first_visit_prediction",
         "environment_name": "Blackjack",
+        "env_params": {"sab": True},
         "template_kind": "guided_fill_in",
         "backend_enabled": True,
         "starter_code": (
@@ -332,6 +336,7 @@ _CORE_LESSONS: list[dict[str, Any]] = [
         "category": "Temporal Difference",
         "required_function": "sarsa_update",
         "environment_name": "CliffWalking",
+        "env_params": {},
         "template_kind": "guided_fill_in",
         "backend_enabled": True,
         "starter_code": (
@@ -410,6 +415,7 @@ _CORE_LESSONS: list[dict[str, Any]] = [
         "category": "Temporal Difference",
         "required_function": "q_learning_update",
         "environment_name": "CliffWalking",
+        "env_params": {},
         "template_kind": "guided_fill_in",
         "backend_enabled": True,
         "starter_code": (
@@ -474,9 +480,6 @@ _CORE_LESSONS: list[dict[str, Any]] = [
     },
 ]
 
-_SECTION_ORDER = ("Dynamic Programming", "Monte Carlo Methods", "Temporal Difference")
-
-
 def _payload_to_lesson(payload: dict[str, Any]) -> LessonDefinition:
     blanks = [
         TemplateBlank(**b) for b in payload.get("template_blanks", [])
@@ -492,6 +495,7 @@ def _payload_to_lesson(payload: dict[str, Any]) -> LessonDefinition:
         template_kind=payload.get("template_kind", "guided_fill_in"),
         template_blanks=blanks,
         success_criteria=payload.get("success_criteria", []),
+        env_params=payload.get("env_params", {}),
     )
 
 
@@ -503,8 +507,6 @@ class LessonRegistryService:
     stored in the same table.  Both are served identically to the rest of
     the application.
     """
-
-    SECTION_ORDER = _SECTION_ORDER
 
     def __init__(self, *, database: Database) -> None:
         self._database = database

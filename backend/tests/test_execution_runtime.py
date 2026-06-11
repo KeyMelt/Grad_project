@@ -28,8 +28,8 @@ class _FakeValidator:
 
 
 class _FakeAdapter:
-    def __init__(self, env_name: str, frame_dir: str) -> None:
-        del env_name
+    def __init__(self, env_name: str, frame_dir: str, env_params: dict | None = None) -> None:
+        del env_name, env_params
         self.frame_dir = frame_dir
 
     def close(self) -> None:
