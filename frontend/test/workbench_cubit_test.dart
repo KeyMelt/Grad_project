@@ -2,11 +2,39 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rl_ide/core/backend_api.dart';
 import 'package:rl_ide/core/workbench_state.dart';
 
+const _backendLesson = LessonDefinition(
+  id: 'dp_policy_eval',
+  title: 'Backend Policy Evaluation',
+  description: '',
+  category: 'Dynamic Programming',
+  starterCode: 'def policy_evaluation():\n    return []\n',
+  conceptVideo: LessonConceptVideo(
+    streamPath: '/media/concept-videos/dp_policy_eval_concept.mp4',
+    durationLabel: '',
+    summary: '',
+    highlights: [],
+  ),
+  exercise: LessonExerciseBrief(
+    title: '',
+    overview: '',
+    tasks: [],
+    successCriteria: [],
+    codeTip: '',
+  ),
+);
+
+const _backendSections = [
+  LessonSection(
+    title: 'Dynamic Programming',
+    lessons: [_backendLesson],
+  ),
+];
+
 class _FakeBackendApi extends BackendApi {
   _FakeBackendApi({
     this.shouldFailRun = false,
     this.shouldFailLessonFetch = false,
-    this.lessonSections = const [],
+    this.lessonSections = _backendSections,
     this.restoredDashboard,
   });
 
@@ -325,34 +353,9 @@ class _FakeBackendApi extends BackendApi {
 void main() {
   test('cubit replaces loading placeholder with backend lesson sections',
       () async {
-    const backendLesson = LessonDefinition(
-      id: 'dp_policy_eval',
-      title: 'Backend Policy Evaluation',
-      description: '',
-      category: 'Dynamic Programming',
-      starterCode: 'def policy_evaluation():\n    return []\n',
-      conceptVideo: LessonConceptVideo(
-        streamPath: '',
-        durationLabel: '',
-        summary: '',
-        highlights: [],
-      ),
-      exercise: LessonExerciseBrief(
-        title: '',
-        overview: '',
-        tasks: [],
-        successCriteria: [],
-        codeTip: '',
-      ),
-    );
     final cubit = RLWorkbenchCubit(
       api: _FakeBackendApi(
-        lessonSections: [
-          const LessonSection(
-            title: 'Dynamic Programming',
-            lessons: [backendLesson],
-          ),
-        ],
+        lessonSections: _backendSections,
       ),
     );
 
@@ -420,6 +423,7 @@ void main() {
   test('cubit workspace run lifecycle reaches terminal status', () async {
     final cubit = RLWorkbenchCubit(api: _FakeBackendApi());
 
+    await cubit.loadBackendLessonCatalog();
     await cubit.signIn('Maya', 'Password123!');
     cubit.openLesson(cubit.state.selectedLesson);
     await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -435,6 +439,7 @@ void main() {
   test('cubit submit lifecycle handles failure state', () async {
     final cubit = RLWorkbenchCubit(api: _FakeBackendApi(shouldFailRun: true));
 
+    await cubit.loadBackendLessonCatalog();
     await cubit.signIn('Maya', 'Password123!');
     await cubit.submit();
 
@@ -454,6 +459,7 @@ void main() {
     final api = _FakeBackendApi();
     final cubit = RLWorkbenchCubit(api: api);
 
+    await cubit.loadBackendLessonCatalog();
     await cubit.signIn('Maya', 'Password123!');
     await cubit.sendStudyBuddyChat('What should I inspect next?');
 

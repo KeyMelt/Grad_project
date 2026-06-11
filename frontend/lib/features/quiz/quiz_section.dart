@@ -137,26 +137,13 @@ class QuizSection extends StatelessWidget {
   }
 
   Widget _buildQuizLauncher() {
-    final assessmentPhases = quizCatalog.assessmentPhases.isNotEmpty
-        ? quizCatalog.assessmentPhases
-        : const [
-            QuizCatalogPhaseData(
-              id: 'pretest',
-              label: 'Pre-test',
-              description: 'Check your starting understanding.',
-              questionCount: 0,
-              showsNGain: true,
-            ),
-            QuizCatalogPhaseData(
-              id: 'posttest',
-              label: 'Post-test',
-              description: 'Measure progress after practice.',
-              questionCount: 0,
-              requiresSuccessfulRun: true,
-              triggersPostStudySurvey: true,
-              showsNGain: true,
-            ),
-          ];
+    final assessmentPhases = quizCatalog.assessmentPhases;
+    if (assessmentPhases.isEmpty && quizCatalog.categoryQuizzes.isEmpty) {
+      return const _QuizGateCard(
+        title: 'Quiz Catalog',
+        message: 'Quiz catalog is unavailable. Try again shortly.',
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

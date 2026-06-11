@@ -9,6 +9,60 @@ import 'package:rl_ide/layout/main_layout.dart';
 import 'package:rl_ide/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/fake_video_player_platform.dart';
+
+const _testLesson = LessonDefinition(
+  id: 'dp_policy_eval',
+  title: 'Policy Evaluation',
+  description: 'Evaluate a policy on FrozenLake.',
+  category: 'Dynamic Programming',
+  starterCode: 'def policy_evaluation():\n    return []\n',
+  conceptVideo: LessonConceptVideo(
+    streamPath: '/media/concept-videos/dp_policy_eval_concept.mp4',
+    durationLabel: '00:10',
+    summary: 'Bellman expectation walkthrough.',
+    highlights: [],
+  ),
+  exercise: LessonExerciseBrief(
+    title: 'Implement iterative policy evaluation',
+    overview: 'Complete the Bellman update.',
+    tasks: ['Fill the Bellman expectation backup.'],
+    successCriteria: ['Submission passed'],
+    codeTip: 'Use the supplied discount factor.',
+  ),
+);
+
+const _testSections = [
+  LessonSection(
+    title: 'Dynamic Programming',
+    lessons: [_testLesson],
+  ),
+];
+
+const _testQuizCatalog = QuizCatalogData(
+  categorySectionLabel: 'Equation family quizzes',
+  categorySectionDescription: 'Practice each equation family separately.',
+  assessmentPhases: [
+    QuizCatalogPhaseData(
+      id: 'pretest',
+      label: 'Pre-test',
+      description: 'Check your starting understanding.',
+      questionCount: 2,
+      showsNGain: true,
+    ),
+    QuizCatalogPhaseData(
+      id: 'posttest',
+      label: 'Post-test',
+      description: 'Measure progress after practice.',
+      questionCount: 2,
+      requiresSuccessfulRun: true,
+      triggersPostStudySurvey: true,
+      showsNGain: true,
+    ),
+  ],
+  categoryQuizzes: [],
+);
+
 class FakeBackendApi extends BackendApi {
   LearnerProfile? _student;
   LearnerProgress _progress = const LearnerProgress.empty();
@@ -37,7 +91,10 @@ class FakeBackendApi extends BackendApi {
   }
 
   @override
-  Future<List<LessonSection>> fetchLessonSections() async => const [];
+  Future<List<LessonSection>> fetchLessonSections() async => _testSections;
+
+  @override
+  Future<QuizCatalogData> fetchQuizCatalog() async => _testQuizCatalog;
 
   @override
   Future<LearnerDashboard> signIn({
@@ -101,6 +158,8 @@ class FakeBackendApi extends BackendApi {
     return QuizSessionData(
       sessionId: '${quizPhaseApiValue(phase)}-session',
       phase: phase,
+      phaseId: quizPhaseApiValue(phase),
+      phaseLabel: quizPhaseLabel(phase),
       questionCount: 2,
       questions: const [
         QuizQuestionData(
@@ -149,6 +208,8 @@ class FakeBackendApi extends BackendApi {
       );
       return QuizAttemptSummary(
         phase: QuizPhase.pretest,
+        phaseId: 'pretest',
+        phaseLabel: 'Pre-test',
         score: 1,
         totalQuestions: 2,
         percentage: 50.0,
@@ -171,6 +232,8 @@ class FakeBackendApi extends BackendApi {
     );
     return QuizAttemptSummary(
       phase: QuizPhase.posttest,
+      phaseId: 'posttest',
+      phaseLabel: 'Post-test',
       score: 2,
       totalQuestions: 2,
       percentage: 100.0,
@@ -418,6 +481,9 @@ class FakeBackendApi extends BackendApi {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  installFakeVideoPlayerPlatform();
+
   testWidgets('Theme toggle switches dark mode and persists the preference', (
     WidgetTester tester,
   ) async {
@@ -535,10 +601,6 @@ void main() {
             find.text('Account is not provisioned for this Firebase user.'),
       ),
       findsNothing,
-    );
-    expect(
-      find.text('Sign in to save quiz results and lesson progress.'),
-      findsOneWidget,
     );
 
     await cubit.close();

@@ -81,6 +81,18 @@ _CORE_LESSONS: list[dict[str, Any]] = [
             "caption_path": "/media/concept-videos/dp_policy_eval_captions.vtt",
             "duration_label": "03:30",
             "summary": "A Bellman expectation sweep over FrozenLake, showing how policy probabilities, transition branches, rewards, and discounted future values combine into each state update.",
+            "theory_equation": r"V^\pi(s)=\sum_a \pi(a|s)\sum_{s',r}p(s',r|s,a)(r+\gamma V^\pi(s'))",
+            "worked_example": "In FrozenLake, each policy-weighted action contributes every possible transition branch to the new state value.",
+            "misconception_to_prevent": "Policy evaluation estimates values for a fixed policy; it does not choose a better action.",
+            "takeaway_line": "Policy evaluation repeatedly applies Bellman expectation backups until the value table stabilizes.",
+            "theory_verification": [
+                {
+                    "claim": "Iterative policy evaluation applies Bellman expectation backups for a fixed policy.",
+                    "source_url": "https://incompleteideas.net/book/the-book-2nd.html",
+                    "validation_note": "Sutton and Barto describe iterative policy evaluation in Chapter 4 as repeated Bellman expectation updates.",
+                    "is_inference": False,
+                }
+            ],
             "highlights": [
                 "How a fixed policy weights each action.",
                 "How transition probabilities and discounted future values combine.",

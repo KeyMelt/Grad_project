@@ -577,7 +577,11 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       }
       emit(state.copyWith(quizCatalog: catalog));
     } catch (_) {
-      // Keep the legacy pre/post launcher if the backend catalog is unavailable.
+      emit(
+        state.copyWith(
+          quizStatusMessage: 'Quiz catalog is unavailable. Try again shortly.',
+        ),
+      );
     }
   }
 

@@ -5,65 +5,36 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rl_ide/core/backend_api.dart';
 import 'package:rl_ide/core/workbench_state.dart';
 import 'package:rl_ide/layout/main_layout.dart';
-import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
-class _FakeVideoPlayerPlatform extends VideoPlayerPlatform {
-  final Map<int, Stream<VideoEvent>> _eventStreams = {};
-  int _nextPlayerId = 1;
+import 'support/fake_video_player_platform.dart';
 
-  @override
-  Future<void> init() async {}
+const _layoutLesson = LessonDefinition(
+  id: 'dp_policy_eval',
+  title: 'Policy Evaluation',
+  description: 'Evaluate a policy on FrozenLake.',
+  category: 'Dynamic Programming',
+  starterCode: 'def policy_evaluation():\n    return []\n',
+  conceptVideo: LessonConceptVideo(
+    streamPath: '/media/concept-videos/dp_policy_eval_concept.mp4',
+    durationLabel: '00:10',
+    summary: 'Bellman expectation walkthrough.',
+    highlights: [],
+  ),
+  exercise: LessonExerciseBrief(
+    title: 'Implement iterative policy evaluation',
+    overview: 'Complete the Bellman update.',
+    tasks: ['Fill the Bellman expectation backup.'],
+    successCriteria: ['Submission passed'],
+    codeTip: 'Use the supplied discount factor.',
+  ),
+);
 
-  @override
-  Future<int?> createWithOptions(VideoCreationOptions options) async {
-    final playerId = _nextPlayerId++;
-    _eventStreams[playerId] = Stream<VideoEvent>.value(
-      VideoEvent(
-        eventType: VideoEventType.initialized,
-        duration: const Duration(minutes: 2),
-        size: const Size(1280, 720),
-      ),
-    );
-    return playerId;
-  }
-
-  @override
-  Stream<VideoEvent> videoEventsFor(int playerId) {
-    return _eventStreams[playerId] ?? const Stream<VideoEvent>.empty();
-  }
-
-  @override
-  Widget buildViewWithOptions(VideoViewOptions options) {
-    return const ColoredBox(color: Colors.black12);
-  }
-
-  @override
-  Future<void> dispose(int playerId) async {}
-
-  @override
-  Future<void> pause(int playerId) async {}
-
-  @override
-  Future<void> play(int playerId) async {}
-
-  @override
-  Future<void> seekTo(int playerId, Duration position) async {}
-
-  @override
-  Future<void> setLooping(int playerId, bool looping) async {}
-
-  @override
-  Future<void> setPlaybackSpeed(int playerId, double speed) async {}
-
-  @override
-  Future<void> setVolume(int playerId, double volume) async {}
-
-  @override
-  Future<Duration> getPosition(int playerId) async => Duration.zero;
-
-  @override
-  Future<void> setMixWithOthers(bool mixWithOthers) async {}
-}
+const _layoutSections = [
+  LessonSection(
+    title: 'Dynamic Programming',
+    lessons: [_layoutLesson],
+  ),
+];
 
 class _WorkspaceLayoutApi extends BackendApi {
   String? _token;
@@ -88,7 +59,7 @@ class _WorkspaceLayoutApi extends BackendApi {
   }
 
   @override
-  Future<List<LessonSection>> fetchLessonSections() async => const [];
+  Future<List<LessonSection>> fetchLessonSections() async => _layoutSections;
 
   @override
   Future<LearnerDashboard> getDashboard() async {
@@ -304,7 +275,7 @@ class _WorkspaceHarness {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  VideoPlayerPlatform.instance = _FakeVideoPlayerPlatform();
+  installFakeVideoPlayerPlatform();
 
   testWidgets('workspace desktop layout opens course outline dialog', (
     tester,
@@ -388,6 +359,12 @@ void main() {
   });
 
   testWidgets('generate marketing screenshots', (tester) async {
+    const shouldRunGoldens =
+        bool.fromEnvironment('RL_IDE_GENERATE_MARKETING_GOLDENS');
+    if (!shouldRunGoldens) {
+      return;
+    }
+
     final harness = await _pumpWorkspace(tester, const Size(1440, 900));
 
     await harness.cubit.signIn('maya@example.com', 'Password123!');
@@ -395,7 +372,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // 1. Capture Workspace (Code Editor)
-    await expectLater(find.byType(MainLayout), matchesGoldenFile('workspace.png'));
+    await expectLater(
+        find.byType(MainLayout), matchesGoldenFile('workspace.png'));
 
     // 2. Capture Trace Replay
     await tester.tap(find.text('Replay'));
@@ -408,12 +386,13 @@ void main() {
     final handle = find.byKey(const ValueKey('study-buddy-drawer-handle'));
     await tester.drag(handle, const Offset(-250, 0)); // open wide
     await tester.pumpAndSettle();
-    
+
     // send a message so it shows some text
     await tester.tap(find.byKey(const ValueKey('study-buddy-quick-recap')));
     await tester.pumpAndSettle();
-    
-    await expectLater(find.byType(MainLayout), matchesGoldenFile('studybuddy.png'));
+
+    await expectLater(
+        find.byType(MainLayout), matchesGoldenFile('studybuddy.png'));
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
@@ -438,6 +417,7 @@ Future<_WorkspaceHarness> _pumpWorkspace(WidgetTester tester, Size size) async {
     await tester.pump();
     await harness.close();
   });
+  await cubit.loadBackendLessonCatalog();
   cubit.openLesson(cubit.state.selectedLesson);
 
   await tester.pumpWidget(
