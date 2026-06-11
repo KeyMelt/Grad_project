@@ -658,6 +658,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Generated Step Replay'), findsOneWidget);
+
+    await _selectReplayBinderSection(tester, 'Run');
     expect(find.text('Sample Test Results'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('home-logo-button')));
@@ -736,4 +738,22 @@ void main() {
     await tester.pumpAndSettle();
     await cubit.close();
   });
+}
+
+Future<void> _selectReplayBinderSection(
+    WidgetTester tester, String label) async {
+  final visibleLabel = find.text(label);
+  if (visibleLabel.evaluate().isNotEmpty) {
+    await tester.tap(visibleLabel.first);
+    await tester.pumpAndSettle();
+    return;
+  }
+  final dropdown = find.byWidgetPredicate((widget) => widget is DropdownButton);
+  if (dropdown.evaluate().isEmpty) {
+    throw StateError('Could not find replay binder section "$label".');
+  }
+  await tester.tap(dropdown.last);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label).last);
+  await tester.pumpAndSettle();
 }

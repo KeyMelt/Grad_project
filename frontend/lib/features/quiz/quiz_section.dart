@@ -7,6 +7,7 @@ import '../../core/theme.dart';
 class QuizSection extends StatelessWidget {
   final LearnerProfile? learner;
   final LearnerProgress progress;
+  final QuizCatalogData quizCatalog;
   final QuizSessionData? activeQuiz;
   final Map<String, int> quizAnswers;
   final QuizAttemptSummary? lastQuizSummary;
@@ -16,6 +17,8 @@ class QuizSection extends StatelessWidget {
   final String postStudySurveyMessage;
   final String statusMessage;
   final ValueChanged<QuizPhase> onStartQuiz;
+  final void Function({required String phaseId, String? phaseLabel})
+      onStartQuizByPhaseId;
   final void Function(String questionId, int selectedIndex) onAnswerQuestion;
   final VoidCallback onSubmitQuiz;
   final VoidCallback onOpenPostStudySurvey;
@@ -36,6 +39,7 @@ class QuizSection extends StatelessWidget {
     super.key,
     required this.learner,
     required this.progress,
+    required this.quizCatalog,
     required this.activeQuiz,
     required this.quizAnswers,
     required this.lastQuizSummary,
@@ -45,6 +49,7 @@ class QuizSection extends StatelessWidget {
     required this.postStudySurveyMessage,
     required this.statusMessage,
     required this.onStartQuiz,
+    required this.onStartQuizByPhaseId,
     required this.onAnswerQuestion,
     required this.onSubmitQuiz,
     required this.onOpenPostStudySurvey,
@@ -71,17 +76,7 @@ class QuizSection extends StatelessWidget {
           if (activeQuiz != null) _buildActiveQuiz(),
           if (lastQuizSummary != null) ...[
             const SizedBox(height: AppConstants.defaultPadding),
-            _buildLatestResult(lastQuizSummary!),
-            if (!postStudySurveyCompleted) ...[
-              const SizedBox(height: AppConstants.defaultPadding),
-              SessionFeedbackCallout(
-                message: postStudySurveyMessage,
-                onPressed: onOpenPostStudySurvey,
-              ),
-            ] else ...[
-              const SizedBox(height: AppConstants.defaultPadding),
-              _FeedbackRecordedCallout(message: postStudySurveyMessage),
-            ],
+            _buildLatestResultWithFollowup(lastQuizSummary!),
           ],
         ],
       ),
@@ -142,28 +137,265 @@ class QuizSection extends StatelessWidget {
   }
 
   Widget _buildQuizLauncher() {
-    return Wrap(
-      spacing: AppConstants.defaultPadding,
-      runSpacing: AppConstants.defaultPadding,
+    final assessmentPhases = quizCatalog.assessmentPhases.isNotEmpty
+        ? quizCatalog.assessmentPhases
+        : const [
+            QuizCatalogPhaseData(
+              id: 'pretest',
+              label: 'Pre-test',
+              description: 'Check your starting understanding.',
+              questionCount: 0,
+              showsNGain: true,
+            ),
+            QuizCatalogPhaseData(
+              id: 'posttest',
+              label: 'Post-test',
+              description: 'Measure progress after practice.',
+              questionCount: 0,
+              requiresSuccessfulRun: true,
+              triggersPostStudySurvey: true,
+              showsNGain: true,
+            ),
+          ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _QuizActionCard(
-          title: 'Randomized Pre-test',
-          description: 'Check your starting understanding.',
-          footer:
-              'Attempts: ${progress.quizAttempts['pretest'] ?? 0} • Latest: ${_formatScore(progress.pretestScore)}',
-          buttonLabel: isLoading ? 'Preparing...' : 'Start Pre-test',
-          onPressed: isLoading ? null : () => onStartQuiz(QuizPhase.pretest),
+        Wrap(
+          spacing: AppConstants.defaultPadding,
+          runSpacing: AppConstants.defaultPadding,
+          children: [
+            for (final phase in assessmentPhases)
+              _QuizActionCard(
+                title: phase.label,
+                description: phase.description,
+                footer: _assessmentFooter(phase),
+                buttonLabel:
+                    isLoading ? 'Preparing...' : 'Start ${phase.label}',
+                onPressed: isLoading || _isLocked(phase)
+                    ? null
+                    : () => onStartQuizByPhaseId(
+                          phaseId: phase.id,
+                          phaseLabel: phase.label,
+                        ),
+              ),
+          ],
         ),
-        _QuizActionCard(
-          title: 'Randomized Post-test',
-          description: 'Measure progress after practice.',
-          footer: progress.successfulRuns == 0
-              ? 'Complete at least one lesson run to unlock the post-test.'
-              : 'Attempts: ${progress.quizAttempts['posttest'] ?? 0} • Latest: ${_formatScore(progress.posttestScore)}',
-          buttonLabel: isLoading ? 'Preparing...' : 'Start Post-test',
-          onPressed: isLoading || progress.successfulRuns == 0
-              ? null
-              : () => onStartQuiz(QuizPhase.posttest),
+        if (quizCatalog.categoryQuizzes.isNotEmpty) ...[
+          const SizedBox(height: AppConstants.defaultPadding),
+          Text(
+            quizCatalog.categorySectionLabel.isEmpty
+                ? 'Category quizzes'
+                : quizCatalog.categorySectionLabel,
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (quizCatalog.categorySectionDescription.isNotEmpty) ...[
+            Text(
+              quizCatalog.categorySectionDescription,
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                height: 1.45,
+              ),
+            ),
+          ],
+          const SizedBox(height: AppConstants.defaultPadding),
+          Wrap(
+            spacing: AppConstants.defaultPadding,
+            runSpacing: AppConstants.defaultPadding,
+            children: [
+              for (final quiz in quizCatalog.categoryQuizzes)
+                _QuizActionCard(
+                  title: quiz.label,
+                  description: quiz.description,
+                  footer:
+                      'Questions: ${quiz.questionCount} • Attempts: ${progress.quizAttempts[quiz.id] ?? 0}',
+                  buttonLabel: isLoading ? 'Preparing...' : 'Start Quiz',
+                  onPressed: isLoading
+                      ? null
+                      : () => onStartQuizByPhaseId(
+                            phaseId: quiz.id,
+                            phaseLabel: quiz.label,
+                          ),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  bool _isLocked(QuizCatalogPhaseData phase) {
+    return phase.requiresSuccessfulRun && progress.successfulRuns == 0;
+  }
+
+  String _assessmentFooter(QuizCatalogPhaseData phase) {
+    if (_isLocked(phase)) {
+      return 'Complete at least one lesson run to unlock this quiz.';
+    }
+    final latestScore = switch (phase.id) {
+      'pretest' => progress.pretestScore,
+      'posttest' => progress.posttestScore,
+      _ => null,
+    };
+    final scoreText =
+        latestScore == null ? '' : ' • Latest: ${_formatScore(latestScore)}';
+    final questionText =
+        phase.questionCount > 0 ? ' • Questions: ${phase.questionCount}' : '';
+    return 'Attempts: ${progress.quizAttempts[phase.id] ?? 0}$scoreText$questionText';
+  }
+
+  String _quizTitle(QuizSessionData quiz) {
+    if (quiz.phaseLabel.isNotEmpty) {
+      return quiz.phaseLabel;
+    }
+    return quizPhaseLabel(quiz.phase);
+  }
+
+  bool _isPosttestSummary(QuizAttemptSummary summary) {
+    return _catalogPhase(summary.phaseId)?.triggersPostStudySurvey ?? false;
+  }
+
+  String _summaryTitle(QuizAttemptSummary summary) {
+    if (summary.phaseLabel.isNotEmpty) {
+      return summary.phaseLabel;
+    }
+    return quizPhaseLabel(summary.phase);
+  }
+
+  bool _shouldOfferPostStudySurvey(QuizAttemptSummary summary) {
+    return _isPosttestSummary(summary) && !postStudySurveyCompleted;
+  }
+
+  bool _shouldShowFeedbackRecorded(QuizAttemptSummary summary) {
+    return _isPosttestSummary(summary) && postStudySurveyCompleted;
+  }
+
+  Widget _buildPostQuizFollowup(QuizAttemptSummary summary) {
+    if (_shouldOfferPostStudySurvey(summary)) {
+      return SessionFeedbackCallout(
+        message: postStudySurveyMessage,
+        onPressed: onOpenPostStudySurvey,
+      );
+    }
+    if (_shouldShowFeedbackRecorded(summary)) {
+      return _FeedbackRecordedCallout(message: postStudySurveyMessage);
+    }
+    return const SizedBox.shrink();
+  }
+
+  bool _hasPostQuizFollowup(QuizAttemptSummary summary) {
+    return _shouldOfferPostStudySurvey(summary) ||
+        _shouldShowFeedbackRecorded(summary);
+  }
+
+  Widget _buildLatestResultWithFollowup(QuizAttemptSummary summary) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildLatestResult(summary),
+        if (_hasPostQuizFollowup(summary)) ...[
+          const SizedBox(height: AppConstants.defaultPadding),
+          _buildPostQuizFollowup(summary),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildQuestionProgress(QuizSessionData quiz) {
+    return Text(
+      '${quizAnswers.length}/${quiz.questions.length} answered',
+      style: const TextStyle(
+        color: AppTheme.textSecondary,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+
+  Widget _buildQuizIntro(QuizSessionData quiz) {
+    final phase = _catalogPhase(quiz.phaseId);
+    return Text(
+      phase == null || phase.concepts.isEmpty
+          ? 'Questions are randomized for every attempt.'
+          : 'This quiz focuses on ${_quizTitle(quiz).toLowerCase()} questions from the editable catalog.',
+      style: const TextStyle(
+        color: AppTheme.textSecondary,
+        height: 1.45,
+      ),
+    );
+  }
+
+  QuizCatalogPhaseData? _catalogPhase(String phaseId) {
+    for (final phase in quizCatalog.assessmentPhases) {
+      if (phase.id == phaseId) {
+        return phase;
+      }
+    }
+    for (final phase in quizCatalog.categoryQuizzes) {
+      if (phase.id == phaseId) {
+        return phase;
+      }
+    }
+    return null;
+  }
+
+  Widget _buildSubmitButton() {
+    return ElevatedButton.icon(
+      onPressed: isLoading ? null : onSubmitQuiz,
+      icon: isLoading
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : const Icon(Icons.assignment_turned_in_outlined),
+      label: Text(
+        isLoading ? 'Submitting...' : 'Submit Quiz',
+      ),
+    );
+  }
+
+  Widget _buildResultMetricLabel(QuizAttemptSummary summary) {
+    return _ResultMetric(
+      label: _summaryTitle(summary),
+      value: '${summary.score}/${summary.totalQuestions}',
+      caption: 'Latest score',
+    );
+  }
+
+  Widget _buildNGainMetric(QuizAttemptSummary summary) {
+    return _ResultMetric(
+      label: 'N-gain',
+      value:
+          summary.nGain == null ? 'Pending' : summary.nGain!.toStringAsFixed(3),
+      caption: 'Shown after both quizzes',
+    );
+  }
+
+  Widget _buildPercentageMetric(QuizAttemptSummary summary) {
+    return _ResultMetric(
+      label: 'Percentage',
+      value: '${summary.percentage.toStringAsFixed(1)}%',
+      caption: 'Score percent',
+    );
+  }
+
+  Widget _buildQuizHeader(QuizSessionData quiz) {
+    return Row(
+      children: [
+        Text(
+          '${_quizTitle(quiz)} in progress',
+          style: const TextStyle(
+            color: AppTheme.textPrimary,
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ],
     );
@@ -176,32 +408,13 @@ class QuizSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(
-              '${quizPhaseLabel(quiz.phase)} in progress',
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            Expanded(child: _buildQuizHeader(quiz)),
             const Spacer(),
-            Text(
-              '${quizAnswers.length}/${quiz.questions.length} answered',
-              style: const TextStyle(
-                color: AppTheme.textSecondary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            _buildQuestionProgress(quiz),
           ],
         ),
         const SizedBox(height: 8),
-        const Text(
-          'Questions are randomized for every attempt.',
-          style: TextStyle(
-            color: AppTheme.textSecondary,
-            height: 1.45,
-          ),
-        ),
+        _buildQuizIntro(quiz),
         const SizedBox(height: AppConstants.defaultPadding),
         ...quiz.questions.asMap().entries.map(
               (entry) => Padding(
@@ -218,22 +431,7 @@ class QuizSection extends StatelessWidget {
             ),
         Align(
           alignment: Alignment.centerRight,
-          child: ElevatedButton.icon(
-            onPressed: isLoading ? null : onSubmitQuiz,
-            icon: isLoading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.assignment_turned_in_outlined),
-            label: Text(
-              isLoading ? 'Submitting...' : 'Submit Quiz',
-            ),
-          ),
+          child: _buildSubmitButton(),
         ),
       ],
     );
@@ -252,23 +450,10 @@ class QuizSection extends StatelessWidget {
           spacing: 24,
           runSpacing: 16,
           children: [
-            _ResultMetric(
-              label: quizPhaseLabel(summary.phase),
-              value: '${summary.score}/${summary.totalQuestions}',
-              caption: 'Latest score',
-            ),
-            _ResultMetric(
-              label: 'Percentage',
-              value: '${summary.percentage.toStringAsFixed(1)}%',
-              caption: 'Score percent',
-            ),
-            _ResultMetric(
-              label: 'N-gain',
-              value: summary.nGain == null
-                  ? 'Pending'
-                  : summary.nGain!.toStringAsFixed(3),
-              caption: 'Shown after both quizzes',
-            ),
+            _buildResultMetricLabel(summary),
+            _buildPercentageMetric(summary),
+            if (_catalogPhase(summary.phaseId)?.showsNGain ?? false)
+              _buildNGainMetric(summary),
           ],
         ),
       ),

@@ -41,6 +41,8 @@ class WorkspaceTabs extends StatefulWidget {
   final List<ExecutionTraceEpisode> traceEpisodes;
   final List<ExecutionEpisodeSummary> episodeSummaries;
   final ValueChanged<Map<String, dynamic>>? onConceptVideoSession;
+  final VoidCallback? onVideoMicroSurveyRequest;
+  final VoidCallback? onReplayMicroSurveyRequest;
   final void Function(String viewId, Duration duration)?
       onWorkspaceFocusSession;
   final VoidCallback? onDismissFeedback;
@@ -81,6 +83,8 @@ class WorkspaceTabs extends StatefulWidget {
     required this.traceEpisodes,
     required this.episodeSummaries,
     this.onConceptVideoSession,
+    this.onVideoMicroSurveyRequest,
+    this.onReplayMicroSurveyRequest,
     this.onWorkspaceFocusSession,
     this.onDismissFeedback,
     this.canShareSessionFeedback = false,
@@ -206,6 +210,7 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
                       VideoPlayerTab(
                         lesson: lesson,
                         onSessionEnded: widget.onConceptVideoSession,
+                        onVideoCompleted: widget.onVideoMicroSurveyRequest,
                       ),
                       _CodeExercisePane(
                         lesson: lesson,
@@ -247,6 +252,7 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
                         episodeSummaries: episodeSummaries,
                         conceptVideo: lesson.conceptVideo,
                         onWatchConcept: () => _tabController.animateTo(0),
+                        onReplayCompleted: widget.onReplayMicroSurveyRequest,
                       ),
                     ],
                   ),

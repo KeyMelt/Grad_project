@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../core/backend_api.dart';
 import '../core/brand_mark.dart';
 import '../core/constants.dart';
 import '../core/onboarding_prefs.dart';
@@ -14,6 +17,7 @@ import '../features/onboarding/onboarding_tutorial.dart';
 import '../features/onboarding/profile_completion_dialog.dart';
 import '../features/quiz/quiz_section.dart';
 import '../features/study_buddy/study_buddy_panel.dart';
+import '../features/workspace/component_micro_survey_dialog.dart';
 import '../features/workspace/workspace_tabs.dart';
 
 class MainLayout extends StatefulWidget {
@@ -39,6 +43,11 @@ class _MainLayoutState extends State<MainLayout> {
   bool _onboardingShown = false;
   bool _studyBuddyDrawerOpen = false;
   bool _profileDialogShowing = false;
+  SurveyTemplateData? _videoSurveyTemplate;
+  SurveyTemplateData? _replaySurveyTemplate;
+  bool _videoSurveyShown = false;
+  bool _replaySurveyShown = false;
+  String? _currentSurveyLessonId;
 
   @override
   void initState() {
@@ -118,6 +127,11 @@ class _MainLayoutState extends State<MainLayout> {
           onSignOut: _cubit.signOut,
         );
       case AppSection.workspace:
+        if (state.selectedLesson.id != _currentSurveyLessonId) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _fetchSurveyTemplates(state.selectedLesson.id);
+          });
+        }
         return LayoutBuilder(
           builder: (context, constraints) {
             final workspace = WorkspaceTabs(
@@ -157,6 +171,10 @@ class _MainLayoutState extends State<MainLayout> {
               canShareSessionFeedback: _canShareSessionFeedback(state),
               onOpenSessionFeedback: _showSessionFeedbackDialog,
               showExerciseBriefInCodePane: true,
+              onVideoMicroSurveyRequest:
+                  state.isAuthenticated ? _showVideoMicroSurvey : null,
+              onReplayMicroSurveyRequest:
+                  state.isAuthenticated ? _showReplayMicroSurvey : null,
             );
 
             final studyBuddyPanel = StudyBuddyPanel(
@@ -217,6 +235,7 @@ class _MainLayoutState extends State<MainLayout> {
         return QuizSection(
           learner: state.learner,
           progress: state.progress,
+          quizCatalog: state.quizCatalog,
           activeQuiz: state.activeQuiz,
           quizAnswers: state.quizAnswers,
           lastQuizSummary: state.lastQuizSummary,
@@ -226,6 +245,7 @@ class _MainLayoutState extends State<MainLayout> {
           postStudySurveyMessage: state.postStudySurveyMessage,
           statusMessage: state.quizStatusMessage,
           onStartQuiz: _cubit.startQuiz,
+          onStartQuizByPhaseId: _cubit.startQuizByPhaseId,
           onAnswerQuestion: _cubit.answerQuizQuestion,
           onSubmitQuiz: _cubit.submitQuiz,
           onOpenPostStudySurvey: _showSessionFeedbackDialog,
@@ -343,6 +363,66 @@ class _MainLayoutState extends State<MainLayout> {
           ),
         );
       },
+    );
+  }
+
+  Future<void> _fetchSurveyTemplates(String lessonId) async {
+    if (!mounted) return;
+    _currentSurveyLessonId = lessonId;
+    _videoSurveyShown = false;
+    _replaySurveyShown = false;
+    final results = await Future.wait([
+      _cubit.api.fetchActiveSurveyByTrigger('post_video'),
+      _cubit.api.fetchActiveSurveyByTrigger('post_replay'),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _videoSurveyTemplate = results[0];
+      _replaySurveyTemplate = results[1];
+    });
+  }
+
+  Future<void> _showVideoMicroSurvey() async {
+    final template = _videoSurveyTemplate;
+    if (!mounted || _videoSurveyShown || template == null) return;
+    _videoSurveyShown = true;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => ComponentMicroSurveyDialog(
+        template: template,
+        onSubmit: (responses) {
+          Navigator.of(context).pop();
+          unawaited(_cubit.submitMicroSurvey(
+            templateId: template.id,
+            contextTrigger: 'post_video',
+            responses: responses,
+          ));
+        },
+        onSkip: () => Navigator.of(context).pop(),
+      ),
+    );
+  }
+
+  Future<void> _showReplayMicroSurvey() async {
+    final template = _replaySurveyTemplate;
+    if (!mounted || _replaySurveyShown || template == null) return;
+    _replaySurveyShown = true;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => ComponentMicroSurveyDialog(
+        template: template,
+        onSubmit: (responses) {
+          Navigator.of(context).pop();
+          unawaited(_cubit.submitMicroSurvey(
+            templateId: template.id,
+            contextTrigger: 'post_replay',
+            responses: responses,
+          ));
+        },
+        onSkip: () => Navigator.of(context).pop(),
+      ),
     );
   }
 

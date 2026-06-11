@@ -30,6 +30,19 @@ class HttpBackendApi extends BackendApi {
   }
 
   @override
+  Future<List<StudyFlashcard>> fetchFlashcards() async {
+    final responseJson = await _getJson('/flashcards');
+    final flashcards = responseJson['flashcards'];
+    if (flashcards is! List) {
+      return const [];
+    }
+    return flashcards
+        .whereType<Map<String, dynamic>>()
+        .map(StudyFlashcard.fromJson)
+        .toList(growable: false);
+  }
+
+  @override
   Future<List<LessonSection>> fetchLessonSections() async {
     final responseJson = await _getJson('/lessons');
     final sections = responseJson['sections'];
@@ -191,13 +204,26 @@ class HttpBackendApi extends BackendApi {
   }
 
   @override
+  Future<QuizCatalogData> fetchQuizCatalog() async {
+    final responseJson = await _getJson('/quiz/catalog');
+    return QuizCatalogData.fromJson(responseJson);
+  }
+
+  @override
   Future<QuizSessionData> startQuiz({
     required QuizPhase phase,
+  }) async {
+    return startQuizByPhaseId(phaseId: quizPhaseApiValue(phase));
+  }
+
+  @override
+  Future<QuizSessionData> startQuizByPhaseId({
+    required String phaseId,
   }) async {
     final responseJson = await _postJson(
       '/quiz/start',
       {
-        'phase': quizPhaseApiValue(phase),
+        'phase': phaseId,
       },
     );
     return QuizSessionData.fromJson(responseJson);
@@ -439,6 +465,35 @@ class HttpBackendApi extends BackendApi {
       fileName: fileName,
       bytes: response.bodyBytes,
     );
+  }
+
+  @override
+  Future<SurveyTemplateData?> fetchActiveSurveyByTrigger(String trigger) async {
+    try {
+      final responseJson =
+          await _getJson('/surveys/active/${Uri.encodeComponent(trigger)}');
+      return SurveyTemplateData.fromJson(responseJson);
+    } on BackendApiException {
+      return null;
+    }
+  }
+
+  @override
+  Future<MicroSurveySubmitResult> submitMicroSurveyResponse({
+    required String templateId,
+    required String studySessionId,
+    required String condition,
+    required List<Map<String, dynamic>> responses,
+  }) async {
+    final responseJson = await _postJson(
+      '/surveys/${Uri.encodeComponent(templateId)}/respond',
+      {
+        'study_session_id': studySessionId,
+        'condition': condition,
+        'responses': responses,
+      },
+    );
+    return MicroSurveySubmitResult.fromJson(responseJson);
   }
 
   @override

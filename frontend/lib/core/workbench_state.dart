@@ -11,7 +11,6 @@ import 'export_file_saver.dart';
 import 'http_backend_api.dart';
 import 'flashcard_catalog.dart';
 import 'lesson_models.dart';
-import 'local_lesson_catalog.dart';
 export 'lesson_models.dart';
 
 /// Current run lifecycle shown in the workspace controls and status strip.
@@ -27,10 +26,6 @@ const String _sessionFeedbackReadyMessage =
     'Your feedback helps improve our services.';
 const Object _sentinel = Object();
 const String _authoredLessonsPrefsKey = 'rl_ide_authored_lessons_v1';
-const bool _allowLocalLessonFallback = bool.fromEnvironment(
-  'RL_IDE_ALLOW_LOCAL_LESSON_FALLBACK',
-  defaultValue: true,
-);
 const LessonDefinition _registryLoadingLesson = LessonDefinition(
   id: '__registry_loading__',
   title: 'Loading lessons',
@@ -76,6 +71,7 @@ class RLWorkbenchState {
   final String homeMessage;
   final String authMessage;
   final String quizStatusMessage;
+  final QuizCatalogData quizCatalog;
   final QuizSessionData? activeQuiz;
   final Map<String, int> quizAnswers;
   final QuizAttemptSummary? lastQuizSummary;
@@ -144,6 +140,7 @@ class RLWorkbenchState {
     required this.homeMessage,
     required this.authMessage,
     required this.quizStatusMessage,
+    required this.quizCatalog,
     required this.activeQuiz,
     required this.quizAnswers,
     required this.lastQuizSummary,
@@ -201,11 +198,9 @@ class RLWorkbenchState {
   });
 
   factory RLWorkbenchState.initial() {
-    final selectedLesson = _allowLocalLessonFallback
-        ? fallbackLessonSections.first.lessons.first
-        : _registryLoadingLesson;
+    const selectedLesson = _registryLoadingLesson;
     return RLWorkbenchState(
-      sections: _allowLocalLessonFallback ? fallbackLessonSections : const [],
+      sections: const [],
       flashcards: studyFlashcards,
       currentSection: AppSection.home,
       learner: null,
@@ -214,12 +209,11 @@ class RLWorkbenchState {
       progress: const LearnerProgress.empty(),
       isSigningIn: false,
       isQuizLoading: false,
-      homeMessage: _allowLocalLessonFallback
-          ? 'Sign in to save quiz results and lesson progress.'
-          : 'Loading lessons from the registry...',
+      homeMessage: 'Loading lessons from the registry...',
       authMessage: '',
       quizStatusMessage:
           'Take a randomized pre-test before you begin the lessons.',
+      quizCatalog: const QuizCatalogData.empty(),
       activeQuiz: null,
       quizAnswers: const {},
       lastQuizSummary: null,
@@ -240,9 +234,7 @@ class RLWorkbenchState {
       totalReward: 0.0,
       averageReward: 0.0,
       bestEpisodeReward: 0.0,
-      statusMessage: _allowLocalLessonFallback
-          ? 'Ready to run ${selectedLesson.title}.'
-          : 'Waiting for lesson registry.',
+      statusMessage: 'Waiting for lesson registry.',
       videoPath: '',
       replayRenderJobId: '',
       replayRenderStatus: 'idle',
@@ -307,6 +299,7 @@ class RLWorkbenchState {
     String? homeMessage,
     String? authMessage,
     String? quizStatusMessage,
+    QuizCatalogData? quizCatalog,
     Object? activeQuiz = _sentinel,
     Map<String, int>? quizAnswers,
     Object? lastQuizSummary = _sentinel,
@@ -377,6 +370,7 @@ class RLWorkbenchState {
       homeMessage: homeMessage ?? this.homeMessage,
       authMessage: authMessage ?? this.authMessage,
       quizStatusMessage: quizStatusMessage ?? this.quizStatusMessage,
+      quizCatalog: quizCatalog ?? this.quizCatalog,
       activeQuiz: identical(activeQuiz, _sentinel)
           ? this.activeQuiz
           : activeQuiz as QuizSessionData?,
@@ -494,6 +488,8 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       autoStart: autoStartTelemetry,
     );
     unawaited(loadBackendLessonCatalog());
+    unawaited(loadBackendFlashcardCatalog());
+    unawaited(loadBackendQuizCatalog());
     unawaited(restoreSession());
   }
 
@@ -507,28 +503,6 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   BackendApi get api => _api;
 
   Future<void> loadBackendLessonCatalog() async {
-    final authoredSections = _allowLocalLessonFallback
-        ? await _loadAuthoredLessonSections()
-        : const <LessonSection>[];
-    if (authoredSections.isNotEmpty) {
-      final sectionsWithAuthored =
-          _mergeNonCoreLessons(state.sections, authoredSections);
-      final selectedLesson =
-          _findLessonById(sectionsWithAuthored, state.selectedLesson.id) ??
-              sectionsWithAuthored.first.lessons.first;
-      emit(
-        state.copyWith(
-          sections: sectionsWithAuthored,
-          selectedLesson: selectedLesson,
-          code: state.code == state.selectedLesson.starterCode
-              ? selectedLesson.starterCode
-              : state.code,
-          adminSelectedLessonId: selectedLesson.id,
-          adminMessage: 'Loaded locally saved authored lessons.',
-        ),
-      );
-    }
-
     try {
       final backendSections = await _api.fetchLessonSections();
       if (backendSections.isEmpty ||
@@ -583,6 +557,30 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     }
   }
 
+  Future<void> loadBackendFlashcardCatalog() async {
+    try {
+      final flashcards = await _api.fetchFlashcards();
+      if (flashcards.isEmpty || isClosed) {
+        return;
+      }
+      emit(state.copyWith(flashcards: flashcards));
+    } catch (_) {
+      // Silently retain the built-in catalog on failure.
+    }
+  }
+
+  Future<void> loadBackendQuizCatalog() async {
+    try {
+      final catalog = await _api.fetchQuizCatalog();
+      if (isClosed) {
+        return;
+      }
+      emit(state.copyWith(quizCatalog: catalog));
+    } catch (_) {
+      // Keep the legacy pre/post launcher if the backend catalog is unavailable.
+    }
+  }
+
   Future<void> loadCloudAuthoredLessons() async {
     if (!state.canAccessAuthoring) {
       return;
@@ -594,7 +592,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       }
       var updatedSections = state.sections;
       for (final lesson in lessons) {
-        if (!_isCoreLessonId(lesson.id)) {
+        if (_findLessonById(state.sections, lesson.id) == null) {
           updatedSections = _upsertLessonInSections(updatedSections, lesson);
         }
       }
@@ -622,28 +620,15 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   }
 
   void _retainFallbackLessonCatalog() {
-    if (!_allowLocalLessonFallback) {
-      emit(
-        state.copyWith(
-          sections: const [],
-          selectedLesson: _registryLoadingLesson,
-          code:
-              state.code == state.selectedLesson.starterCode ? '' : state.code,
-          adminSelectedLessonId: _registryLoadingLesson.id,
-          homeMessage:
-              'Lesson registry is unavailable. Production builds do not use local lesson fallbacks.',
-          statusMessage: 'Lesson registry is unavailable.',
-        ),
-      );
-      return;
-    }
-    if (state.learner != null) {
-      return;
-    }
     emit(
       state.copyWith(
+        sections: const [],
+        selectedLesson: _registryLoadingLesson,
+        code: state.code == state.selectedLesson.starterCode ? '' : state.code,
+        adminSelectedLessonId: _registryLoadingLesson.id,
         homeMessage:
-            'Lesson sync is unavailable. Local practice content is ready.',
+            'Lesson registry is unavailable. Production builds do not use local lesson fallbacks.',
+        statusMessage: 'Lesson registry is unavailable.',
       ),
     );
   }
@@ -1231,6 +1216,23 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   }
 
   Future<void> startQuiz(QuizPhase phase) async {
+    await startQuizByPhaseId(
+      phaseId: quizPhaseApiValue(phase),
+      phaseLabel: quizPhaseLabel(phase),
+    );
+  }
+
+  Future<void> startQuizByPhaseId({
+    required String phaseId,
+    String? phaseLabel,
+  }) async {
+    final phaseMetadata = _quizCatalogPhase(phaseId);
+    final resolvedPhaseLabel = phaseLabel ?? phaseMetadata?.label ?? phaseId;
+    final legacyPosttestPhaseId = quizPhaseApiValue(QuizPhase.posttest);
+    final requiresSuccessfulRun = phaseMetadata?.requiresSuccessfulRun ??
+        phaseId == legacyPosttestPhaseId;
+    final triggersPostStudySurvey = phaseMetadata?.triggersPostStudySurvey ??
+        phaseId == legacyPosttestPhaseId;
     final learner = state.learner;
     if (learner == null) {
       emit(
@@ -1242,12 +1244,12 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       return;
     }
 
-    if (phase == QuizPhase.posttest && state.progress.successfulRuns == 0) {
+    if (requiresSuccessfulRun && state.progress.successfulRuns == 0) {
       emit(
         state.copyWith(
           currentSection: AppSection.quiz,
           quizStatusMessage:
-              'Complete at least one lesson run before taking the post-test.',
+              'Complete at least one lesson run before taking $resolvedPhaseLabel.',
         ),
       );
       return;
@@ -1260,23 +1262,20 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         activeQuiz: null,
         lastQuizSummary: null,
         quizAnswers: const {},
-        isPostStudySurveySubmitting: phase == QuizPhase.posttest
-            ? false
-            : state.isPostStudySurveySubmitting,
-        postStudySurveyCompleted: phase == QuizPhase.posttest
-            ? false
-            : state.postStudySurveyCompleted,
-        postStudySurveyMessage: phase == QuizPhase.posttest
+        isPostStudySurveySubmitting:
+            triggersPostStudySurvey ? false : state.isPostStudySurveySubmitting,
+        postStudySurveyCompleted:
+            triggersPostStudySurvey ? false : state.postStudySurveyCompleted,
+        postStudySurveyMessage: triggersPostStudySurvey
             ? _sessionFeedbackReadyMessage
             : state.postStudySurveyMessage,
-        quizStatusMessage:
-            'Preparing ${quizPhaseLabel(phase).toLowerCase()}...',
+        quizStatusMessage: 'Preparing ${resolvedPhaseLabel.toLowerCase()}...',
       ),
     );
 
     try {
-      final session = await _api.startQuiz(
-        phase: phase,
+      final session = await _api.startQuizByPhaseId(
+        phaseId: phaseId,
       );
       emit(
         state.copyWith(
@@ -1284,7 +1283,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
           activeQuiz: session,
           lastQuizSummary: null,
           quizAnswers: const {},
-          quizStatusMessage: '${quizPhaseLabel(session.phase)} is ready.',
+          quizStatusMessage: '${session.phaseLabel} is ready.',
         ),
       );
     } on BackendApiException catch (error) {
@@ -1308,6 +1307,20 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     final updatedAnswers = Map<String, int>.from(state.quizAnswers)
       ..[questionId] = selectedIndex;
     emit(state.copyWith(quizAnswers: updatedAnswers));
+  }
+
+  QuizCatalogPhaseData? _quizCatalogPhase(String phaseId) {
+    for (final phase in state.quizCatalog.assessmentPhases) {
+      if (phase.id == phaseId) {
+        return phase;
+      }
+    }
+    for (final phase in state.quizCatalog.categoryQuizzes) {
+      if (phase.id == phaseId) {
+        return phase;
+      }
+    }
+    return null;
   }
 
   Future<void> submitQuiz() async {
@@ -1427,6 +1440,31 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         ),
       );
     }
+  }
+
+  Future<void> submitMicroSurvey({
+    required String templateId,
+    required String contextTrigger,
+    required List<Map<String, dynamic>> responses,
+  }) async {
+    if (state.learner == null) {
+      return;
+    }
+    try {
+      await _api.submitMicroSurveyResponse(
+        templateId: templateId,
+        studySessionId: state.studySessionId,
+        condition: 'adaptive',
+        responses: responses,
+      );
+      _recordTelemetry(
+        contextTrigger == 'post_video'
+            ? 'video_micro_survey_submitted'
+            : 'replay_micro_survey_submitted',
+        {'template_id': templateId},
+        flushAfter: true,
+      );
+    } catch (_) {}
   }
 
   Future<void> run() async {
@@ -2120,15 +2158,6 @@ def lesson_function(*args, **kwargs):
     if (!state.canAccessAuthoring) {
       emit(state.copyWith(
           adminMessage: 'Authoring requires instructor or admin access.'));
-      return;
-    }
-    if (_isCoreLessonId(lessonId)) {
-      emit(
-        state.copyWith(
-          adminMessage:
-              'Core lessons are locked and cannot be deleted from the studio.',
-        ),
-      );
       return;
     }
 
@@ -2829,17 +2858,6 @@ def lesson_function(*args, **kwargs):
     return null;
   }
 
-  bool _isCoreLessonId(String lessonId) {
-    for (final section in fallbackLessonSections) {
-      for (final lesson in section.lessons) {
-        if (lesson.id == lessonId) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
   List<LessonSection> _mergeNonCoreLessons(
     List<LessonSection> baseSections,
     List<LessonSection> authoredSections,
@@ -2847,7 +2865,7 @@ def lesson_function(*args, **kwargs):
     var mergedSections = baseSections;
     for (final section in authoredSections) {
       for (final lesson in section.lessons) {
-        if (!_isCoreLessonId(lesson.id)) {
+        if (_findLessonById(baseSections, lesson.id) == null) {
           mergedSections = _upsertLessonInSections(mergedSections, lesson);
         }
       }
@@ -2855,28 +2873,8 @@ def lesson_function(*args, **kwargs):
     return mergedSections;
   }
 
-  Future<List<LessonSection>> _loadAuthoredLessonSections() async {
-    try {
-      final preferences = await SharedPreferences.getInstance();
-      final rawValue = preferences.getString(_authoredLessonsPrefsKey);
-      if (rawValue == null || rawValue.isEmpty) {
-        return const [];
-      }
-      final decoded = jsonDecode(rawValue);
-      if (decoded is! List) {
-        return const [];
-      }
-      return decoded
-          .whereType<Map<String, dynamic>>()
-          .map(LessonSection.fromJson)
-          .toList(growable: false);
-    } catch (_) {
-      return const [];
-    }
-  }
-
   Future<void> _syncAuthoredLessonToCloud(LessonDefinition lesson) async {
-    if (!state.canAccessAuthoring || _isCoreLessonId(lesson.id)) {
+    if (!state.canAccessAuthoring) {
       return;
     }
     try {
@@ -2908,7 +2906,7 @@ def lesson_function(*args, **kwargs):
   }
 
   Future<void> _deleteAuthoredLessonFromCloud(String lessonId) async {
-    if (!state.canAccessAuthoring || _isCoreLessonId(lessonId)) {
+    if (!state.canAccessAuthoring) {
       return;
     }
     try {
@@ -2933,9 +2931,7 @@ def lesson_function(*args, **kwargs):
   ) async {
     final authoredSections = <LessonSection>[];
     for (final section in sections) {
-      final authoredLessons = section.lessons
-          .where((lesson) => !_isCoreLessonId(lesson.id))
-          .toList(growable: false);
+      final authoredLessons = section.lessons.toList(growable: false);
       if (authoredLessons.isNotEmpty) {
         authoredSections.add(
           LessonSection(title: section.title, lessons: authoredLessons),

@@ -8,6 +8,23 @@ import 'package:rl_ide/features/workspace/trace_replay/trace_value_sparkline.dar
 
 Widget _wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
 
+Future<void> _selectBinderSection(WidgetTester tester, String label) async {
+  final visibleLabel = find.text(label);
+  if (visibleLabel.evaluate().isNotEmpty) {
+    await tester.tap(visibleLabel.first);
+    await tester.pumpAndSettle();
+    return;
+  }
+  final dropdown = find.byWidgetPredicate((widget) => widget is DropdownButton);
+  if (dropdown.evaluate().isEmpty) {
+    throw StateError('Could not find replay binder section "$label".');
+  }
+  await tester.tap(dropdown.last);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label).last);
+  await tester.pumpAndSettle();
+}
+
 TraceReplayPanel _panel(List<ExecutionTraceStep> steps) => TraceReplayPanel(
       runStatusLabel: 'Completed',
       statusMessage: '',
@@ -141,6 +158,7 @@ void main() {
     _wide(tester);
     await tester.pumpWidget(_wrap(_panel([_dpStep()])));
     await tester.pumpAndSettle();
+    await _selectBinderSection(tester, 'Environment');
     expect(find.text('Probability (p)'), findsWidgets);
     expect(find.text('sampled · model-free'), findsNothing);
   });
@@ -150,6 +168,7 @@ void main() {
     _wide(tester);
     await tester.pumpWidget(_wrap(_panel([_tdStep()])));
     await tester.pumpAndSettle();
+    await _selectBinderSection(tester, 'Environment');
     expect(find.text('sampled · model-free'), findsWidgets);
     expect(find.text('Probability (p)'), findsNothing);
   });

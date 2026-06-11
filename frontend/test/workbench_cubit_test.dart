@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rl_ide/core/backend_api.dart';
-import 'package:rl_ide/core/local_lesson_catalog.dart';
 import 'package:rl_ide/core/workbench_state.dart';
 
 class _FakeBackendApi extends BackendApi {
@@ -324,16 +323,32 @@ class _FakeBackendApi extends BackendApi {
 }
 
 void main() {
-  test('cubit replaces fallback catalog with backend lesson sections',
+  test('cubit replaces loading placeholder with backend lesson sections',
       () async {
-    final backendLesson = fallbackLessonSections.first.lessons.first.copyWith(
+    const backendLesson = LessonDefinition(
+      id: 'dp_policy_eval',
       title: 'Backend Policy Evaluation',
+      description: '',
+      category: 'Dynamic Programming',
       starterCode: 'def policy_evaluation():\n    return []\n',
+      conceptVideo: LessonConceptVideo(
+        streamPath: '',
+        durationLabel: '',
+        summary: '',
+        highlights: [],
+      ),
+      exercise: LessonExerciseBrief(
+        title: '',
+        overview: '',
+        tasks: [],
+        successCriteria: [],
+        codeTip: '',
+      ),
     );
     final cubit = RLWorkbenchCubit(
       api: _FakeBackendApi(
         lessonSections: [
-          LessonSection(
+          const LessonSection(
             title: 'Dynamic Programming',
             lessons: [backendLesson],
           ),
@@ -351,7 +366,7 @@ void main() {
     await cubit.close();
   });
 
-  test('cubit keeps fallback lessons when backend lesson fetch fails',
+  test('cubit shows unavailable message when backend lesson fetch fails',
       () async {
     final cubit = RLWorkbenchCubit(
       api: _FakeBackendApi(shouldFailLessonFetch: true),
@@ -359,8 +374,8 @@ void main() {
 
     await cubit.loadBackendLessonCatalog();
 
-    expect(cubit.state.sections.first.lessons.first.id, 'dp_policy_eval');
-    expect(cubit.state.homeMessage, contains('Lesson sync is unavailable'));
+    expect(cubit.state.sections, isEmpty);
+    expect(cubit.state.homeMessage, contains('Lesson registry is unavailable'));
 
     await cubit.close();
   });

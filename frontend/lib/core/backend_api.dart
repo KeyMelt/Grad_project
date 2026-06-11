@@ -9,6 +9,10 @@ export 'backend_connection_manager.dart';
 abstract class BackendApi {
   Future<List<LessonSection>> fetchLessonSections();
 
+  Future<List<StudyFlashcard>> fetchFlashcards() async {
+    return const [];
+  }
+
   Future<List<LessonDefinition>> fetchAuthoredLessons() async {
     return const [];
   }
@@ -57,6 +61,19 @@ abstract class BackendApi {
   Future<QuizSessionData> startQuiz({
     required QuizPhase phase,
   });
+
+  Future<QuizCatalogData> fetchQuizCatalog() async {
+    return const QuizCatalogData.empty();
+  }
+
+  Future<QuizSessionData> startQuizByPhaseId({
+    required String phaseId,
+  }) {
+    final phase = phaseId == quizPhaseApiValue(QuizPhase.posttest)
+        ? QuizPhase.posttest
+        : QuizPhase.pretest;
+    return startQuiz(phase: phase);
+  }
 
   Future<QuizAttemptSummary> submitQuiz({
     required String sessionId,
@@ -133,6 +150,19 @@ abstract class BackendApi {
     String? feedbackHelpful,
     String? feedbackConfusing,
     String? feedbackImprovement,
+  }) {
+    throw UnimplementedError();
+  }
+
+  Future<SurveyTemplateData?> fetchActiveSurveyByTrigger(String trigger) async {
+    return null;
+  }
+
+  Future<MicroSurveySubmitResult> submitMicroSurveyResponse({
+    required String templateId,
+    required String studySessionId,
+    required String condition,
+    required List<Map<String, dynamic>> responses,
   }) {
     throw UnimplementedError();
   }

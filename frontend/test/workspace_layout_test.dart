@@ -386,6 +386,39 @@ void main() {
     await tester.pump();
     await harness.close();
   });
+
+  testWidgets('generate marketing screenshots', (tester) async {
+    final harness = await _pumpWorkspace(tester, const Size(1440, 900));
+
+    await harness.cubit.signIn('maya@example.com', 'Password123!');
+    harness.cubit.openLesson(harness.cubit.state.selectedLesson);
+    await tester.pumpAndSettle();
+
+    // 1. Capture Workspace (Code Editor)
+    await expectLater(find.byType(MainLayout), matchesGoldenFile('workspace.png'));
+
+    // 2. Capture Trace Replay
+    await tester.tap(find.text('Replay'));
+    await tester.pumpAndSettle();
+    await expectLater(find.byType(MainLayout), matchesGoldenFile('trace.png'));
+
+    // 3. Capture StudyBuddy
+    await tester.tap(find.text('Concept')); // switch back
+    await tester.pumpAndSettle();
+    final handle = find.byKey(const ValueKey('study-buddy-drawer-handle'));
+    await tester.drag(handle, const Offset(-250, 0)); // open wide
+    await tester.pumpAndSettle();
+    
+    // send a message so it shows some text
+    await tester.tap(find.byKey(const ValueKey('study-buddy-quick-recap')));
+    await tester.pumpAndSettle();
+    
+    await expectLater(find.byType(MainLayout), matchesGoldenFile('studybuddy.png'));
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await harness.close();
+  });
 }
 
 Future<_WorkspaceHarness> _pumpWorkspace(WidgetTester tester, Size size) async {

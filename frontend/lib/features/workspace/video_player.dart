@@ -77,11 +77,13 @@ List<_VttCue> _parseVttBody(String vttText) {
 class VideoPlayerTab extends StatefulWidget {
   final LessonDefinition lesson;
   final ValueChanged<Map<String, dynamic>>? onSessionEnded;
+  final VoidCallback? onVideoCompleted;
 
   const VideoPlayerTab({
     super.key,
     required this.lesson,
     this.onSessionEnded,
+    this.onVideoCompleted,
   });
 
   @override
@@ -336,7 +338,12 @@ class _VideoPlayerTabState extends State<VideoPlayerTab>
     final duration = value.duration;
     if (duration.inMilliseconds > 0 &&
         duration - position <= const Duration(seconds: 1)) {
-      _completedOnce = true;
+      if (!_completedOnce) {
+        _completedOnce = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) widget.onVideoCompleted?.call();
+        });
+      }
     }
     _lastPosition = position;
   }

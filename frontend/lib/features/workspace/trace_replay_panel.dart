@@ -30,6 +30,7 @@ class TraceReplayPanel extends StatefulWidget {
   final List<ExecutionEpisodeSummary> episodeSummaries;
   final LessonConceptVideo? conceptVideo;
   final VoidCallback? onWatchConcept;
+  final VoidCallback? onReplayCompleted;
 
   const TraceReplayPanel({
     super.key,
@@ -49,20 +50,44 @@ class TraceReplayPanel extends StatefulWidget {
     this.episodeSummaries = const [],
     this.conceptVideo,
     this.onWatchConcept,
+    this.onReplayCompleted,
   });
 
   @override
   State<TraceReplayPanel> createState() => _TraceReplayPanelState();
 }
 
+enum _ReplayBinderSection {
+  overview(Icons.dashboard_customize_rounded, 'Overview'),
+  environment(Icons.public_rounded, 'Environment'),
+  math(Icons.functions_rounded, 'Equation'),
+  code(Icons.code_rounded, 'Code'),
+  table(Icons.grid_on_rounded, 'Table'),
+  run(Icons.analytics_rounded, 'Run');
+
+  const _ReplayBinderSection(this.icon, this.label);
+
+  final IconData icon;
+  final String label;
+}
+
 class _TraceReplayPanelState extends State<TraceReplayPanel> {
   int _selectedEpisodeIndex = 0;
   int _currentStepIndex = 0;
-  int _selectedMobilePane = 0;
+  int _selectedBinderIndex = 0;
+  final Set<_ReplayBinderSection> _visibleBinderSections = {
+    _ReplayBinderSection.overview,
+    _ReplayBinderSection.environment,
+    _ReplayBinderSection.math,
+    _ReplayBinderSection.code,
+    _ReplayBinderSection.table,
+    _ReplayBinderSection.run,
+  };
   bool _quizMode = false;
   int _playbackMs = 1200;
   bool _guideExpanded = false;
   bool _guideDismissed = false;
+  bool _replayCompletionFired = false;
   int? _jumpState;
   VideoPlayerController? _replayController;
   Timer? _tracePlaybackTimer;
@@ -209,6 +234,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
         }
         if (_currentStepIndex >= _currentEpisodeSteps.length - 1) {
           _stopTracePlayback();
+          _fireReplayCompleted();
           return;
         }
         setState(() => _currentStepIndex += 1);
@@ -232,7 +258,17 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     if (lastIndex < 0) {
       return;
     }
-    setState(() => _currentStepIndex = index.clamp(0, lastIndex));
+    final clamped = index.clamp(0, lastIndex);
+    setState(() => _currentStepIndex = clamped);
+    if (clamped == lastIndex) {
+      _fireReplayCompleted();
+    }
+  }
+
+  void _fireReplayCompleted() {
+    if (_replayCompletionFired) return;
+    _replayCompletionFired = true;
+    widget.onReplayCompleted?.call();
   }
 
   void _selectEpisode(int episodeIndex) {
@@ -240,6 +276,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     setState(() {
       _selectedEpisodeIndex = episodeIndex;
       _currentStepIndex = 0;
+      _replayCompletionFired = false;
     });
   }
 
@@ -316,17 +353,15 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: const Color(0xFF1E293B)),
         ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
           child: LayoutBuilder(
-            builder: (context, constraints) {
-              return _buildDebuggerBody(
-                context,
-                hasTrace: hasTrace,
-                step: step,
-                isWide: constraints.maxWidth >= 980,
-              );
-            },
+            builder: (context, constraints) => _buildDebuggerBody(
+              context,
+              hasTrace: hasTrace,
+              step: step,
+              isWide: constraints.maxWidth >= 980,
+            ),
           ),
         ),
       ),
@@ -361,46 +396,281 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     required ExecutionTraceStep? step,
     required bool isWide,
   }) {
+    if (!hasTrace || step == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildCompactHeader(context, hasTrace),
+          const SizedBox(height: 12),
+          Expanded(child: _buildWaitingPanel(context)),
+          const SizedBox(height: 12),
+          _buildMetricsPanel(context),
+        ],
+      );
+    }
+
+    final sections = _activeBinderSections(hasTrace: hasTrace, step: step);
+    final selectedIndex = _selectedBinderIndex.clamp(0, sections.length - 1);
+    final selectedSection = sections[selectedIndex];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildHeader(context, hasTrace),
-        const SizedBox(height: 12),
-        _buildConceptVideoCta(),
-        _buildReadGuide(context, hasTrace),
-        const SizedBox(height: 18),
-        if (hasTrace && step != null) ...[
-          _buildStepToolbar(context),
-          const SizedBox(height: 18),
-          if (_quizMode &&
-              _currentStepIndex < _currentEpisodeSteps.length - 1) ...[
-            _buildQuizPrompt(),
-            const SizedBox(height: 18),
-          ],
-          if (isWide)
-            _buildDesktopDebugger(context, step)
-          else
-            _buildMobileDebuggerTabs(context, step),
-          const SizedBox(height: 18),
-          _buildBottomInspector(context, step, isWide: isWide),
-        ] else
-          _buildWaitingPanel(context),
-        const SizedBox(height: 18),
-        _buildMetricsPanel(context),
-        if (widget.videoPath.isNotEmpty ||
-            widget.replayRenderStatus != 'idle') ...[
-          const SizedBox(height: 18),
-          _buildManimReplayPanel(context),
+        _buildCompactHeader(context, hasTrace),
+        const SizedBox(height: 8),
+        _buildStepToolbar(context),
+        if (_quizMode &&
+            _currentStepIndex < _currentEpisodeSteps.length - 1) ...[
+          const SizedBox(height: 8),
+          _buildQuizPrompt(),
         ],
-        if (widget.runStatusLabel == 'Failed') ...[
-          const SizedBox(height: 18),
-          _buildErrorPanel(context),
-        ],
-        if (widget.testResults.isNotEmpty) ...[
-          const SizedBox(height: 18),
-          _buildSampleTests(context),
-        ],
+        const SizedBox(height: 8),
+        _buildBinderControls(context, sections, selectedIndex),
+        const SizedBox(height: 8),
+        Expanded(
+          child: _buildBinderPage(
+            context,
+            selectedSection,
+            step,
+            isWide: isWide,
+          ),
+        ),
       ],
+    );
+  }
+
+  List<_ReplayBinderSection> _activeBinderSections({
+    required bool hasTrace,
+    required ExecutionTraceStep? step,
+  }) {
+    final sections = <_ReplayBinderSection>[
+      _ReplayBinderSection.overview,
+      if (hasTrace) _ReplayBinderSection.environment,
+      if (hasTrace) _ReplayBinderSection.math,
+      if (hasTrace) _ReplayBinderSection.code,
+      if (hasTrace) _ReplayBinderSection.table,
+      _ReplayBinderSection.run,
+    ].where(_visibleBinderSections.contains).toList(growable: false);
+    return sections.isEmpty ? [_ReplayBinderSection.overview] : sections;
+  }
+
+  Widget _buildBinderControls(
+    BuildContext context,
+    List<_ReplayBinderSection> sections,
+    int selectedIndex,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 1220;
+        final selector = compact
+            ? DropdownButtonHideUnderline(
+                child: DropdownButton<_ReplayBinderSection>(
+                  value: sections[selectedIndex],
+                  isExpanded: true,
+                  dropdownColor: const Color(0xFF111827),
+                  iconEnabledColor: const Color(0xFF93C5FD),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  items: [
+                    for (final section in sections)
+                      DropdownMenuItem(
+                        value: section,
+                        child: Row(
+                          children: [
+                            Icon(section.icon,
+                                color: const Color(0xFF93C5FD), size: 18),
+                            const SizedBox(width: 8),
+                            Text(section.label),
+                          ],
+                        ),
+                      ),
+                  ],
+                  onChanged: (section) {
+                    if (section == null) return;
+                    setState(() {
+                      _selectedBinderIndex = sections.indexOf(section);
+                    });
+                  },
+                ),
+              )
+            : SegmentedButton<_ReplayBinderSection>(
+                segments: [
+                  for (final section in sections)
+                    ButtonSegment(
+                      value: section,
+                      icon: Icon(section.icon),
+                      label: Text(section.label),
+                    ),
+                ],
+                selected: {sections[selectedIndex]},
+                onSelectionChanged: (selection) {
+                  setState(() {
+                    _selectedBinderIndex = sections.indexOf(selection.first);
+                  });
+                },
+                showSelectedIcon: false,
+              );
+
+        return Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F172A),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF1E293B)),
+          ),
+          child: Row(
+            children: [
+              Expanded(child: selector),
+              const SizedBox(width: 10),
+              _buildVisibilityMenu(sections),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildVisibilityMenu(List<_ReplayBinderSection> activeSections) {
+    return Tooltip(
+      message: 'Customize visible binder sections',
+      child: PopupMenuButton<_ReplayBinderSection>(
+        tooltip: 'Customize visible binder sections',
+        onSelected: (section) {
+          setState(() {
+            if (_visibleBinderSections.contains(section) &&
+                _visibleBinderSections.length > 1) {
+              _visibleBinderSections.remove(section);
+              _selectedBinderIndex =
+                  _selectedBinderIndex.clamp(0, activeSections.length - 1);
+            } else {
+              _visibleBinderSections.add(section);
+            }
+          });
+        },
+        itemBuilder: (context) => [
+          for (final section in _ReplayBinderSection.values)
+            CheckedPopupMenuItem(
+              value: section,
+              checked: _visibleBinderSections.contains(section),
+              child: Row(
+                children: [
+                  Icon(section.icon, size: 18, color: const Color(0xFF1D4ED8)),
+                  const SizedBox(width: 8),
+                  Text(section.label),
+                ],
+              ),
+            ),
+        ],
+        child: Container(
+          height: 44,
+          width: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: const Color(0xFF111827),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF334155)),
+          ),
+          child: const Icon(
+            Icons.tune_rounded,
+            color: Color(0xFF93C5FD),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBinderPage(
+    BuildContext context,
+    _ReplayBinderSection section,
+    ExecutionTraceStep step, {
+    required bool isWide,
+  }) {
+    final child = switch (section) {
+      _ReplayBinderSection.overview =>
+        _buildOverviewBinderPage(context, step, isWide: isWide),
+      _ReplayBinderSection.environment => _buildEnvironmentPanel(context, step),
+      _ReplayBinderSection.math => _buildMathPanel(context, step),
+      _ReplayBinderSection.code => _buildCodePanel(context, step),
+      _ReplayBinderSection.table => _buildTableInspector(context, step),
+      _ReplayBinderSection.run => _buildRunBinderPage(context),
+    };
+    return ClipRect(
+      child: child,
+    );
+  }
+
+  Widget _buildOverviewBinderPage(
+    BuildContext context,
+    ExecutionTraceStep step, {
+    required bool isWide,
+  }) {
+    if (isWide) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(flex: 5, child: _buildCurrentStepSummary(context, step)),
+          const SizedBox(width: 12),
+          Expanded(flex: 4, child: _buildTraceOutline(context)),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(child: _buildCurrentStepSummary(context, step)),
+        const SizedBox(height: 12),
+        SizedBox(height: 180, child: _buildTraceOutline(context)),
+      ],
+    );
+  }
+
+  Widget _buildRunBinderPage(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final panels = <Widget>[
+          _buildMetricsPanel(context),
+          _buildReadGuide(context, true),
+          if (widget.conceptVideo != null &&
+              widget.conceptVideo!.streamPath.isNotEmpty &&
+              widget.onWatchConcept != null)
+            _buildConceptVideoCta(),
+          if (widget.videoPath.isNotEmpty || widget.replayRenderStatus != 'idle')
+            _buildManimReplayPanel(context),
+          if (widget.runStatusLabel == 'Failed') _buildErrorPanel(context),
+          if (widget.testResults.isNotEmpty) _buildSampleTests(context),
+        ];
+        if (constraints.maxWidth >= 980 && panels.length > 1) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: panels.first),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var index = 1; index < panels.length; index++) ...[
+                      if (index > 1) const SizedBox(height: 12),
+                      Flexible(child: panels[index]),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var index = 0; index < panels.length; index++) ...[
+              if (index > 0) const SizedBox(height: 12),
+              Flexible(child: panels[index]),
+            ],
+          ],
+        );
+      },
     );
   }
 
@@ -842,176 +1112,72 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     return markers;
   }
 
-  Widget _buildDesktopDebugger(
-    BuildContext context,
-    ExecutionTraceStep step,
-  ) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          flex: 5,
-          child: _buildEnvironmentPanel(context, step),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          flex: 6,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget _buildCompactHeader(BuildContext context, bool hasTrace) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final showSubtitle = constraints.maxWidth >= 420;
+        final showRunTags = constraints.maxWidth >= 560;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F172A),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF1E293B)),
+          ),
+          child: Row(
             children: [
-              _buildCurrentStepSummary(context, step),
-              const SizedBox(height: 16),
-              _buildMathPanel(context, step),
-              const SizedBox(height: 16),
-              _buildCodePanel(context, step),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMobileDebuggerTabs(
-    BuildContext context,
-    ExecutionTraceStep step,
-  ) {
-    final panes = <({IconData icon, String label, Widget child})>[
-      (
-        icon: Icons.insights_rounded,
-        label: 'Summary',
-        child: _buildCurrentStepSummary(context, step),
-      ),
-      (
-        icon: Icons.public_rounded,
-        label: 'Environment',
-        child: _buildEnvironmentPanel(context, step),
-      ),
-      (
-        icon: Icons.functions_rounded,
-        label: 'Equation',
-        child: _buildMathPanel(context, step),
-      ),
-      (
-        icon: Icons.grid_on_rounded,
-        label: 'Table',
-        child: _buildTableInspector(context, step),
-      ),
-      (
-        icon: Icons.code_rounded,
-        label: 'Code',
-        child: _buildCodePanel(context, step),
-      ),
-    ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: ToggleButtons(
-            isSelected: [
-              for (var index = 0; index < panes.length; index++)
-                index == _selectedMobilePane,
-            ],
-            borderRadius: BorderRadius.circular(10),
-            selectedColor: Colors.white,
-            color: const Color(0xFFCBD5E1),
-            fillColor: const Color(0xFF1D4ED8),
-            borderColor: const Color(0xFF334155),
-            selectedBorderColor: const Color(0xFF60A5FA),
-            onPressed: (index) => setState(() => _selectedMobilePane = index),
-            children: [
-              for (final pane in panes)
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(pane.icon, size: 18),
-                      const SizedBox(width: 6),
-                      Text(pane.label),
-                    ],
-                  ),
+              const Icon(
+                Icons.account_tree_rounded,
+                color: Color(0xFF38BDF8),
+                size: 24,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Generated Step Replay',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    if (showSubtitle)
+                      Text(
+                        hasTrace
+                            ? 'Use binder sections to inspect one layer at a time.'
+                            : 'Run code to generate replay steps.',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: const Color(0xFFCBD5E1),
+                              height: 1.25,
+                            ),
+                      ),
+                  ],
                 ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        panes[_selectedMobilePane].child,
-      ],
-    );
-  }
-
-  Widget _buildBottomInspector(
-    BuildContext context,
-    ExecutionTraceStep step, {
-    required bool isWide,
-  }) {
-    if (!isWide) {
-      return _buildTraceOutline(context);
-    }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          flex: 6,
-          child: _buildTableInspector(context, step),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          flex: 5,
-          child: _buildTraceOutline(context),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildHeader(BuildContext context, bool hasTrace) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF1E293B)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Generated Step Replay',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            hasTrace
-                ? 'Step through environment, code, and math together.'
-                : 'Run code to generate replay steps.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFFCBD5E1),
-                  height: 1.45,
-                ),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
+              ),
+              const SizedBox(width: 10),
               _buildTag(widget.runStatusLabel, const Color(0xFF38BDF8)),
-              _buildTag(
-                'Episodes ${widget.episodesCompleted}',
-                const Color(0xFF34D399),
-              ),
-              _buildTag(
-                'Steps ${widget.stepsRecorded}',
-                const Color(0xFFFBBF24),
-              ),
+              if (showRunTags) ...[
+                const SizedBox(width: 8),
+                _buildTag(
+                  'Ep ${widget.episodesCompleted}',
+                  const Color(0xFF34D399),
+                ),
+                const SizedBox(width: 8),
+                _buildTag(
+                  'Steps ${widget.stepsRecorded}',
+                  const Color(0xFFFBBF24),
+                ),
+              ],
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -3398,28 +3564,45 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     required String title,
     required Widget child,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF1E293B)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-              fontSize: 18,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final boundedHeight = constraints.hasBoundedHeight;
+        final content = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+              ),
             ),
+            const SizedBox(height: 14),
+            if (boundedHeight)
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const NeverScrollableScrollPhysics(),
+                  child: child,
+                ),
+              )
+            else
+              child,
+          ],
+        );
+
+        return Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F172A),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFF1E293B)),
           ),
-          const SizedBox(height: 14),
-          child,
-        ],
-      ),
+          child: boundedHeight ? content : IntrinsicHeight(child: content),
+        );
+      },
     );
   }
 }

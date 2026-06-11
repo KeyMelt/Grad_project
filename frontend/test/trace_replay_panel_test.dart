@@ -91,13 +91,18 @@ void main() {
       ),
     );
 
+    await _selectBinderSection(tester, 'Equation');
     expect(find.text('SARSA numeric update'), findsOneWidget);
+    await _selectBinderSection(tester, 'Table');
     expect(find.text('Q-table Inspector'), findsOneWidget);
     expect(find.text('active s1, a0'), findsOneWidget);
     expect(find.text('bootstrap s0, a1'), findsOneWidget);
+    await _selectBinderSection(tester, 'Equation');
     expect(find.textContaining('0.0 + 0.1'), findsOneWidget);
+    await _selectBinderSection(tester, 'Code');
     expect(
         find.byKey(const ValueKey('trace-code-focus-line-0')), findsOneWidget);
+    await _selectBinderSection(tester, 'Overview');
     expect(find.text('Why this update is correct'), findsOneWidget);
     expect(
       find.text('SARSA uses the sampled next action in the TD target.'),
@@ -192,10 +197,13 @@ void main() {
       ),
     );
 
+    await _selectBinderSection(tester, 'Equation');
     expect(find.text('Value iteration action comparison'), findsOneWidget);
     expect(find.text('Selected action'), findsOneWidget);
     expect(find.text('Left'), findsWidgets);
+    await _selectBinderSection(tester, 'Table');
     expect(find.text('Value Table Inspector'), findsOneWidget);
+    await _selectBinderSection(tester, 'Equation');
     expect(find.textContaining('1.00*(r 1.00 + V 1.00)'), findsOneWidget);
   });
 
@@ -306,11 +314,16 @@ void main() {
       ),
     );
 
+    await _selectBinderSection(tester, 'Environment');
     expect(find.text('Blackjack observation'), findsOneWidget);
+    await _selectBinderSection(tester, 'Equation');
     expect(find.text('First-visit return update'), findsOneWidget);
+    await _selectBinderSection(tester, 'Table');
     expect(find.text('Monte Carlo Episode Inspector'), findsOneWidget);
     expect(find.text('Return ladder'), findsOneWidget);
-    expect(find.textContaining('Player 15'), findsWidgets);
+    await _selectBinderSection(tester, 'Environment');
+    expect(find.text('Player sum'), findsOneWidget);
+    expect(find.text('15'), findsWidgets);
   });
 
   testWidgets('renders grid-world companion from grid metadata',
@@ -392,6 +405,7 @@ void main() {
       ),
     );
 
+    await _selectBinderSection(tester, 'Environment');
     expect(find.text('FrozenLake grid'), findsOneWidget);
     expect(find.text('state 0'), findsOneWidget);
     expect(find.text('next 1'), findsOneWidget);
@@ -543,8 +557,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Equation'));
-    await tester.pumpAndSettle();
+    await _selectBinderSection(tester, 'Equation');
 
     expect(find.text('First step math'), findsOneWidget);
     expect(find.text('Second step math'), findsNothing);
@@ -581,19 +594,71 @@ void main() {
         expect(find.textContaining('Episode 2'), findsOneWidget);
         expect(find.text('Why this update is correct'), findsOneWidget,
             reason: 'breakpoint $size');
-        if (size.width < 980) {
-          await tester.ensureVisible(find.text('Equation'));
-          await tester.tap(find.text('Equation'));
-          await tester.pumpAndSettle();
-        }
+        await _selectBinderSection(tester, 'Equation');
         expect(find.text('Q-learning numeric update'), findsOneWidget);
-        expect(find.bySemanticsLabel('Trace step slider'), findsOneWidget);
-        expect(find.bySemanticsLabel('Trace episode selector'), findsOneWidget);
+        expect(find.byType(Slider), findsOneWidget);
+        expect(
+          find.byWidgetPredicate((widget) => widget is DropdownButton<int>),
+          findsOneWidget,
+        );
       }
     } finally {
       semantics.dispose();
     }
   });
+
+  testWidgets('customizes visible replay binder sections', (tester) async {
+    tester.view.physicalSize = const Size(1500, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(_traceReplayHarness());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Code'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.tune_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(_visibleBinderMenuItem('Code').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Code'), findsNothing);
+
+    await tester.tap(find.byIcon(Icons.tune_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(_visibleBinderMenuItem('Code').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Code'), findsOneWidget);
+  });
+}
+
+Future<void> _selectBinderSection(WidgetTester tester, String label) async {
+  final visibleLabel = find.text(label);
+  if (visibleLabel.evaluate().isNotEmpty) {
+    await tester.tap(visibleLabel.first);
+    await tester.pumpAndSettle();
+    return;
+  }
+
+  final dropdown = find.byWidgetPredicate((widget) => widget is DropdownButton);
+  if (dropdown.evaluate().isEmpty) {
+    throw StateError('Could not find replay binder section "$label".');
+  }
+  await tester.tap(dropdown.last);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label).last);
+  await tester.pumpAndSettle();
+}
+
+Finder _visibleBinderMenuItem(String label) {
+  return find.ancestor(
+    of: find.text(label).last,
+    matching: find.byWidgetPredicate(
+      (widget) => widget is CheckedPopupMenuItem,
+    ),
+  );
 }
 
 Widget _traceReplayHarness() {

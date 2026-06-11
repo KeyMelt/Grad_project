@@ -41,17 +41,11 @@ String quizPhaseLabel(QuizPhase phase) {
   }
 }
 
-QuizPhase _parseQuizPhase(String? value) {
-  switch (value) {
-    case 'pretest':
-      return QuizPhase.pretest;
-    case 'posttest':
-      return QuizPhase.posttest;
-    default:
-      throw const BackendApiException(
-        'Unknown quiz phase.',
-      );
+QuizPhase _parseQuizPhaseCompat(String? value) {
+  if (value == 'posttest') {
+    return QuizPhase.posttest;
   }
+  return QuizPhase.pretest;
 }
 
 enum ExecutionTaskStatus { queued, running, succeeded, failed }
@@ -245,20 +239,27 @@ class QuizQuestionData {
 class QuizSessionData {
   final String sessionId;
   final QuizPhase phase;
+  final String phaseId;
+  final String phaseLabel;
   final int questionCount;
   final List<QuizQuestionData> questions;
 
   const QuizSessionData({
     required this.sessionId,
     required this.phase,
+    this.phaseId = 'pretest',
+    this.phaseLabel = 'Pre-test',
     required this.questionCount,
     required this.questions,
   });
 
   factory QuizSessionData.fromJson(Map<String, dynamic> json) {
+    final rawPhase = json['phase'] as String? ?? 'pretest';
     return QuizSessionData(
       sessionId: json['session_id'] as String? ?? '',
-      phase: _parseQuizPhase(json['phase'] as String?),
+      phase: _parseQuizPhaseCompat(rawPhase),
+      phaseId: rawPhase,
+      phaseLabel: json['phase_label'] as String? ?? rawPhase,
       questionCount: (json['question_count'] as num?)?.toInt() ?? 0,
       questions: (json['questions'] as List<dynamic>? ?? const [])
           .whereType<Map<String, dynamic>>()
@@ -270,6 +271,8 @@ class QuizSessionData {
 
 class QuizAttemptSummary {
   final QuizPhase phase;
+  final String phaseId;
+  final String phaseLabel;
   final int score;
   final int totalQuestions;
   final double percentage;
@@ -278,6 +281,8 @@ class QuizAttemptSummary {
 
   const QuizAttemptSummary({
     required this.phase,
+    this.phaseId = 'pretest',
+    this.phaseLabel = 'Pre-test',
     required this.score,
     required this.totalQuestions,
     required this.percentage,
@@ -286,8 +291,11 @@ class QuizAttemptSummary {
   });
 
   factory QuizAttemptSummary.fromJson(Map<String, dynamic> json) {
+    final rawPhase = json['phase'] as String? ?? 'pretest';
     return QuizAttemptSummary(
-      phase: _parseQuizPhase(json['phase'] as String?),
+      phase: _parseQuizPhaseCompat(rawPhase),
+      phaseId: rawPhase,
+      phaseLabel: json['phase_label'] as String? ?? rawPhase,
       score: (json['score'] as num?)?.toInt() ?? 0,
       totalQuestions: (json['total_questions'] as num?)?.toInt() ?? 0,
       percentage: (json['percentage'] as num?)?.toDouble() ?? 0.0,
@@ -295,6 +303,81 @@ class QuizAttemptSummary {
       progress: LearnerProgress.fromJson(
         (json['progress'] as Map<String, dynamic>?) ?? const {},
       ),
+    );
+  }
+}
+
+class QuizCatalogPhaseData {
+  final String id;
+  final String label;
+  final String description;
+  final int questionCount;
+  final List<String> concepts;
+  final bool requiresSuccessfulRun;
+  final bool triggersPostStudySurvey;
+  final bool showsNGain;
+
+  const QuizCatalogPhaseData({
+    required this.id,
+    required this.label,
+    required this.description,
+    required this.questionCount,
+    this.concepts = const [],
+    this.requiresSuccessfulRun = false,
+    this.triggersPostStudySurvey = false,
+    this.showsNGain = false,
+  });
+
+  factory QuizCatalogPhaseData.fromJson(Map<String, dynamic> json) {
+    return QuizCatalogPhaseData(
+      id: json['id'] as String? ?? '',
+      label: json['label'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      questionCount: (json['question_count'] as num?)?.toInt() ?? 0,
+      concepts: (json['concepts'] as List<dynamic>? ?? const [])
+          .map((value) => value.toString())
+          .toList(growable: false),
+      requiresSuccessfulRun: json['requires_successful_run'] as bool? ?? false,
+      triggersPostStudySurvey:
+          json['triggers_post_study_survey'] as bool? ?? false,
+      showsNGain: json['shows_n_gain'] as bool? ?? false,
+    );
+  }
+}
+
+class QuizCatalogData {
+  final String categorySectionLabel;
+  final String categorySectionDescription;
+  final List<QuizCatalogPhaseData> assessmentPhases;
+  final List<QuizCatalogPhaseData> categoryQuizzes;
+
+  const QuizCatalogData({
+    this.categorySectionLabel = '',
+    this.categorySectionDescription = '',
+    required this.assessmentPhases,
+    required this.categoryQuizzes,
+  });
+
+  const QuizCatalogData.empty()
+      : categorySectionLabel = '',
+        categorySectionDescription = '',
+        assessmentPhases = const [],
+        categoryQuizzes = const [];
+
+  factory QuizCatalogData.fromJson(Map<String, dynamic> json) {
+    return QuizCatalogData(
+      categorySectionLabel: json['category_section_label'] as String? ?? '',
+      categorySectionDescription:
+          json['category_section_description'] as String? ?? '',
+      assessmentPhases:
+          (json['assessment_phases'] as List<dynamic>? ?? const [])
+              .whereType<Map<String, dynamic>>()
+              .map(QuizCatalogPhaseData.fromJson)
+              .toList(growable: false),
+      categoryQuizzes: (json['category_quizzes'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(QuizCatalogPhaseData.fromJson)
+          .toList(growable: false),
     );
   }
 }
@@ -1779,6 +1862,73 @@ class StudyBuddyReviewRecommendation {
       confidenceScore: (json['confidence_score'] as num?)?.toDouble() ?? 0.10,
       stalenessDays: (json['staleness_days'] as num?)?.toInt() ?? 0,
       reviewPriority: (json['review_priority'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
+class SurveyTemplateItemData {
+  final String id;
+  final int orderIndex;
+  final String questionText;
+  final String questionType;
+  final bool required;
+
+  const SurveyTemplateItemData({
+    required this.id,
+    required this.orderIndex,
+    required this.questionText,
+    required this.questionType,
+    required this.required,
+  });
+
+  factory SurveyTemplateItemData.fromJson(Map<String, dynamic> json) {
+    return SurveyTemplateItemData(
+      id: json['id'] as String? ?? '',
+      orderIndex: (json['order_index'] as num?)?.toInt() ?? 0,
+      questionText: json['question_text'] as String? ?? '',
+      questionType: json['question_type'] as String? ?? 'likert_5',
+      required: json['required'] as bool? ?? true,
+    );
+  }
+}
+
+class SurveyTemplateData {
+  final String id;
+  final String name;
+  final String contextTrigger;
+  final int version;
+  final List<SurveyTemplateItemData> items;
+
+  const SurveyTemplateData({
+    required this.id,
+    required this.name,
+    required this.contextTrigger,
+    required this.version,
+    required this.items,
+  });
+
+  factory SurveyTemplateData.fromJson(Map<String, dynamic> json) {
+    return SurveyTemplateData(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      contextTrigger: json['context_trigger'] as String? ?? '',
+      version: (json['version'] as num?)?.toInt() ?? 1,
+      items: (json['items'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(SurveyTemplateItemData.fromJson)
+          .toList(growable: false),
+    );
+  }
+}
+
+class MicroSurveySubmitResult {
+  final String surveyResponseId;
+
+  const MicroSurveySubmitResult({required this.surveyResponseId});
+
+  factory MicroSurveySubmitResult.fromJson(Map<String, dynamic> json) {
+    return MicroSurveySubmitResult(
+      surveyResponseId: json['survey_response_id'] as String? ?? '',
     );
   }
 }
