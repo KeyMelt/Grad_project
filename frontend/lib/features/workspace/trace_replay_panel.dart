@@ -636,7 +636,8 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
               widget.conceptVideo!.streamPath.isNotEmpty &&
               widget.onWatchConcept != null)
             _buildConceptVideoCta(),
-          if (widget.videoPath.isNotEmpty || widget.replayRenderStatus != 'idle')
+          if (widget.videoPath.isNotEmpty ||
+              widget.replayRenderStatus != 'idle')
             _buildManimReplayPanel(context),
           if (widget.runStatusLabel == 'Failed') _buildErrorPanel(context),
           if (widget.testResults.isNotEmpty) _buildSampleTests(context),
@@ -1920,7 +1921,8 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
           ),
           // Make the code -> table link explicit: the highlighted line is what
           // writes the active (green) cell in the table inspector.
-          if (focusedLineIndex >= 0 && step.tableSnapshot?.activeCell != null) ...[
+          if (focusedLineIndex >= 0 &&
+              step.tableSnapshot?.activeCell != null) ...[
             const SizedBox(height: 6),
             Row(
               children: [
@@ -3354,12 +3356,12 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
             )
           else if (_guideExpanded) ...[
             const SizedBox(height: 8),
-            _guideStep('1', 'Environment',
-                'where the agent is and what it just did'),
+            _guideStep(
+                '1', 'Environment', 'where the agent is and what it just did'),
             _guideStep('2', 'Code',
                 'the exact line running at this step (highlighted)'),
-            _guideStep('3', 'Math',
-                'the numbers that line plugs into the update'),
+            _guideStep(
+                '3', 'Math', 'the numbers that line plugs into the update'),
             _guideStep('4', 'Predict',
                 'flip on Quiz to guess each step before it reveals'),
           ] else
@@ -3584,7 +3586,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
             if (boundedHeight)
               Expanded(
                 child: SingleChildScrollView(
-                  physics: const NeverScrollableScrollPhysics(),
                   child: child,
                 ),
               )

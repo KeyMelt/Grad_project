@@ -759,15 +759,21 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     try {
       String? firebaseIdToken;
       if (kIsWeb) {
-        final credential =
-            await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: normalizedEmail,
-          password: password,
-        );
-        firebaseIdToken = await credential.user?.getIdToken(true);
+        try {
+          final credential =
+              await FirebaseAuth.instance.createUserWithEmailAndPassword(
+            email: normalizedEmail,
+            password: password,
+          );
+          firebaseIdToken = await credential.user?.getIdToken(true);
+        } on FirebaseAuthException catch (error) {
+          if (!_canUseBackendPasswordFallback(error)) {
+            rethrow;
+          }
+        }
       }
 
-      final dashboard = await _api.signIn(
+      final dashboard = await _signInWithBackendFallback(
         displayName: normalizedEmail,
         password: password,
         firebaseIdToken: firebaseIdToken,
@@ -942,14 +948,21 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   }) async {
     String? firebaseIdToken;
     if (kIsWeb) {
-      final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: normalizedEmail,
-        password: password,
-      );
-      firebaseIdToken = await credential.user?.getIdToken(true);
+      try {
+        final credential =
+            await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: normalizedEmail,
+          password: password,
+        );
+        firebaseIdToken = await credential.user?.getIdToken(true);
+      } on FirebaseAuthException catch (error) {
+        if (!_canUseBackendPasswordFallback(error)) {
+          rethrow;
+        }
+      }
     }
 
-    final dashboard = await _api.signIn(
+    final dashboard = await _signInWithBackendFallback(
       displayName: normalizedEmail,
       password: password,
       firebaseIdToken: firebaseIdToken,
@@ -958,6 +971,47 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       dashboard,
       successMessage: 'Signed in as ${dashboard.student.displayName}.',
     );
+  }
+
+  Future<LearnerDashboard> _signInWithBackendFallback({
+    required String displayName,
+    required String password,
+    String? firebaseIdToken,
+  }) async {
+    try {
+      return await _api.signIn(
+        displayName: displayName,
+        password: password,
+        firebaseIdToken: firebaseIdToken,
+      );
+    } on BackendApiException catch (error) {
+      if (firebaseIdToken == null || !_isBackendFirebaseUnavailable(error)) {
+        rethrow;
+      }
+      return _api.signIn(
+        displayName: displayName,
+        password: password,
+      );
+    }
+  }
+
+  bool _canUseBackendPasswordFallback(FirebaseAuthException error) {
+    return switch (error.code) {
+      'configuration-not-found' ||
+      'operation-not-allowed' ||
+      'network-request-failed' ||
+      'web-context-cancelled' ||
+      'web-context-already-presented' ||
+      'internal-error' =>
+        true,
+      _ => false,
+    };
+  }
+
+  bool _isBackendFirebaseUnavailable(BackendApiException error) {
+    return error.message.toLowerCase().contains(
+          'firebase authentication is unavailable',
+        );
   }
 
   Future<void> updateProfile({
