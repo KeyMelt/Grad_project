@@ -328,20 +328,26 @@ class QuizService:
     def _load_all_questions(self) -> list[QuizQuestionTemplate]:
         if self._database is None:
             return list(self._catalog.questions)
+        configured_questions = {
+            template.id: template for template in self._catalog.questions
+        }
         with self._database.session() as session:
             rows = session.exec(select(QuizQuestion)).all()
         if not rows:
             return list(self._catalog.questions)
-        return [
-            QuizQuestionTemplate(
+
+        merged = dict(configured_questions)
+        for row in rows:
+            if row.created_by_user_id == "system" and row.id not in configured_questions:
+                continue
+            merged[row.id] = QuizQuestionTemplate(
                 id=row.id,
                 concept=row.concept,
                 prompt=row.prompt,
                 options=tuple(json.loads(row.options_json)),
                 correct_index=row.correct_index,
             )
-            for row in rows
-        ]
+        return list(merged.values())
 
     def _select_questions(self, student_id: str, phase: str) -> list[QuizQuestionTemplate]:
         all_questions = self._load_all_questions()
@@ -379,6 +385,7 @@ class QuizService:
                     row.id: row for row in session.exec(select(QuizQuestion)).all()
                 }
             now = datetime.now(timezone.utc)
+            configured_ids = {template.id for template in self._catalog.questions}
             for template in self._catalog.questions:
                 with self._database.session() as session:
                     existing = session.get(QuizQuestion, template.id)
@@ -402,4 +409,15 @@ class QuizService:
                         existing.correct_index = template.correct_index
                         existing.updated_at_utc = now
                         session.add(existing)
+                    session.commit()
+            with self._database.session() as session:
+                stale_system_rows = [
+                    row
+                    for row in session.exec(select(QuizQuestion)).all()
+                    if row.created_by_user_id == "system"
+                    and row.id not in configured_ids
+                ]
+                for row in stale_system_rows:
+                    session.delete(row)
+                if stale_system_rows:
                     session.commit()

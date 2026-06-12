@@ -1,5 +1,7 @@
 import unittest
 
+from backend.models.quiz_question import QuizQuestion
+from backend.persistence import Database
 from backend.services.quiz_service import QuizService
 
 
@@ -157,6 +159,28 @@ class QuizServiceTest(unittest.TestCase):
                 for question in session["questions"]
             )
         )
+
+    def test_database_seed_removes_stale_system_questions(self):
+        database = Database("sqlite://")
+        database.create_schema()
+        with database.session() as session:
+            session.add(
+                QuizQuestion(
+                    id="q_bellman_backup",
+                    concept="Dynamic Programming",
+                    prompt="Old hardcoded Bellman backup question.",
+                    options_json='["A", "B"]',
+                    correct_index=0,
+                    created_by_user_id="system",
+                )
+            )
+            session.commit()
+
+        quiz_service = QuizService(self.progress_service, database=database)
+        session = quiz_service.start_session(self.student_id, "bellman_equations")
+        question_ids = {question["id"] for question in session["questions"]}
+
+        self.assertNotIn("q_bellman_backup", question_ids)
 
 
 if __name__ == "__main__":
