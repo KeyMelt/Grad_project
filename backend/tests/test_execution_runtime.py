@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import backend.execution_runtime as execution_runtime
 import backend.lesson_registry as lesson_registry
 from backend.execution_runtime import _derive_timeout_seconds, _run_execution_pipeline
+from backend.rl_engine.engine import RLEngine
 from backend.validation.validator import ValidationResult
 
 
@@ -88,6 +89,46 @@ class _FakeMultiEpisodeEngine:
             }
         )
         self.logger.end_episode()
+
+
+class _FakeBlackjackActionSpace:
+    def sample(self) -> int:
+        return 0
+
+
+class _FakeBlackjackEnv:
+    action_space = _FakeBlackjackActionSpace()
+
+
+class _FakeBlackjackAdapter:
+    env = _FakeBlackjackEnv()
+
+    def reset(self, seed: int | None = None):
+        del seed
+        return (16, 10, False), {}
+
+    def step(self, action: int):
+        del action
+        return (18, 10, False), 1.0, True, False, {"p": 1.0}
+
+    def action_label(self, action: int) -> str:
+        return f"action {action}"
+
+    def capture_frame_png(self, state=None, prefix: str = "step") -> str:
+        del prefix
+        assert state is None
+        return ""
+
+
+class _FakeTraceLogger:
+    def __init__(self) -> None:
+        self.episodes: list[list[dict]] = [[]]
+
+    def log_step(self, step: dict) -> None:
+        self.episodes[-1].append(step)
+
+    def end_episode(self) -> None:
+        self.episodes.append([])
 
 
 class _FakeVisualizationService:
@@ -185,6 +226,29 @@ def test_execution_response_includes_episode_summaries_and_traces(monkeypatch, t
             "truncated": False,
         },
     ]
+
+
+def test_mc_first_visit_runtime_handles_tuple_observation_states():
+    logger = _FakeTraceLogger()
+    engine = RLEngine(adapter=_FakeBlackjackAdapter(), logger=logger)
+
+    def lesson_function(episode, values, returns, gamma):
+        del gamma
+        state = episode[0][0]
+        returns.setdefault(state, []).append(1.0)
+        values[state] = 1.0
+        return values
+
+    engine._run_mc_first_visit(
+        lesson_function,
+        num_episodes=1,
+        hyperparameters={"gamma": 1.0},
+    )
+
+    steps = logger.episodes[0]
+    assert len(steps) == 2
+    assert steps[-1]["equation_update"]["kind"] == "mc_first_visit"
+    assert steps[-1]["state"] == (16, 10, False)
 
 
 def test_execution_runtime_initializes_registry_for_spawned_process(monkeypatch, tmp_path):

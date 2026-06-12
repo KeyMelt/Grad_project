@@ -903,10 +903,7 @@ class RLEngine:
                     hyperparameters["gamma"],
                 )
 
-                frame_path = self.adapter.capture_frame_png(
-                    state=visited_state,
-                    prefix="mc_return",
-                )
+                frame_path = self.adapter.capture_frame_png(prefix="mc_return")
                 self._log_trace_step(
                     {
                         "state": visited_state,
