@@ -42,31 +42,44 @@ const _testSections = [
 const _testQuizCatalog = QuizCatalogData(
   categorySectionLabel: 'Equation family quizzes',
   categorySectionDescription: 'Practice each equation family separately.',
-  assessmentPhases: [
-    QuizCatalogPhaseData(
-      id: 'pretest',
-      label: 'Pre-test',
-      description: 'Check your starting understanding.',
-      questionCount: 2,
-      showsNGain: true,
-    ),
-    QuizCatalogPhaseData(
-      id: 'posttest',
-      label: 'Post-test',
-      description: 'Measure progress after practice.',
-      questionCount: 2,
-      requiresSuccessfulRun: true,
-      triggersPostStudySurvey: true,
-      showsNGain: true,
+  assessmentPhases: [],
+  categoryQuizzes: [],
+  quizFamilies: [
+    QuizFamilyData(
+      id: 'dp_policy_eval',
+      label: 'Policy Evaluation',
+      description: 'Bellman expectation backups.',
+      lessonIds: ['dp_policy_eval'],
+      pretest: QuizCatalogPhaseData(
+        id: 'dp_policy_eval:pre',
+        label: 'Policy Evaluation pre-test',
+        description: 'Check your starting understanding.',
+        questionCount: 2,
+        familyId: 'dp_policy_eval',
+        stage: 'pre',
+        lessonIds: ['dp_policy_eval'],
+        showsNGain: true,
+      ),
+      posttest: QuizCatalogPhaseData(
+        id: 'dp_policy_eval:post',
+        label: 'Policy Evaluation post-test',
+        description: 'Measure progress after practice.',
+        questionCount: 2,
+        familyId: 'dp_policy_eval',
+        stage: 'post',
+        lessonIds: ['dp_policy_eval'],
+        requiresLessonCompletion: true,
+        triggersPostStudySurvey: true,
+        showsNGain: true,
+      ),
     ),
   ],
-  categoryQuizzes: [],
 );
 
 class FakeBackendApi extends BackendApi {
   LearnerProfile? _student;
   LearnerProgress _progress = const LearnerProgress.empty();
-  QuizPhase? _latestPhase;
+  String? _latestPhaseId;
   String _workspaceContent = 'print("workspace")\n';
   String? _token;
   List<int>? submittedSusResponses;
@@ -154,7 +167,7 @@ class FakeBackendApi extends BackendApi {
   Future<QuizSessionData> startQuiz({
     required QuizPhase phase,
   }) async {
-    _latestPhase = phase;
+    _latestPhaseId = quizPhaseApiValue(phase);
     return QuizSessionData(
       sessionId: '${quizPhaseApiValue(phase)}-session',
       phase: phase,
@@ -189,11 +202,55 @@ class FakeBackendApi extends BackendApi {
   }
 
   @override
+  Future<QuizSessionData> startQuizByPhaseId({
+    required String phaseId,
+  }) async {
+    _latestPhaseId = phaseId;
+    final isPosttest = phaseId.endsWith(':post');
+    return QuizSessionData(
+      sessionId: '$phaseId-session',
+      phase: isPosttest ? QuizPhase.posttest : QuizPhase.pretest,
+      phaseId: phaseId,
+      phaseLabel: isPosttest
+          ? 'Policy Evaluation post-test'
+          : 'Policy Evaluation pre-test',
+      familyId: 'dp_policy_eval',
+      familyLabel: 'Policy Evaluation',
+      stage: isPosttest ? 'post' : 'pre',
+      questionCount: 2,
+      questions: const [
+        QuizQuestionData(
+          id: 'q1',
+          concept: 'Core RL',
+          prompt: 'What does gamma control?',
+          options: [
+            'How much future rewards matter',
+            'How fast the video plays',
+            'How many states exist',
+            'How many files Manim writes',
+          ],
+        ),
+        QuizQuestionData(
+          id: 'q2',
+          concept: 'Temporal Difference',
+          prompt: 'What is the TD target in Q-learning?',
+          options: [
+            'Reward plus discounted best next-state action value',
+            'Average reward minus epsilon',
+            'The current value of the same state',
+            'Only the immediate reward',
+          ],
+        ),
+      ],
+    );
+  }
+
+  @override
   Future<QuizAttemptSummary> submitQuiz({
     required String sessionId,
     required Map<String, int> answers,
   }) async {
-    if (_latestPhase == QuizPhase.pretest) {
+    if (_latestPhaseId?.endsWith(':post') != true) {
       _progress = const LearnerProgress(
         completedLessonIds: ['dp_policy_eval'],
         successfulRuns: 1,
@@ -201,15 +258,24 @@ class FakeBackendApi extends BackendApi {
         pretestScore: 50.0,
         posttestScore: null,
         nGain: null,
+        familyQuizScores: {
+          'dp_policy_eval': FamilyQuizScore(
+            pretestScore: 50.0,
+            attempts: {'pretest': 1, 'posttest': 0},
+          ),
+        },
         quizAttempts: {
-          'pretest': 1,
-          'posttest': 0,
+          'dp_policy_eval:pre': 1,
+          'dp_policy_eval:post': 0,
         },
       );
       return QuizAttemptSummary(
         phase: QuizPhase.pretest,
-        phaseId: 'pretest',
-        phaseLabel: 'Pre-test',
+        phaseId: 'dp_policy_eval:pre',
+        phaseLabel: 'Policy Evaluation pre-test',
+        familyId: 'dp_policy_eval',
+        familyLabel: 'Policy Evaluation',
+        stage: 'pre',
         score: 1,
         totalQuestions: 2,
         percentage: 50.0,
@@ -225,15 +291,26 @@ class FakeBackendApi extends BackendApi {
       pretestScore: 50.0,
       posttestScore: 100.0,
       nGain: 1.0,
+      familyQuizScores: {
+        'dp_policy_eval': FamilyQuizScore(
+          pretestScore: 50.0,
+          posttestScore: 100.0,
+          nGain: 1.0,
+          attempts: {'pretest': 1, 'posttest': 1},
+        ),
+      },
       quizAttempts: {
-        'pretest': 1,
-        'posttest': 1,
+        'dp_policy_eval:pre': 1,
+        'dp_policy_eval:post': 1,
       },
     );
     return QuizAttemptSummary(
       phase: QuizPhase.posttest,
-      phaseId: 'posttest',
-      phaseLabel: 'Post-test',
+      phaseId: 'dp_policy_eval:post',
+      phaseLabel: 'Policy Evaluation post-test',
+      familyId: 'dp_policy_eval',
+      familyLabel: 'Policy Evaluation',
+      stage: 'post',
       score: 2,
       totalQuestions: 2,
       percentage: 100.0,
@@ -729,7 +806,7 @@ void main() {
     await tester.tap(find.text('Quiz').first);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Start Pre-test'));
+    await tester.tap(find.text('Start pre-test'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('How much future rewards matter'));
     await tester.tap(
@@ -740,7 +817,7 @@ void main() {
 
     expect(find.text('50.0%'), findsWidgets);
 
-    await tester.tap(find.text('Start Post-test'));
+    await tester.tap(find.text('Start post-test'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('How much future rewards matter'));
     await tester.tap(

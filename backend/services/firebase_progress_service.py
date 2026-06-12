@@ -118,6 +118,8 @@ class FirebaseProgressService:
         phase: str,
         percentage: float,
         question_ids: list[str],
+        family_id: Optional[str] = None,
+        stage: Optional[str] = None,
     ) -> Optional[dict[str, Any]]:
         user_ref = self._users.document(student_id)
         snapshot = user_ref.get()
@@ -130,7 +132,14 @@ class FirebaseProgressService:
         attempts[phase] = int(attempts.get(phase, 0)) + 1
         progress["quiz_attempts"] = attempts
 
-        if phase == "pretest":
+        if family_id and stage in {"pre", "post"}:
+            progress = self._record_family_quiz_score(
+                progress,
+                family_id=family_id,
+                stage=stage,
+                percentage=percentage,
+            )
+        elif phase == "pretest":
             progress["pretest_score"] = percentage
         elif phase == "posttest":
             progress["posttest_score"] = percentage
@@ -138,6 +147,13 @@ class FirebaseProgressService:
         question_history = list(progress.get("question_history", []))
         question_history.extend(question_ids)
         progress["question_history"] = question_history
+        if family_id and stage in {"pre", "post"}:
+            scoped_history = dict(progress.get("question_history_by_scope", {}))
+            scope_key = f"{family_id}:{stage}"
+            scope_items = list(scoped_history.get(scope_key, []))
+            scope_items.extend(question_ids)
+            scoped_history[scope_key] = scope_items
+            progress["question_history_by_scope"] = scoped_history
         progress["n_gain"] = self._compute_n_gain(
             progress.get("pretest_score"),
             progress.get("posttest_score"),
@@ -148,12 +164,20 @@ class FirebaseProgressService:
         user_ref.set(payload)
         return self._dashboard_payload(student_id, payload)
 
-    def get_question_history(self, student_id: str) -> list[str]:
+    def get_question_history(
+        self,
+        student_id: str,
+        family_id: Optional[str] = None,
+        stage: Optional[str] = None,
+    ) -> list[str]:
         snapshot = self._users.document(student_id).get()
         if not snapshot.exists:
             return []
         payload = snapshot.to_dict() or {}
         progress = payload.get("progress", {})
+        if family_id and stage:
+            scoped_history = progress.get("question_history_by_scope", {})
+            return [str(item) for item in scoped_history.get(f"{family_id}:{stage}", [])]
         return [str(item) for item in progress.get("question_history", [])]
 
     def list_n_gain_metrics(self) -> list[dict[str, Any]]:
@@ -205,7 +229,9 @@ class FirebaseProgressService:
                     "pretest": 0,
                     "posttest": 0,
                 },
+                "family_quiz_scores": {},
                 "question_history": [],
+                "question_history_by_scope": {},
                 "total_submission_attempts": 0,
                 "passed_submission_attempts": 0,
                 "validation_failures": 0,
@@ -262,7 +288,9 @@ class FirebaseProgressService:
                     "pretest": 0,
                     "posttest": 0,
                 },
+                "family_quiz_scores": {},
                 "question_history": [],
+                "question_history_by_scope": {},
                 "total_submission_attempts": 0,
                 "passed_submission_attempts": 0,
                 "validation_failures": 0,
@@ -282,6 +310,9 @@ class FirebaseProgressService:
         }
         normalized_attempts.setdefault("pretest", 0)
         normalized_attempts.setdefault("posttest", 0)
+        family_scores = self._normalize_family_scores(
+            progress.get("family_quiz_scores", {})
+        )
         return {
             "student": {
                 "id": student_id,
@@ -298,6 +329,7 @@ class FirebaseProgressService:
                 "posttest_score": progress.get("posttest_score"),
                 "n_gain": progress.get("n_gain"),
                 "quiz_attempts": normalized_attempts,
+                "family_quiz_scores": family_scores,
                 "total_submission_attempts": int(progress.get("total_submission_attempts", 0)),
                 "passed_submission_attempts": int(progress.get("passed_submission_attempts", 0)),
                 "validation_failures": int(progress.get("validation_failures", 0)),
@@ -316,6 +348,78 @@ class FirebaseProgressService:
         if pretest_score >= 100:
             return 1.0 if posttest_score >= 100 else 0.0
         return round((posttest_score - pretest_score) / (100 - pretest_score), 3)
+
+    def _record_family_quiz_score(
+        self,
+        progress: dict[str, Any],
+        *,
+        family_id: str,
+        stage: str,
+        percentage: float,
+    ) -> dict[str, Any]:
+        scores = self._normalize_family_scores(progress.get("family_quiz_scores", {}))
+        score = scores.get(
+            family_id,
+            {
+                "pretest_score": None,
+                "posttest_score": None,
+                "n_gain": None,
+                "attempts": {"pretest": 0, "posttest": 0},
+            },
+        )
+        attempts = dict(score.get("attempts", {}))
+        if stage == "pre":
+            score["pretest_score"] = percentage
+            attempts["pretest"] = int(attempts.get("pretest", 0)) + 1
+        else:
+            score["posttest_score"] = percentage
+            attempts["posttest"] = int(attempts.get("posttest", 0)) + 1
+        score["attempts"] = attempts
+        score["n_gain"] = self._compute_n_gain(
+            score.get("pretest_score"),
+            score.get("posttest_score"),
+        )
+        scores[family_id] = score
+        progress["family_quiz_scores"] = scores
+
+        pre_scores = [
+            item.get("pretest_score")
+            for item in scores.values()
+            if item.get("pretest_score") is not None
+        ]
+        post_scores = [
+            item.get("posttest_score")
+            for item in scores.values()
+            if item.get("posttest_score") is not None
+        ]
+        progress["pretest_score"] = (
+            round(sum(pre_scores) / len(pre_scores), 2) if pre_scores else None
+        )
+        progress["posttest_score"] = (
+            round(sum(post_scores) / len(post_scores), 2) if post_scores else None
+        )
+        return progress
+
+    def _normalize_family_scores(self, raw: Any) -> dict[str, dict[str, Any]]:
+        if not isinstance(raw, dict):
+            return {}
+        normalized: dict[str, dict[str, Any]] = {}
+        for family_id, value in raw.items():
+            if not isinstance(value, dict):
+                continue
+            attempts = value.get("attempts", {})
+            if not isinstance(attempts, dict):
+                attempts = {}
+            normalized[str(family_id)] = {
+                "pretest_score": value.get("pretest_score"),
+                "posttest_score": value.get("posttest_score"),
+                "n_gain": value.get("n_gain"),
+                "attempts": {
+                    "pretest": int(attempts.get("pretest", 0)),
+                    "posttest": int(attempts.get("posttest", 0)),
+                },
+            }
+        return normalized
 
     def _get_or_create_app(
         self,

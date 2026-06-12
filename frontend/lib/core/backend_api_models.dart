@@ -99,6 +99,7 @@ class LearnerProgress {
   final double? pretestScore;
   final double? posttestScore;
   final double? nGain;
+  final Map<String, FamilyQuizScore> familyQuizScores;
   final Map<String, int> quizAttempts;
   final int totalSubmissionAttempts;
   final int passedSubmissionAttempts;
@@ -113,6 +114,7 @@ class LearnerProgress {
     required this.pretestScore,
     required this.posttestScore,
     required this.nGain,
+    this.familyQuizScores = const {},
     required this.quizAttempts,
     this.totalSubmissionAttempts = 0,
     this.passedSubmissionAttempts = 0,
@@ -128,6 +130,7 @@ class LearnerProgress {
         pretestScore = null,
         posttestScore = null,
         nGain = null,
+        familyQuizScores = const {},
         quizAttempts = const {
           'pretest': 0,
           'posttest': 0,
@@ -143,6 +146,8 @@ class LearnerProgress {
   factory LearnerProgress.fromJson(Map<String, dynamic> json) {
     final rawQuizAttempts =
         (json['quiz_attempts'] as Map<String, dynamic>?) ?? const {};
+    final rawFamilyScores =
+        (json['family_quiz_scores'] as Map<String, dynamic>?) ?? const {};
     return LearnerProgress(
       completedLessonIds:
           (json['completed_lesson_ids'] as List<dynamic>? ?? const [])
@@ -153,6 +158,14 @@ class LearnerProgress {
       pretestScore: (json['pretest_score'] as num?)?.toDouble(),
       posttestScore: (json['posttest_score'] as num?)?.toDouble(),
       nGain: (json['n_gain'] as num?)?.toDouble(),
+      familyQuizScores: rawFamilyScores.map(
+        (key, value) => MapEntry(
+          key,
+          FamilyQuizScore.fromJson(
+            (value as Map<String, dynamic>?) ?? const {},
+          ),
+        ),
+      ),
       quizAttempts: rawQuizAttempts.map(
         (key, value) => MapEntry(key, (value as num).toInt()),
       ),
@@ -163,6 +176,32 @@ class LearnerProgress {
       validationFailures: (json['validation_failures'] as num?)?.toInt() ?? 0,
       runtimeFailures: (json['runtime_failures'] as num?)?.toInt() ?? 0,
       testFailures: (json['test_failures'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class FamilyQuizScore {
+  final double? pretestScore;
+  final double? posttestScore;
+  final double? nGain;
+  final Map<String, int> attempts;
+
+  const FamilyQuizScore({
+    this.pretestScore,
+    this.posttestScore,
+    this.nGain,
+    this.attempts = const {},
+  });
+
+  factory FamilyQuizScore.fromJson(Map<String, dynamic> json) {
+    final rawAttempts = (json['attempts'] as Map<String, dynamic>?) ?? const {};
+    return FamilyQuizScore(
+      pretestScore: (json['pretest_score'] as num?)?.toDouble(),
+      posttestScore: (json['posttest_score'] as num?)?.toDouble(),
+      nGain: (json['n_gain'] as num?)?.toDouble(),
+      attempts: rawAttempts.map(
+        (key, value) => MapEntry(key, (value as num).toInt()),
+      ),
     );
   }
 }
@@ -241,6 +280,9 @@ class QuizSessionData {
   final QuizPhase phase;
   final String phaseId;
   final String phaseLabel;
+  final String familyId;
+  final String familyLabel;
+  final String stage;
   final int questionCount;
   final List<QuizQuestionData> questions;
 
@@ -249,6 +291,9 @@ class QuizSessionData {
     required this.phase,
     this.phaseId = 'pretest',
     this.phaseLabel = 'Pre-test',
+    this.familyId = '',
+    this.familyLabel = '',
+    this.stage = '',
     required this.questionCount,
     required this.questions,
   });
@@ -260,6 +305,9 @@ class QuizSessionData {
       phase: _parseQuizPhaseCompat(rawPhase),
       phaseId: rawPhase,
       phaseLabel: json['phase_label'] as String? ?? rawPhase,
+      familyId: json['family_id'] as String? ?? '',
+      familyLabel: json['family_label'] as String? ?? '',
+      stage: json['stage'] as String? ?? '',
       questionCount: (json['question_count'] as num?)?.toInt() ?? 0,
       questions: (json['questions'] as List<dynamic>? ?? const [])
           .whereType<Map<String, dynamic>>()
@@ -273,6 +321,9 @@ class QuizAttemptSummary {
   final QuizPhase phase;
   final String phaseId;
   final String phaseLabel;
+  final String familyId;
+  final String familyLabel;
+  final String stage;
   final int score;
   final int totalQuestions;
   final double percentage;
@@ -283,6 +334,9 @@ class QuizAttemptSummary {
     required this.phase,
     this.phaseId = 'pretest',
     this.phaseLabel = 'Pre-test',
+    this.familyId = '',
+    this.familyLabel = '',
+    this.stage = '',
     required this.score,
     required this.totalQuestions,
     required this.percentage,
@@ -296,6 +350,9 @@ class QuizAttemptSummary {
       phase: _parseQuizPhaseCompat(rawPhase),
       phaseId: rawPhase,
       phaseLabel: json['phase_label'] as String? ?? rawPhase,
+      familyId: json['family_id'] as String? ?? '',
+      familyLabel: json['family_label'] as String? ?? '',
+      stage: json['stage'] as String? ?? '',
       score: (json['score'] as num?)?.toInt() ?? 0,
       totalQuestions: (json['total_questions'] as num?)?.toInt() ?? 0,
       percentage: (json['percentage'] as num?)?.toDouble() ?? 0.0,
@@ -313,7 +370,12 @@ class QuizCatalogPhaseData {
   final String description;
   final int questionCount;
   final List<String> concepts;
+  final String familyId;
+  final String familyLabel;
+  final String stage;
+  final List<String> lessonIds;
   final bool requiresSuccessfulRun;
+  final bool requiresLessonCompletion;
   final bool triggersPostStudySurvey;
   final bool showsNGain;
 
@@ -323,7 +385,12 @@ class QuizCatalogPhaseData {
     required this.description,
     required this.questionCount,
     this.concepts = const [],
+    this.familyId = '',
+    this.familyLabel = '',
+    this.stage = '',
+    this.lessonIds = const [],
     this.requiresSuccessfulRun = false,
+    this.requiresLessonCompletion = false,
     this.triggersPostStudySurvey = false,
     this.showsNGain = false,
   });
@@ -337,10 +404,67 @@ class QuizCatalogPhaseData {
       concepts: (json['concepts'] as List<dynamic>? ?? const [])
           .map((value) => value.toString())
           .toList(growable: false),
+      familyId: json['family_id'] as String? ?? '',
+      familyLabel: json['family_label'] as String? ?? '',
+      stage: json['stage'] as String? ?? '',
+      lessonIds: (json['lesson_ids'] as List<dynamic>? ?? const [])
+          .map((value) => value.toString())
+          .toList(growable: false),
       requiresSuccessfulRun: json['requires_successful_run'] as bool? ?? false,
+      requiresLessonCompletion:
+          json['requires_lesson_completion'] as bool? ?? false,
       triggersPostStudySurvey:
           json['triggers_post_study_survey'] as bool? ?? false,
       showsNGain: json['shows_n_gain'] as bool? ?? false,
+    );
+  }
+}
+
+class QuizFamilyData {
+  final String id;
+  final String label;
+  final String description;
+  final List<String> lessonIds;
+  final QuizCatalogPhaseData pretest;
+  final QuizCatalogPhaseData posttest;
+
+  const QuizFamilyData({
+    required this.id,
+    required this.label,
+    required this.description,
+    required this.lessonIds,
+    required this.pretest,
+    required this.posttest,
+  });
+
+  factory QuizFamilyData.fromJson(Map<String, dynamic> json) {
+    final id = json['id'] as String? ?? '';
+    final lessonIds = (json['lesson_ids'] as List<dynamic>? ?? const [])
+        .map((value) => value.toString())
+        .toList(growable: false);
+    final pretestJson = (json['pretest'] as Map<String, dynamic>?) ?? const {};
+    final posttestJson =
+        (json['posttest'] as Map<String, dynamic>?) ?? const {};
+    return QuizFamilyData(
+      id: id,
+      label: json['label'] as String? ?? id,
+      description: json['description'] as String? ?? '',
+      lessonIds: lessonIds,
+      pretest: QuizCatalogPhaseData.fromJson({
+        'family_id': id,
+        'family_label': json['label'] as String? ?? id,
+        'stage': 'pre',
+        'lesson_ids': lessonIds,
+        ...pretestJson,
+      }),
+      posttest: QuizCatalogPhaseData.fromJson({
+        'family_id': id,
+        'family_label': json['label'] as String? ?? id,
+        'stage': 'post',
+        'lesson_ids': lessonIds,
+        'requires_lesson_completion': true,
+        ...posttestJson,
+      }),
     );
   }
 }
@@ -350,19 +474,22 @@ class QuizCatalogData {
   final String categorySectionDescription;
   final List<QuizCatalogPhaseData> assessmentPhases;
   final List<QuizCatalogPhaseData> categoryQuizzes;
+  final List<QuizFamilyData> quizFamilies;
 
   const QuizCatalogData({
     this.categorySectionLabel = '',
     this.categorySectionDescription = '',
     required this.assessmentPhases,
     required this.categoryQuizzes,
+    this.quizFamilies = const [],
   });
 
   const QuizCatalogData.empty()
       : categorySectionLabel = '',
         categorySectionDescription = '',
         assessmentPhases = const [],
-        categoryQuizzes = const [];
+        categoryQuizzes = const [],
+        quizFamilies = const [];
 
   factory QuizCatalogData.fromJson(Map<String, dynamic> json) {
     return QuizCatalogData(
@@ -377,6 +504,10 @@ class QuizCatalogData {
       categoryQuizzes: (json['category_quizzes'] as List<dynamic>? ?? const [])
           .whereType<Map<String, dynamic>>()
           .map(QuizCatalogPhaseData.fromJson)
+          .toList(growable: false),
+      quizFamilies: (json['quiz_families'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(QuizFamilyData.fromJson)
           .toList(growable: false),
     );
   }

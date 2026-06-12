@@ -137,6 +137,63 @@ class QuizSection extends StatelessWidget {
   }
 
   Widget _buildQuizLauncher() {
+    if (quizCatalog.quizFamilies.isNotEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            quizCatalog.categorySectionLabel.isEmpty
+                ? 'Equation family quizzes'
+                : quizCatalog.categorySectionLabel,
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (quizCatalog.categorySectionDescription.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              quizCatalog.categorySectionDescription,
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                height: 1.45,
+              ),
+            ),
+          ],
+          const SizedBox(height: AppConstants.defaultPadding),
+          Wrap(
+            spacing: AppConstants.defaultPadding,
+            runSpacing: AppConstants.defaultPadding,
+            children: [
+              for (final family in quizCatalog.quizFamilies)
+                _QuizFamilyCard(
+                  family: family,
+                  pretestFooter: _assessmentFooter(family.pretest),
+                  posttestFooter: _assessmentFooter(family.posttest),
+                  pretestButtonLabel:
+                      isLoading ? 'Preparing...' : 'Start pre-test',
+                  posttestButtonLabel:
+                      isLoading ? 'Preparing...' : 'Start post-test',
+                  onStartPretest: isLoading || _isLocked(family.pretest)
+                      ? null
+                      : () => onStartQuizByPhaseId(
+                            phaseId: family.pretest.id,
+                            phaseLabel: family.pretest.label,
+                          ),
+                  onStartPosttest: isLoading || _isLocked(family.posttest)
+                      ? null
+                      : () => onStartQuizByPhaseId(
+                            phaseId: family.posttest.id,
+                            phaseLabel: family.posttest.label,
+                          ),
+                ),
+            ],
+          ),
+        ],
+      );
+    }
+
     final assessmentPhases = quizCatalog.assessmentPhases;
     if (assessmentPhases.isEmpty && quizCatalog.categoryQuizzes.isEmpty) {
       return const _QuizGateCard(
@@ -216,23 +273,91 @@ class QuizSection extends StatelessWidget {
   }
 
   bool _isLocked(QuizCatalogPhaseData phase) {
+    if (phase.requiresLessonCompletion) {
+      final completedLessons = progress.completedLessonIds.toSet();
+      return phase.lessonIds
+          .any((lessonId) => !completedLessons.contains(lessonId));
+    }
     return phase.requiresSuccessfulRun && progress.successfulRuns == 0;
   }
 
   String _assessmentFooter(QuizCatalogPhaseData phase) {
-    if (_isLocked(phase)) {
-      return 'Complete at least one lesson run to unlock this quiz.';
+    final lockMessage = _phaseLockMessage(phase);
+    if (lockMessage != null) {
+      return lockMessage;
     }
-    final latestScore = switch (phase.id) {
-      'pretest' => progress.pretestScore,
-      'posttest' => progress.posttestScore,
-      _ => null,
-    };
+    final latestScore = _phaseScore(phase);
+    final attempts = _phaseAttemptCount(phase);
+    final nGain = phase.familyId.isEmpty
+        ? null
+        : progress.familyQuizScores[phase.familyId]?.nGain;
+    final nGainText =
+        nGain == null ? '' : ' • N-gain: ${nGain.toStringAsFixed(3)}';
     final scoreText =
         latestScore == null ? '' : ' • Latest: ${_formatScore(latestScore)}';
     final questionText =
         phase.questionCount > 0 ? ' • Questions: ${phase.questionCount}' : '';
-    return 'Attempts: ${progress.quizAttempts[phase.id] ?? 0}$scoreText$questionText';
+    return 'Attempts: $attempts$scoreText$nGainText$questionText';
+  }
+
+  String? _phaseLockMessage(QuizCatalogPhaseData phase) {
+    if (phase.requiresLessonCompletion) {
+      final completedLessons = progress.completedLessonIds.toSet();
+      final missingLessons = phase.lessonIds
+          .where((lessonId) => !completedLessons.contains(lessonId))
+          .toList(growable: false);
+      if (missingLessons.isNotEmpty) {
+        final label = phase.familyLabel.isEmpty
+            ? missingLessons.join(', ')
+            : phase.familyLabel;
+        return 'Complete required lesson: $label.';
+      }
+    }
+    if (phase.requiresSuccessfulRun && progress.successfulRuns == 0) {
+      return 'Complete at least one lesson run to unlock this quiz.';
+    }
+    return null;
+  }
+
+  int _phaseAttemptCount(QuizCatalogPhaseData phase) {
+    final familyAttempts = phase.familyId.isEmpty
+        ? null
+        : progress.familyQuizScores[phase.familyId]
+            ?.attempts[_familyAttemptKey(phase.stage)];
+    return familyAttempts ?? progress.quizAttempts[phase.id] ?? 0;
+  }
+
+  String _familyAttemptKey(String stage) {
+    if (stage == 'pre') {
+      return 'pretest';
+    }
+    if (stage == 'post') {
+      return 'posttest';
+    }
+    return stage;
+  }
+
+  double? _phaseScore(QuizCatalogPhaseData phase) {
+    final familyScore = phase.familyId.isEmpty
+        ? null
+        : progress.familyQuizScores[phase.familyId];
+    if (familyScore != null) {
+      if (phase.stage == 'pre') {
+        return familyScore.pretestScore;
+      }
+      if (phase.stage == 'post') {
+        return familyScore.posttestScore;
+      }
+      return null;
+    }
+    final phaseKey = phase.stage.isNotEmpty ? phase.stage : phase.id;
+    if (phaseKey == 'pre' || phaseKey == 'pretest') {
+      return progress.pretestScore;
+    }
+    if (phaseKey == 'post' || phaseKey == 'posttest') {
+      return progress.posttestScore;
+    }
+    return null;
   }
 
   String _quizTitle(QuizSessionData quiz) {
@@ -304,10 +429,11 @@ class QuizSection extends StatelessWidget {
 
   Widget _buildQuizIntro(QuizSessionData quiz) {
     final phase = _catalogPhase(quiz.phaseId);
+    final familyText = quiz.familyLabel.isEmpty ? '' : '${quiz.familyLabel}: ';
     return Text(
       phase == null || phase.concepts.isEmpty
-          ? 'Questions are randomized for every attempt.'
-          : 'This quiz focuses on ${_quizTitle(quiz).toLowerCase()} questions from the editable catalog.',
+          ? '${familyText}Questions are randomized for every attempt.'
+          : '${familyText}This quiz focuses on ${_quizTitle(quiz).toLowerCase()} questions from the editable catalog.',
       style: const TextStyle(
         color: AppTheme.textSecondary,
         height: 1.45,
@@ -316,6 +442,14 @@ class QuizSection extends StatelessWidget {
   }
 
   QuizCatalogPhaseData? _catalogPhase(String phaseId) {
+    for (final family in quizCatalog.quizFamilies) {
+      if (family.pretest.id == phaseId) {
+        return family.pretest;
+      }
+      if (family.posttest.id == phaseId) {
+        return family.posttest;
+      }
+    }
     for (final phase in quizCatalog.assessmentPhases) {
       if (phase.id == phaseId) {
         return phase;
@@ -358,7 +492,9 @@ class QuizSection extends StatelessWidget {
 
   Widget _buildNGainMetric(QuizAttemptSummary summary) {
     return _ResultMetric(
-      label: 'N-gain',
+      label: summary.familyLabel.isEmpty
+          ? 'N-gain'
+          : '${summary.familyLabel} N-gain',
       value:
           summary.nGain == null ? 'Pending' : summary.nGain!.toStringAsFixed(3),
       caption: 'Shown after both quizzes',
@@ -376,12 +512,14 @@ class QuizSection extends StatelessWidget {
   Widget _buildQuizHeader(QuizSessionData quiz) {
     return Row(
       children: [
-        Text(
-          '${_quizTitle(quiz)} in progress',
-          style: const TextStyle(
-            color: AppTheme.textPrimary,
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
+        Expanded(
+          child: Text(
+            '${_quizTitle(quiz)} in progress',
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ],
@@ -396,7 +534,6 @@ class QuizSection extends StatelessWidget {
         Row(
           children: [
             Expanded(child: _buildQuizHeader(quiz)),
-            const Spacer(),
             _buildQuestionProgress(quiz),
           ],
         ),
@@ -1055,6 +1192,140 @@ class _QuizGateCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _QuizFamilyCard extends StatelessWidget {
+  final QuizFamilyData family;
+  final String pretestFooter;
+  final String posttestFooter;
+  final String pretestButtonLabel;
+  final String posttestButtonLabel;
+  final VoidCallback? onStartPretest;
+  final VoidCallback? onStartPosttest;
+
+  const _QuizFamilyCard({
+    required this.family,
+    required this.pretestFooter,
+    required this.posttestFooter,
+    required this.pretestButtonLabel,
+    required this.posttestButtonLabel,
+    required this.onStartPretest,
+    required this.onStartPosttest,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 440,
+      child: Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppConstants.cardRadius),
+          side: const BorderSide(color: AppTheme.borderLight),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                family.label,
+                style: const TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (family.description.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  family.description,
+                  style: const TextStyle(
+                    color: AppTheme.textSecondary,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 18),
+              _FamilyPhaseAction(
+                title: family.pretest.label,
+                description: family.pretest.description,
+                footer: pretestFooter,
+                buttonLabel: pretestButtonLabel,
+                onPressed: onStartPretest,
+              ),
+              const Divider(height: 28),
+              _FamilyPhaseAction(
+                title: family.posttest.label,
+                description: family.posttest.description,
+                footer: posttestFooter,
+                buttonLabel: posttestButtonLabel,
+                onPressed: onStartPosttest,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FamilyPhaseAction extends StatelessWidget {
+  final String title;
+  final String description;
+  final String footer;
+  final String buttonLabel;
+  final VoidCallback? onPressed;
+
+  const _FamilyPhaseAction({
+    required this.title,
+    required this.description,
+    required this.footer,
+    required this.buttonLabel,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: AppTheme.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        if (description.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            description,
+            style: const TextStyle(
+              color: AppTheme.textSecondary,
+              height: 1.4,
+            ),
+          ),
+        ],
+        const SizedBox(height: 10),
+        Text(
+          footer,
+          style: const TextStyle(
+            color: AppTheme.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: onPressed,
+            child: Text(buttonLabel),
+          ),
+        ),
+      ],
     );
   }
 }

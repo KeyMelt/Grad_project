@@ -25,6 +25,8 @@ _QUIZ_BANK_PATH = Path(__file__).resolve().parents[1] / "config" / "quiz_bank.js
 @dataclass(frozen=True)
 class QuizQuestionTemplate:
     id: str
+    family_id: str
+    stage: str
     concept: str
     prompt: str
     options: tuple[str, ...]
@@ -32,21 +34,44 @@ class QuizQuestionTemplate:
 
 
 @dataclass(frozen=True)
+class QuizPhaseTemplate:
+    id: str
+    label: str
+    description: str
+    triggers_post_study_survey: bool = False
+    shows_n_gain: bool = True
+
+
+@dataclass(frozen=True)
+class QuizFamilyTemplate:
+    id: str
+    label: str
+    description: str
+    lesson_ids: tuple[str, ...]
+    pretest: QuizPhaseTemplate
+    posttest: QuizPhaseTemplate
+
+
+@dataclass(frozen=True)
 class QuizCatalog:
-    assessment_phases: frozenset[str]
-    category_phases: dict[str, tuple[str, ...]]
-    phase_labels: dict[str, str]
-    phase_descriptions: dict[str, str]
-    phase_flags: dict[str, dict[str, bool]]
+    quiz_families: tuple[QuizFamilyTemplate, ...]
     category_section_label: str
     category_section_description: str
     default_quiz_length: int
-    default_category_quiz_length: int
+    minimum_family_stage_questions: int
     questions: tuple[QuizQuestionTemplate, ...]
 
     @property
+    def phase_map(self) -> dict[str, tuple[QuizFamilyTemplate, str, QuizPhaseTemplate]]:
+        phases: dict[str, tuple[QuizFamilyTemplate, str, QuizPhaseTemplate]] = {}
+        for family in self.quiz_families:
+            phases[family.pretest.id] = (family, "pre", family.pretest)
+            phases[family.posttest.id] = (family, "post", family.posttest)
+        return phases
+
+    @property
     def supported_phases(self) -> frozenset[str]:
-        return self.assessment_phases | frozenset(self.category_phases)
+        return frozenset(self.phase_map)
 
 
 @dataclass
@@ -54,6 +79,8 @@ class QuizSession:
     session_id: str
     student_id: str
     phase: str
+    family_id: str
+    stage: str
     question_ids: list[str]
     correct_indices: dict[str, int]
     questions: list[dict[str, Any]]
@@ -63,59 +90,54 @@ def load_quiz_catalog(path: Path = _QUIZ_BANK_PATH) -> QuizCatalog:
     with path.open("r", encoding="utf-8") as handle:
         raw = json.load(handle)
 
-    assessment_phases = frozenset(
-        str(phase["id"]) for phase in raw.get("assessment_phases", [])
-    )
-    category_phases: dict[str, tuple[str, ...]] = {}
-    phase_labels: dict[str, str] = {}
-    phase_descriptions: dict[str, str] = {}
-    phase_flags: dict[str, dict[str, bool]] = {}
-
-    for phase in raw.get("assessment_phases", []):
-        phase_id = str(phase["id"])
-        phase_labels[phase_id] = str(phase.get("label") or phase_id)
-        phase_descriptions[phase_id] = str(phase.get("description") or "")
-        phase_flags[phase_id] = {
-            "requires_successful_run": bool(phase.get("requires_successful_run", False)),
-            "triggers_post_study_survey": bool(
-                phase.get("triggers_post_study_survey", False)
-            ),
-            "shows_n_gain": bool(phase.get("shows_n_gain", False)),
-        }
-
-    for quiz in raw.get("category_quizzes", []):
-        quiz_id = str(quiz["id"])
-        category_phases[quiz_id] = tuple(str(c) for c in quiz.get("concepts", []))
-        phase_labels[quiz_id] = str(quiz.get("label") or quiz_id)
-        phase_descriptions[quiz_id] = str(quiz.get("description") or "")
-        phase_flags[quiz_id] = {
-            "requires_successful_run": bool(quiz.get("requires_successful_run", False)),
-            "triggers_post_study_survey": bool(
-                quiz.get("triggers_post_study_survey", False)
-            ),
-            "shows_n_gain": bool(quiz.get("shows_n_gain", False)),
-        }
-
+    families = tuple(_parse_family(item) for item in raw.get("families", []))
     questions = tuple(_parse_question(item) for item in raw.get("questions", []))
+    default_quiz_length = int(raw.get("default_quiz_length", 6))
+    minimum_family_stage_questions = int(
+        raw.get("minimum_family_stage_questions", max(10, default_quiz_length))
+    )
     _validate_catalog(
-        assessment_phases=assessment_phases,
-        category_phases=category_phases,
+        families=families,
         questions=questions,
+        minimum_family_stage_questions=minimum_family_stage_questions,
+        known_lesson_ids=_load_core_lesson_ids(),
     )
 
     return QuizCatalog(
-        assessment_phases=assessment_phases,
-        category_phases=category_phases,
-        phase_labels=phase_labels,
-        phase_descriptions=phase_descriptions,
-        phase_flags=phase_flags,
+        quiz_families=families,
         category_section_label=str(
-            raw.get("category_section_label") or "Category quizzes"
+            raw.get("category_section_label") or "Equation family quizzes"
         ),
         category_section_description=str(raw.get("category_section_description") or ""),
-        default_quiz_length=int(raw.get("default_quiz_length", 6)),
-        default_category_quiz_length=int(raw.get("default_category_quiz_length", 5)),
+        default_quiz_length=default_quiz_length,
+        minimum_family_stage_questions=minimum_family_stage_questions,
         questions=questions,
+    )
+
+
+def _parse_family(raw: dict[str, Any]) -> QuizFamilyTemplate:
+    family_id = str(raw["id"])
+    return QuizFamilyTemplate(
+        id=family_id,
+        label=str(raw.get("label") or family_id),
+        description=str(raw.get("description") or ""),
+        lesson_ids=tuple(str(value) for value in raw.get("lesson_ids", [])),
+        pretest=_parse_phase(raw.get("pretest") or {}, family_id=family_id, stage="pre"),
+        posttest=_parse_phase(
+            raw.get("posttest") or {}, family_id=family_id, stage="post"
+        ),
+    )
+
+
+def _parse_phase(raw: dict[str, Any], *, family_id: str, stage: str) -> QuizPhaseTemplate:
+    default_id = f"{family_id}:{stage}"
+    default_label = "Pre-test" if stage == "pre" else "Post-test"
+    return QuizPhaseTemplate(
+        id=str(raw.get("id") or default_id),
+        label=str(raw.get("label") or default_label),
+        description=str(raw.get("description") or ""),
+        triggers_post_study_survey=bool(raw.get("triggers_post_study_survey", False)),
+        shows_n_gain=bool(raw.get("shows_n_gain", True)),
     )
 
 
@@ -123,6 +145,8 @@ def _parse_question(raw: dict[str, Any]) -> QuizQuestionTemplate:
     options = tuple(str(option) for option in raw.get("options", []))
     return QuizQuestionTemplate(
         id=str(raw["id"]),
+        family_id=str(raw["family_id"]),
+        stage=str(raw.get("stage") or "both").lower(),
         concept=str(raw["concept"]),
         prompt=str(raw["prompt"]),
         options=options,
@@ -132,32 +156,124 @@ def _parse_question(raw: dict[str, Any]) -> QuizQuestionTemplate:
 
 def _validate_catalog(
     *,
-    assessment_phases: frozenset[str],
-    category_phases: dict[str, tuple[str, ...]],
+    families: tuple[QuizFamilyTemplate, ...],
     questions: tuple[QuizQuestionTemplate, ...],
+    minimum_family_stage_questions: int,
+    known_lesson_ids: set[str] | None = None,
 ) -> None:
-    if not assessment_phases:
-        raise ValueError("Quiz catalog must define at least one assessment phase.")
+    if not families:
+        raise ValueError("Quiz catalog must define at least one quiz family.")
     if not questions:
         raise ValueError("Quiz catalog must define at least one question.")
 
     seen_ids: set[str] = set()
-    concepts = {question.concept for question in questions}
+    seen_phase_ids: set[str] = set()
+    family_ids = {family.id for family in families}
+    for family in families:
+        if not family.lesson_ids:
+            raise ValueError(f"Quiz family {family.id!r} must define lesson_ids.")
+        if known_lesson_ids is not None:
+            missing_lessons = [
+                lesson_id
+                for lesson_id in family.lesson_ids
+                if lesson_id not in known_lesson_ids
+            ]
+            if missing_lessons:
+                raise ValueError(
+                    f"Quiz family {family.id!r} references unknown lesson_ids: "
+                    f"{missing_lessons!r}."
+                )
+        for phase in (family.pretest, family.posttest):
+            if phase.id in seen_phase_ids:
+                raise ValueError(f"Duplicate quiz phase id {phase.id!r}.")
+            seen_phase_ids.add(phase.id)
+
     for question in questions:
         if question.id in seen_ids:
             raise ValueError(f"Duplicate quiz question id {question.id!r}.")
         seen_ids.add(question.id)
+        if question.family_id not in family_ids:
+            raise ValueError(
+                f"Quiz question {question.id!r} references unknown family "
+                f"{question.family_id!r}."
+            )
+        if question.stage not in {"pre", "post", "both"}:
+            raise ValueError(f"Quiz question {question.id!r} has invalid stage.")
         if len(question.options) < 2:
             raise ValueError(f"Quiz question {question.id!r} needs at least two options.")
         if not 0 <= question.correct_index < len(question.options):
             raise ValueError(f"Quiz question {question.id!r} has an invalid correct_index.")
 
-    for phase, phase_concepts in category_phases.items():
-        missing = [concept for concept in phase_concepts if concept not in concepts]
-        if missing:
-            raise ValueError(
-                f"Category quiz {phase!r} references concepts with no questions: {missing!r}."
+    for family in families:
+        for stage in ("pre", "post"):
+            eligible_count = len(
+                [
+                    question
+                    for question in questions
+                    if question.family_id == family.id
+                    and question.stage in {stage, "both"}
+                ]
             )
+            if eligible_count < minimum_family_stage_questions:
+                raise ValueError(
+                    f"Quiz family {family.id!r} {stage!r} stage needs at least "
+                    f"{minimum_family_stage_questions} eligible questions."
+                )
+
+
+def _load_core_lesson_ids() -> set[str] | None:
+    try:
+        from backend.services.lesson_registry_service import _CORE_LESSONS
+    except Exception:
+        return None
+    return {str(lesson["id"]) for lesson in _CORE_LESSONS if lesson.get("id")}
+
+
+def _family_score(progress: dict[str, Any], family_id: str) -> dict[str, Any]:
+    raw_scores = progress.get("family_quiz_scores", {})
+    raw_family = raw_scores.get(family_id, {})
+    attempts = raw_family.get("attempts", {})
+    return {
+        "pretest_score": raw_family.get("pretest_score"),
+        "posttest_score": raw_family.get("posttest_score"),
+        "n_gain": raw_family.get("n_gain"),
+        "attempts": {
+            "pretest": int(attempts.get("pretest", 0)),
+            "posttest": int(attempts.get("posttest", 0)),
+        },
+    }
+
+
+def _compute_n_gain(pretest_score: float | None, posttest_score: float | None) -> float | None:
+    if pretest_score is None or posttest_score is None:
+        return None
+    if pretest_score >= 100:
+        return 1.0 if posttest_score >= 100 else 0.0
+    return round((posttest_score - pretest_score) / (100 - pretest_score), 3)
+
+
+def is_post_phase_unlocked(
+    *,
+    dashboard: dict[str, Any],
+    family: QuizFamilyTemplate,
+) -> bool:
+    completed = set(
+        str(item)
+        for item in dashboard.get("progress", {}).get("completed_lesson_ids", [])
+    )
+    return all(lesson_id in completed for lesson_id in family.lesson_ids)
+
+
+def _locked_post_message(family: QuizFamilyTemplate) -> str:
+    lesson_text = ", ".join(family.lesson_ids)
+    return (
+        f"Complete {family.label} lesson work before taking the post-test "
+        f"({lesson_text})."
+    )
+
+
+def _question_matches_stage(question: QuizQuestionTemplate, family_id: str, stage: str) -> bool:
+    return question.family_id == family_id and question.stage in {stage, "both"}
 
 
 class QuizService:
@@ -182,36 +298,51 @@ class QuizService:
         return {
             "category_section_label": self._catalog.category_section_label,
             "category_section_description": self._catalog.category_section_description,
-            "assessment_phases": [
-                {
-                    "id": phase,
-                    "label": self._catalog.phase_labels.get(phase, phase),
-                    "description": self._catalog.phase_descriptions.get(phase, ""),
-                    "question_count": self.quiz_length,
-                    **self._catalog.phase_flags.get(phase, {}),
-                }
-                for phase in sorted(self._catalog.assessment_phases)
+            "assessment_phases": [],
+            "category_quizzes": [],
+            "quiz_families": [
+                self._family_payload(family)
+                for family in self._catalog.quiz_families
             ],
-            "category_quizzes": [
-                {
-                    "id": phase,
-                    "label": self._catalog.phase_labels.get(phase, phase),
-                    "description": self._catalog.phase_descriptions.get(phase, ""),
-                    "concepts": list(self._catalog.category_phases[phase]),
-                    **self._catalog.phase_flags.get(phase, {}),
-                    "question_count": min(
-                        self.category_quiz_length,
-                        len(
-                            [
-                                question
-                                for question in self._catalog.questions
-                                if question.concept in self._catalog.category_phases[phase]
-                            ]
-                        ),
-                    ),
-                }
-                for phase in self._catalog.category_phases
-            ],
+        }
+
+    def _family_payload(self, family: QuizFamilyTemplate) -> dict[str, Any]:
+        return {
+            "id": family.id,
+            "label": family.label,
+            "description": family.description,
+            "lesson_ids": list(family.lesson_ids),
+            "pretest": self._phase_payload(family, "pre", family.pretest),
+            "posttest": self._phase_payload(family, "post", family.posttest),
+        }
+
+    def _phase_payload(
+        self,
+        family: QuizFamilyTemplate,
+        stage: str,
+        phase: QuizPhaseTemplate,
+    ) -> dict[str, Any]:
+        return {
+            "id": phase.id,
+            "label": phase.label,
+            "description": phase.description,
+            "question_count": min(
+                self.quiz_length,
+                len(
+                    [
+                        question
+                        for question in self._catalog.questions
+                        if _question_matches_stage(question, family.id, stage)
+                    ]
+                ),
+            ),
+            "family_id": family.id,
+            "family_label": family.label,
+            "stage": stage,
+            "lesson_ids": list(family.lesson_ids),
+            "requires_lesson_completion": stage == "post",
+            "triggers_post_study_survey": phase.triggers_post_study_survey,
+            "shows_n_gain": phase.shows_n_gain,
         }
 
     @property
@@ -221,18 +352,19 @@ class QuizService:
             return int(raw)
         return self._catalog.default_quiz_length
 
-    @property
-    def category_quiz_length(self) -> int:
-        raw = os.environ.get("RL_IDE_CATEGORY_QUIZ_LENGTH", "").strip()
-        if raw.isdigit():
-            return int(raw)
-        return self._catalog.default_category_quiz_length
-
     def start_session(self, student_id: str, phase: str) -> dict[str, Any]:
-        if self._progress_service.get_dashboard(student_id) is None:
+        dashboard = self._progress_service.get_dashboard(student_id)
+        if dashboard is None:
             raise ValueError("Unknown student_id.")
-        if phase not in self._catalog.supported_phases:
+        phase_metadata = self._catalog.phase_map.get(phase)
+        if phase_metadata is None:
             raise ValueError(f"Unsupported quiz phase '{phase}'.")
+        family, stage, phase_template = phase_metadata
+        if stage == "post" and not is_post_phase_unlocked(
+            dashboard=dashboard,
+            family=family,
+        ):
+            raise ValueError(_locked_post_message(family))
 
         question_templates = self._select_questions(student_id, phase)
         questions: list[dict[str, Any]] = []
@@ -259,6 +391,8 @@ class QuizService:
             session_id=session_id,
             student_id=student_id,
             phase=phase,
+            family_id=family.id,
+            stage=stage,
             question_ids=question_ids,
             correct_indices=correct_indices,
             questions=questions,
@@ -267,7 +401,10 @@ class QuizService:
         return {
             "session_id": session_id,
             "phase": phase,
-            "phase_label": self._catalog.phase_labels.get(phase, phase),
+            "phase_label": phase_template.label,
+            "family_id": family.id,
+            "family_label": family.label,
+            "stage": stage,
             "question_count": len(questions),
             "questions": questions,
         }
@@ -308,6 +445,8 @@ class QuizService:
             phase=session.phase,
             percentage=percentage,
             question_ids=session.question_ids,
+            family_id=session.family_id,
+            stage=session.stage,
         )
         del self._sessions[session_id]
 
@@ -316,11 +455,14 @@ class QuizService:
 
         return {
             "phase": session.phase,
-            "phase_label": self._catalog.phase_labels.get(session.phase, session.phase),
+            "phase_label": self._catalog.phase_map[session.phase][2].label,
+            "family_id": session.family_id,
+            "family_label": self._catalog.phase_map[session.phase][0].label,
+            "stage": session.stage,
             "score": score,
             "total_questions": total_questions,
             "percentage": percentage,
-            "n_gain": dashboard["progress"]["n_gain"],
+            "n_gain": _family_score(dashboard["progress"], session.family_id)["n_gain"],
             "progress": dashboard["progress"],
             "concept_results": concept_results,
         }
@@ -338,10 +480,13 @@ class QuizService:
 
         merged = dict(configured_questions)
         for row in rows:
-            if row.created_by_user_id == "system" and row.id not in configured_questions:
+            configured = configured_questions.get(row.id)
+            if configured is None:
                 continue
             merged[row.id] = QuizQuestionTemplate(
                 id=row.id,
+                family_id=configured.family_id,
+                stage=configured.stage,
                 concept=row.concept,
                 prompt=row.prompt,
                 options=tuple(json.loads(row.options_json)),
@@ -350,19 +495,24 @@ class QuizService:
         return list(merged.values())
 
     def _select_questions(self, student_id: str, phase: str) -> list[QuizQuestionTemplate]:
+        family, stage, _phase = self._catalog.phase_map[phase]
         all_questions = self._load_all_questions()
-        if phase in self._catalog.category_phases:
-            concepts = set(self._catalog.category_phases[phase])
-            all_questions = [q for q in all_questions if q.concept in concepts]
+        all_questions = [
+            question
+            for question in all_questions
+            if _question_matches_stage(question, family.id, stage)
+        ]
 
-        used_question_ids = set(self._progress_service.get_question_history(student_id))
+        used_question_ids = set(
+            self._progress_service.get_question_history(
+                student_id,
+                family_id=family.id,
+                stage=stage,
+            )
+        )
         unused_templates = [q for q in all_questions if q.id not in used_question_ids]
         used_templates = [q for q in all_questions if q.id in used_question_ids]
-        quiz_len = (
-            self.category_quiz_length
-            if phase in self._catalog.category_phases
-            else self.quiz_length
-        )
+        quiz_len = self.quiz_length
 
         if len(unused_templates) >= quiz_len:
             selected = self._rng.sample(unused_templates, quiz_len)

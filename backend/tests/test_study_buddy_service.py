@@ -77,6 +77,9 @@ class _FakeProgressService:
                 "posttest_score": None,
                 "n_gain": None,
                 "quiz_attempts": {"pretest": 0, "posttest": 0},
+                "family_quiz_scores": {},
+                "question_history": [],
+                "question_history_by_scope": {},
             },
         }
         self._dashboards[student_id] = dashboard
@@ -92,12 +95,17 @@ class _FakeProgressService:
         phase: str,
         percentage: float,
         question_ids: list[str],
+        family_id: str | None = None,
+        stage: str | None = None,
     ) -> dict[str, Any] | None:
+        del family_id, stage
         dashboard = self._dashboards.get(student_id)
         if dashboard is None:
             return None
         progress = dashboard["progress"]
-        progress["quiz_attempts"][phase] += 1
+        progress["quiz_attempts"][phase] = int(
+            progress["quiz_attempts"].get(phase, 0)
+        ) + 1
         progress[f"{phase}_score"] = percentage
         if phase == "posttest":
             pretest_score = progress.get("pretest_score")
@@ -113,7 +121,13 @@ class _FakeProgressService:
         self._question_history.setdefault(student_id, []).extend(question_ids)
         return dashboard
 
-    def get_question_history(self, student_id: str) -> list[str]:
+    def get_question_history(
+        self,
+        student_id: str,
+        family_id: str | None = None,
+        stage: str | None = None,
+    ) -> list[str]:
+        del family_id, stage
         return list(self._question_history.get(student_id, []))
 
     def close(self) -> None:
@@ -544,7 +558,7 @@ def test_quiz_submit_route_records_mastery_evidence():
 
     start = client.post(
         "/quiz/start",
-        json={"phase": "pretest"},
+        json={"phase": "dp_policy_eval:pre"},
         headers=_auth_headers(),
     )
     assert start.status_code == 200

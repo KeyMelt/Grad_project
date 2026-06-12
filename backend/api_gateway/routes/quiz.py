@@ -26,7 +26,7 @@ def build_quiz_router(services: Any) -> APIRouter:
         catalog = getattr(services.user_evaluation, "quiz_catalog", None)
         if callable(catalog):
             return catalog()
-        return {"assessment_phases": [], "category_quizzes": []}
+        return {"assessment_phases": [], "category_quizzes": [], "quiz_families": []}
 
     @router.post("/quiz/start")
     def start_quiz(

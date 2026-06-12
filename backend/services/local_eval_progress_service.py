@@ -35,7 +35,9 @@ _DEFAULT_PROGRESS: dict[str, Any] = {
     "posttest_score": None,
     "n_gain": None,
     "quiz_attempts": {"pretest": 0, "posttest": 0},
+    "family_quiz_scores": {},
     "question_history": [],
+    "question_history_by_scope": {},
     "total_submission_attempts": 0,
     "passed_submission_attempts": 0,
     "validation_failures": 0,
@@ -153,6 +155,8 @@ class LocalEvalProgressService:
         phase: str,
         percentage: float,
         question_ids: list[str],
+        family_id: Optional[str] = None,
+        stage: Optional[str] = None,
     ) -> Optional[dict[str, Any]]:
         with self._lock:
             row = self._fetch(student_id)
@@ -163,29 +167,55 @@ class LocalEvalProgressService:
             attempts[phase] = int(attempts.get(phase, 0)) + 1
             progress["quiz_attempts"] = attempts
 
+            if family_id and stage in {"pre", "post"}:
+                progress = self._record_family_quiz_score(
+                    progress,
+                    family_id=family_id,
+                    stage=stage,
+                    percentage=percentage,
+                )
+            elif phase == "pretest":
+                progress["pretest_score"] = percentage
+            elif phase == "posttest":
+                progress["posttest_score"] = percentage
+
             history = list(progress.get("question_history", []))
             for qid in question_ids:
                 if qid not in history:
                     history.append(qid)
             progress["question_history"] = history
+            if family_id and stage in {"pre", "post"}:
+                scoped_history = dict(progress.get("question_history_by_scope", {}))
+                scope_key = f"{family_id}:{stage}"
+                scoped_items = list(scoped_history.get(scope_key, []))
+                for qid in question_ids:
+                    if qid not in scoped_items:
+                        scoped_items.append(qid)
+                scoped_history[scope_key] = scoped_items
+                progress["question_history_by_scope"] = scoped_history
 
-            if phase == "pretest":
-                progress["pretest_score"] = percentage
-            elif phase == "posttest":
-                progress["posttest_score"] = percentage
-                progress["n_gain"] = self._compute_n_gain(
-                    progress.get("pretest_score"),
-                    progress.get("posttest_score"),
-                )
+            progress["n_gain"] = self._compute_n_gain(
+                progress.get("pretest_score"),
+                progress.get("posttest_score"),
+            )
             row["progress"] = progress
             self._save(student_id, row)
         return self._dashboard_payload(student_id, row)
 
-    def get_question_history(self, student_id: str) -> list[str]:
+    def get_question_history(
+        self,
+        student_id: str,
+        family_id: Optional[str] = None,
+        stage: Optional[str] = None,
+    ) -> list[str]:
         row = self._fetch(student_id)
         if row is None:
             return []
-        return [str(q) for q in row["progress"].get("question_history", [])]
+        progress = row["progress"]
+        if family_id and stage:
+            scoped_history = progress.get("question_history_by_scope", {})
+            return [str(q) for q in scoped_history.get(f"{family_id}:{stage}", [])]
+        return [str(q) for q in progress.get("question_history", [])]
 
     def list_n_gain_metrics(self) -> list[dict[str, Any]]:
         with sqlite3.connect(self._db_path) as conn:
@@ -299,6 +329,9 @@ class LocalEvalProgressService:
         }
         normalized_attempts.setdefault("pretest", 0)
         normalized_attempts.setdefault("posttest", 0)
+        family_scores = self._normalize_family_scores(
+            progress.get("family_quiz_scores", {})
+        )
         return {
             "student": {
                 "id": student_id,
@@ -314,6 +347,7 @@ class LocalEvalProgressService:
                 "posttest_score": progress.get("posttest_score"),
                 "n_gain": progress.get("n_gain"),
                 "quiz_attempts": normalized_attempts,
+                "family_quiz_scores": family_scores,
                 "total_submission_attempts": int(
                     progress.get("total_submission_attempts", 0)
                 ),
@@ -338,3 +372,75 @@ class LocalEvalProgressService:
         return round(
             (posttest_score - pretest_score) / (100 - pretest_score), 3
         )
+
+    def _record_family_quiz_score(
+        self,
+        progress: dict[str, Any],
+        *,
+        family_id: str,
+        stage: str,
+        percentage: float,
+    ) -> dict[str, Any]:
+        scores = self._normalize_family_scores(progress.get("family_quiz_scores", {}))
+        score = scores.get(
+            family_id,
+            {
+                "pretest_score": None,
+                "posttest_score": None,
+                "n_gain": None,
+                "attempts": {"pretest": 0, "posttest": 0},
+            },
+        )
+        attempts = dict(score.get("attempts", {}))
+        if stage == "pre":
+            score["pretest_score"] = percentage
+            attempts["pretest"] = int(attempts.get("pretest", 0)) + 1
+        else:
+            score["posttest_score"] = percentage
+            attempts["posttest"] = int(attempts.get("posttest", 0)) + 1
+        score["attempts"] = attempts
+        score["n_gain"] = self._compute_n_gain(
+            score.get("pretest_score"),
+            score.get("posttest_score"),
+        )
+        scores[family_id] = score
+        progress["family_quiz_scores"] = scores
+
+        pre_scores = [
+            item.get("pretest_score")
+            for item in scores.values()
+            if item.get("pretest_score") is not None
+        ]
+        post_scores = [
+            item.get("posttest_score")
+            for item in scores.values()
+            if item.get("posttest_score") is not None
+        ]
+        progress["pretest_score"] = (
+            round(sum(pre_scores) / len(pre_scores), 2) if pre_scores else None
+        )
+        progress["posttest_score"] = (
+            round(sum(post_scores) / len(post_scores), 2) if post_scores else None
+        )
+        return progress
+
+    def _normalize_family_scores(self, raw: Any) -> dict[str, dict[str, Any]]:
+        if not isinstance(raw, dict):
+            return {}
+        normalized: dict[str, dict[str, Any]] = {}
+        for family_id, value in raw.items():
+            if not isinstance(value, dict):
+                continue
+            attempts = value.get("attempts", {})
+            if not isinstance(attempts, dict):
+                attempts = {}
+            normalized[str(family_id)] = {
+                "pretest_score": value.get("pretest_score"),
+                "posttest_score": value.get("posttest_score"),
+                "n_gain": value.get("n_gain"),
+                "attempts": {
+                    "pretest": int(attempts.get("pretest", 0)),
+                    "posttest": int(attempts.get("posttest", 0)),
+                },
+            }
+        return normalized

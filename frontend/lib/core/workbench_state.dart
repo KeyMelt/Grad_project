@@ -652,6 +652,9 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
     if (section == AppSection.admin && state.canAccessAuthoring) {
       unawaited(loadStaffProgressDirectory());
     }
+    if (section == AppSection.quiz && state.isAuthenticated) {
+      unawaited(refreshDashboard(quiet: true));
+    }
   }
 
   void toggleSidebar() {
@@ -1302,11 +1305,13 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       return;
     }
 
-    if (requiresSuccessfulRun && state.progress.successfulRuns == 0) {
+    final lockMessage = _quizPhaseLockMessage(phaseMetadata);
+    if (lockMessage != null ||
+        requiresSuccessfulRun && state.progress.successfulRuns == 0) {
       emit(
         state.copyWith(
           currentSection: AppSection.quiz,
-          quizStatusMessage:
+          quizStatusMessage: lockMessage ??
               'Complete at least one lesson run before taking $resolvedPhaseLabel.',
         ),
       );
@@ -1368,6 +1373,14 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
   }
 
   QuizCatalogPhaseData? _quizCatalogPhase(String phaseId) {
+    for (final family in state.quizCatalog.quizFamilies) {
+      if (family.pretest.id == phaseId) {
+        return family.pretest;
+      }
+      if (family.posttest.id == phaseId) {
+        return family.posttest;
+      }
+    }
     for (final phase in state.quizCatalog.assessmentPhases) {
       if (phase.id == phaseId) {
         return phase;
@@ -1379,6 +1392,23 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       }
     }
     return null;
+  }
+
+  String? _quizPhaseLockMessage(QuizCatalogPhaseData? phase) {
+    if (phase == null || !phase.requiresLessonCompletion) {
+      return null;
+    }
+    final completedLessons = state.progress.completedLessonIds.toSet();
+    final missingLessons = phase.lessonIds
+        .where((lessonId) => !completedLessons.contains(lessonId))
+        .toList(growable: false);
+    if (missingLessons.isEmpty) {
+      return null;
+    }
+    final label = phase.familyLabel.isEmpty
+        ? missingLessons.join(', ')
+        : phase.familyLabel;
+    return 'Complete required lesson: $label.';
   }
 
   Future<void> submitQuiz() async {
@@ -2895,6 +2925,24 @@ def lesson_function(*args, **kwargs):
   }
 
   String _quizPromptForProgress(LearnerProgress progress) {
+    final familyCount = state.quizCatalog.quizFamilies.length;
+    if (familyCount > 0) {
+      final completedPretests = state.quizCatalog.quizFamilies
+          .where((family) =>
+              progress.familyQuizScores[family.id]?.pretestScore != null)
+          .length;
+      final completedPosttests = state.quizCatalog.quizFamilies
+          .where((family) =>
+              progress.familyQuizScores[family.id]?.posttestScore != null)
+          .length;
+      if (completedPretests < familyCount) {
+        return 'Take each family pre-test before its lesson.';
+      }
+      if (completedPosttests < familyCount) {
+        return 'Family post-tests unlock after each linked lesson.';
+      }
+      return 'Family quizzes complete. Check N-gain on Quiz.';
+    }
     if (progress.pretestScore == null) {
       return 'Take the pre-test first.';
     }

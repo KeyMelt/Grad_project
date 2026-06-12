@@ -28,6 +28,8 @@ def _empty_progress_payload() -> dict[str, Any]:
         "posttest_score": None,
         "n_gain": None,
         "quiz_attempts": {"pretest": 0, "posttest": 0},
+        "family_quiz_scores": {},
+        "question_history_by_scope": {},
         "total_submission_attempts": 0,
         "passed_submission_attempts": 0,
         "validation_failures": 0,
