@@ -13,30 +13,20 @@ import 'trace_replay/trace_step_markers.dart';
 import 'trace_replay/trace_td_error_bar.dart';
 import 'trace_replay/trace_value_sparkline.dart';
 
-/// Centralized design tokens for the Trace/Replay tab.
-///
-/// Grounded in dark-UI accessibility guidance: elevation is expressed through
-/// tonal surface steps + borders (not shadows, which are invisible on dark),
-/// text is soft-white rather than pure white, interactive surfaces clear the
-/// WCAG non-text 3:1 bar against their background, and the single primary
-/// action (Play) carries the highest contrast.
+/// Design tokens for the Trace/Replay tab.
 class _Ink {
-  // Surface elevation ladder (canvas → panel → raised → control → hover).
   static const canvas = Color(0xFF0B1120);
   static const panel = Color(0xFF111C30);
   static const raised = Color(0xFF1B2840);
   static const control = Color(0xFF24344F);
 
-  // Borders: subtle for grouping, strong for anything interactive.
   static const borderSubtle = Color(0xFF24344F);
   static const borderStrong = Color(0xFF3E5170);
 
-  // Text.
   static const textHigh = Color(0xFFF1F5F9);
   static const textMed = Color(0xFFC7D2E1);
   static const textLow = Color(0xFF93A4BC);
 
-  // Accents (slightly de-saturated so they don't vibrate on dark).
   static const primary = Color(0xFF3B82F6);
   static const primaryText = Colors.white;
   static const state = Color(0xFF38BDF8);
@@ -492,10 +482,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     List<_ReplayBinderSection> sections,
     int selectedIndex,
   ) {
-    // A custom pill bar (not Material SegmentedButton/Dropdown) so the section
-    // labels always paint with the intended contrast. It WRAPS rather than
-    // scrolls, so every section stays visible/reachable at narrow widths
-    // instead of hiding off-screen.
     final selector = Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -655,8 +641,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
         ],
       );
     }
-    // On narrow/short viewports the toolbar is taller (options wrap), so let
-    // the overview scroll instead of clipping the summary against the outline.
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -696,9 +680,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
               ],
             );
 
-        // The Run page is a stack of natural-height info panels — let it scroll
-        // rather than forcing everything into the fixed binder viewport (which
-        // is what produced the clipped/overflowing panels).
         final wide = constraints.maxWidth >= 980 && secondary.isNotEmpty;
         final body = wide
             ? Row(
@@ -816,7 +797,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
         : (mcLabel.isNotEmpty ? mcLabel : 'a${next.action}');
     final rewardSign = next.reward > 0 ? 1 : (next.reward < 0 ? -1 : 0);
     var options = _actionOptions();
-    // The real answer must always be selectable.
     if (!options.contains(nextActionLabel)) {
       options = [...options, nextActionLabel];
     }
@@ -862,10 +842,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     );
   }
 
-  /// A circular icon button with deliberate contrast — the primary (Play)
-  /// variant is the highest-contrast control in the tab; secondary variants
-  /// use a raised tonal surface + a strong border so they never disappear into
-  /// the panel. Disabled state dims rather than vanishing.
   Widget _circleIconButton({
     required IconData icon,
     required VoidCallback? onTap,
@@ -901,8 +877,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     );
   }
 
-  /// A compact, high-contrast control pill (icon + label) used for the speed
-  /// and quiz toggles so they read clearly against the dark toolbar.
   Widget _controlPill({
     required IconData icon,
     required String label,
@@ -1028,10 +1002,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       ],
     );
 
-    // The options (episode/speed/quiz). At narrow widths a single segmented
-    // control can be wider than the remaining row space, and a Wrap cannot
-    // break inside one child — so below a threshold we stack options under the
-    // transport on their own full-width line instead of squeezing them beside.
     Widget optionsWrap(WrapAlignment alignment) => Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -1054,7 +1024,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Tier 1 — transport (left) + options (right, wrapping).
           LayoutBuilder(
             builder: (context, c) {
               if (c.maxWidth < 640) {
@@ -1078,7 +1047,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
             },
           ),
           const SizedBox(height: 16),
-          // Tier 2 — full-width scrubber with an inline step counter.
           Row(
             children: [
               _counterChip(_currentStepIndex + 1, totalSteps),
@@ -1087,7 +1055,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
             ],
           ),
           const SizedBox(height: 12),
-          // Tier 3 — at-a-glance transition context (wraps freely).
           _buildTransitionChips(step),
         ],
       ),
@@ -1154,9 +1121,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
   bool get _hasMultipleEpisodes =>
       widget.traceEpisodes.length > 1 || widget.episodeSummaries.length > 1;
 
-  // A custom segmented control (not Material SegmentedButton) so the
-  // Early/Mid/Late labels are guaranteed to paint with the contrast we set —
-  // and so it matches the speed/quiz pills visually.
   Widget _buildEpisodeSelector(BuildContext context) {
     final curated = _curatedEpisodeIndexes;
     final selected = curated.contains(_selectedEpisodeIndex)
@@ -1224,8 +1188,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     );
   }
 
-  /// Curate the episode set to Early / Mid / Late so a long training run reads
-  /// as a 3-beat learning story, not an overwhelming dump of every episode.
+  /// Curate the episode set to Early / Mid / Late.
   List<int> get _curatedEpisodeIndexes {
     final all = _episodeIndexes;
     if (all.length <= 3) return all;
@@ -1513,8 +1476,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Lead with the plain-language summary; the dense math lives in its
-          // own panel. Falls back to the agent caption when no summary exists.
           Text(
             (explanation != null && explanation.summary.isNotEmpty)
                 ? explanation.summary
@@ -1627,8 +1588,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     );
   }
 
-  /// Value history of one updated cell across the current episode's steps —
-  /// drives the convergence sparkline. Matches on the equation LHS label.
   List<double> _valueHistory(String lhs) {
     if (lhs.isEmpty) {
       return const [];
@@ -1684,12 +1643,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
                   const SizedBox(height: 16),
                   Builder(
                     builder: (context) {
-                      // The transition probability p is only meaningful for the
-                      // model-based DP lessons (FrozenLake). Monte Carlo and TD are
-                      // model-free — they sample transitions and never read p — so
-                      // showing a p value (which defaults to 1.0) misrepresents the
-                      // method. Blackjack already shows its observation card, so the
-                      // integer state-transition card is redundant there.
                       final eq = step.equationUpdate;
                       final isDp = eq?.isDynamicProgramming ?? false;
                       final isBlackjack = eq?.mcDetails?.observation != null;
@@ -1905,9 +1858,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
                   return _buildGridCell(grid, grid.cells[index]);
                 },
               );
-              // Wide grids (e.g. CliffWalking 4x12) get squished into an
-              // unreadable strip by AspectRatio; give them a fixed cell size and
-              // let the row scroll horizontally instead.
               if (grid.columns > 8) {
                 const cell = 38.0;
                 return SingleChildScrollView(
@@ -2122,8 +2072,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
                   fontWeight: FontWeight.w700,
                 ),
           ),
-          // Make the code -> table link explicit: the highlighted line is what
-          // writes the active (green) cell in the table inspector.
           if (focusedLineIndex >= 0 &&
               step.tableSnapshot?.activeCell != null) ...[
             const SizedBox(height: 6),
