@@ -5,6 +5,7 @@ import 'package:markdown/markdown.dart' as md;
 
 import '../../core/lesson_models.dart';
 import '../../core/theme.dart';
+import 'expanded_panel_overlay.dart';
 
 /// Supplemental lesson notes shown beside the concept video.
 ///
@@ -13,8 +14,20 @@ import '../../core/theme.dart';
 /// summary / highlights / takeaway layout.
 class LessonNotesPanel extends StatelessWidget {
   final LessonDefinition lesson;
+  final bool isExpanded;
+  final VoidCallback? onToggleExpanded;
+  final BorderRadiusGeometry borderRadius;
 
-  const LessonNotesPanel({super.key, required this.lesson});
+  const LessonNotesPanel({
+    super.key,
+    required this.lesson,
+    this.isExpanded = false,
+    this.onToggleExpanded,
+    this.borderRadius = const BorderRadius.only(
+      topLeft: Radius.circular(18),
+      bottomLeft: Radius.circular(18),
+    ),
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -23,24 +36,35 @@ class LessonNotesPanel extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.surfaceWhite,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(18),
-          bottomLeft: Radius.circular(18),
-        ),
+        borderRadius: borderRadius,
         border: Border.all(color: AppTheme.borderLight),
       ),
       padding: const EdgeInsets.all(18),
       child: hasMarkdown
-          ? _LessonNotesMarkdown(notes: video.lectureNotes)
-          : _LessonNotesFallback(video: video),
+          ? _LessonNotesMarkdown(
+              notes: video.lectureNotes,
+              isExpanded: isExpanded,
+              onToggleExpanded: onToggleExpanded,
+            )
+          : _LessonNotesFallback(
+              video: video,
+              isExpanded: isExpanded,
+              onToggleExpanded: onToggleExpanded,
+            ),
     );
   }
 }
 
 class _LessonNotesMarkdown extends StatelessWidget {
   final String notes;
+  final bool isExpanded;
+  final VoidCallback? onToggleExpanded;
 
-  const _LessonNotesMarkdown({required this.notes});
+  const _LessonNotesMarkdown({
+    required this.notes,
+    required this.isExpanded,
+    required this.onToggleExpanded,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -109,9 +133,10 @@ class _LessonNotesMarkdown extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Lecture Notes',
-            style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          _LessonNotesHeader(
+            title: 'Lecture Notes',
+            isExpanded: isExpanded,
+            onToggleExpanded: onToggleExpanded,
           ),
           const SizedBox(height: 12),
           MarkdownBody(
@@ -147,8 +172,14 @@ class _LessonNotesMarkdown extends StatelessWidget {
 
 class _LessonNotesFallback extends StatelessWidget {
   final LessonConceptVideo video;
+  final bool isExpanded;
+  final VoidCallback? onToggleExpanded;
 
-  const _LessonNotesFallback({required this.video});
+  const _LessonNotesFallback({
+    required this.video,
+    required this.isExpanded,
+    required this.onToggleExpanded,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -156,11 +187,10 @@ class _LessonNotesFallback extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Lesson Notes',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+          _LessonNotesHeader(
+            title: 'Lesson Notes',
+            isExpanded: isExpanded,
+            onToggleExpanded: onToggleExpanded,
           ),
           const SizedBox(height: 12),
           if (video.summary.isNotEmpty)
@@ -215,6 +245,48 @@ class _LessonNotesFallback extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+class _LessonNotesHeader extends StatelessWidget {
+  final String title;
+  final bool isExpanded;
+  final VoidCallback? onToggleExpanded;
+
+  const _LessonNotesHeader({
+    required this.title,
+    required this.isExpanded,
+    required this.onToggleExpanded,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+        ),
+        if (onToggleExpanded != null)
+          DrawerPanelResizeButton(
+            key: ValueKey(
+              isExpanded
+                  ? 'lesson-notes-minimize-button'
+                  : 'lesson-notes-expand-button',
+            ),
+            isExpanded: isExpanded,
+            expandTooltip: 'Expand notes',
+            minimizeTooltip: 'Minimize notes',
+            onPressed: onToggleExpanded!,
+          ),
+      ],
     );
   }
 }

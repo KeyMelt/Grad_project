@@ -5,6 +5,7 @@ import '../../core/theme.dart';
 import '../../core/workbench_state.dart';
 import 'code_editor.dart';
 import 'exercise_brief_panel.dart';
+import 'expanded_panel_overlay.dart';
 import 'lesson_notes_panel.dart';
 import 'trace_replay_panel.dart';
 import 'video_player.dart';
@@ -102,6 +103,7 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
   int _activeTabIndex = 0;
   DateTime _focusStartedAt = DateTime.now();
   bool _lessonNotesOpen = false;
+  bool _lessonNotesExpanded = false;
 
   @override
   void initState() {
@@ -135,6 +137,9 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
     _emitFocusSession();
     setState(() {
       _activeTabIndex = _tabController.index;
+      if (_activeTabIndex != 0) {
+        _lessonNotesExpanded = false;
+      }
     });
     _focusStartedAt = DateTime.now();
   }
@@ -186,106 +191,139 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
     final traceEpisodes = widget.traceEpisodes;
     final episodeSummaries = widget.episodeSummaries;
 
+    final workspaceContent = Column(
+      children: [
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_activeTabIndex == 0)
+                _LessonNotesDrawer(
+                  lesson: lesson,
+                  isOpen: _lessonNotesOpen,
+                  onToggle: () => setState(() {
+                    _lessonNotesOpen = !_lessonNotesOpen;
+                    if (!_lessonNotesOpen) {
+                      _lessonNotesExpanded = false;
+                    }
+                  }),
+                  onOpen: () => setState(() => _lessonNotesOpen = true),
+                  onClose: () => setState(() {
+                    _lessonNotesOpen = false;
+                    _lessonNotesExpanded = false;
+                  }),
+                  onExpand: () => setState(() {
+                    _lessonNotesOpen = true;
+                    _lessonNotesExpanded = true;
+                  }),
+                ),
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    VideoPlayerTab(
+                      lesson: lesson,
+                      onSessionEnded: widget.onConceptVideoSession,
+                      onVideoCompleted: widget.onVideoMicroSurveyRequest,
+                    ),
+                    _CodeExercisePane(
+                      lesson: lesson,
+                      code: code,
+                      workspaceSessionId: workspaceSessionId,
+                      workspaceReady: workspaceReady,
+                      editorConnectionStatus: editorConnectionStatus,
+                      consoleConnectionStatus: consoleConnectionStatus,
+                      editorShellUrl: editorShellUrl,
+                      scriptVersion: scriptVersion,
+                      statusMessage: statusMessage,
+                      runStatusLabel: runStatusLabel,
+                      failureKind: failureKind,
+                      unresolvedBlanks: unresolvedBlanks,
+                      studentFeedback: studentFeedback,
+                      feedbackDismissed: feedbackDismissed,
+                      testResults: testResults,
+                      onSubmit: widget.onSubmit,
+                      onStop: widget.onStop,
+                      onReset: widget.onReset,
+                      onReconnectWorkspace: widget.onReconnectWorkspace,
+                      onDismissFeedback: widget.onDismissFeedback,
+                      showExerciseBrief: widget.showExerciseBriefInCodePane,
+                    ),
+                    TraceReplayPanel(
+                      runStatusLabel: runStatusLabel,
+                      statusMessage: statusMessage,
+                      totalReward: totalReward,
+                      averageReward: averageReward,
+                      bestEpisodeReward: bestEpisodeReward,
+                      episodesCompleted: episodesCompleted,
+                      stepsRecorded: stepsRecorded,
+                      videoPath: videoPath,
+                      replayRenderStatus: replayRenderStatus,
+                      replayRenderError: replayRenderError,
+                      testResults: testResults,
+                      stepTrace: stepTrace,
+                      traceEpisodes: traceEpisodes,
+                      episodeSummaries: episodeSummaries,
+                      conceptVideo: lesson.conceptVideo,
+                      onWatchConcept: () => _tabController.animateTo(0),
+                      onReplayCompleted: widget.onReplayMicroSurveyRequest,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (widget.canShareSessionFeedback &&
+            widget.onOpenSessionFeedback != null) ...[
+          _SessionFeedbackPrompt(onPressed: widget.onOpenSessionFeedback!),
+          const SizedBox(height: 8),
+        ],
+        Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+          ),
+          child: TabBar(
+            controller: _tabController,
+            indicatorColor: AppTheme.primaryBlue,
+            labelColor: AppTheme.primaryBlue,
+            unselectedLabelColor: const Color(0xFF6B7280),
+            indicatorSize: TabBarIndicatorSize.tab,
+            tabs: const [
+              Tab(height: 36, text: 'Concept'),
+              Tab(height: 36, text: 'Code'),
+              Tab(height: 36, text: 'Replay'),
+            ],
+          ),
+        ),
+      ],
+    );
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(6, 4, 6, 6),
-      child: Column(
+      child: Stack(
         children: [
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (_activeTabIndex == 0)
-                  _LessonNotesDrawer(
-                    lesson: lesson,
-                    isOpen: _lessonNotesOpen,
-                    onToggle: () =>
-                        setState(() => _lessonNotesOpen = !_lessonNotesOpen),
-                    onOpen: () => setState(() => _lessonNotesOpen = true),
-                    onClose: () => setState(() => _lessonNotesOpen = false),
-                  ),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      VideoPlayerTab(
-                        lesson: lesson,
-                        onSessionEnded: widget.onConceptVideoSession,
-                        onVideoCompleted: widget.onVideoMicroSurveyRequest,
-                      ),
-                      _CodeExercisePane(
-                        lesson: lesson,
-                        code: code,
-                        workspaceSessionId: workspaceSessionId,
-                        workspaceReady: workspaceReady,
-                        editorConnectionStatus: editorConnectionStatus,
-                        consoleConnectionStatus: consoleConnectionStatus,
-                        editorShellUrl: editorShellUrl,
-                        scriptVersion: scriptVersion,
-                        statusMessage: statusMessage,
-                        runStatusLabel: runStatusLabel,
-                        failureKind: failureKind,
-                        unresolvedBlanks: unresolvedBlanks,
-                        studentFeedback: studentFeedback,
-                        feedbackDismissed: feedbackDismissed,
-                        testResults: testResults,
-                        onSubmit: widget.onSubmit,
-                        onStop: widget.onStop,
-                        onReset: widget.onReset,
-                        onReconnectWorkspace: widget.onReconnectWorkspace,
-                        onDismissFeedback: widget.onDismissFeedback,
-                        showExerciseBrief: widget.showExerciseBriefInCodePane,
-                      ),
-                      TraceReplayPanel(
-                        runStatusLabel: runStatusLabel,
-                        statusMessage: statusMessage,
-                        totalReward: totalReward,
-                        averageReward: averageReward,
-                        bestEpisodeReward: bestEpisodeReward,
-                        episodesCompleted: episodesCompleted,
-                        stepsRecorded: stepsRecorded,
-                        videoPath: videoPath,
-                        replayRenderStatus: replayRenderStatus,
-                        replayRenderError: replayRenderError,
-                        testResults: testResults,
-                        stepTrace: stepTrace,
-                        traceEpisodes: traceEpisodes,
-                        episodeSummaries: episodeSummaries,
-                        conceptVideo: lesson.conceptVideo,
-                        onWatchConcept: () => _tabController.animateTo(0),
-                        onReplayCompleted: widget.onReplayMicroSurveyRequest,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+          Positioned.fill(
+            child: ExpandedPanelBackdrop(
+              isActive: _lessonNotesExpanded,
+              child: workspaceContent,
             ),
           ),
-          const SizedBox(height: 8),
-          if (widget.canShareSessionFeedback &&
-              widget.onOpenSessionFeedback != null) ...[
-            _SessionFeedbackPrompt(onPressed: widget.onOpenSessionFeedback!),
-            const SizedBox(height: 8),
-          ],
-          Container(
-            padding: const EdgeInsets.all(5),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
+          if (_lessonNotesExpanded)
+            ExpandedDrawerOverlay(
+              key: const ValueKey('lesson-notes-expanded-overlay'),
+              child: LessonNotesPanel(
+                lesson: lesson,
+                isExpanded: true,
+                onToggleExpanded: () =>
+                    setState(() => _lessonNotesExpanded = false),
+                borderRadius: BorderRadius.zero,
+              ),
             ),
-            child: TabBar(
-              controller: _tabController,
-              indicatorColor: AppTheme.primaryBlue,
-              labelColor: AppTheme.primaryBlue,
-              unselectedLabelColor: const Color(0xFF6B7280),
-              indicatorSize: TabBarIndicatorSize.tab,
-              tabs: const [
-                Tab(height: 36, text: 'Concept'),
-                Tab(height: 36, text: 'Code'),
-                Tab(height: 36, text: 'Replay'),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -545,6 +583,7 @@ class _LessonNotesDrawer extends StatelessWidget {
   final VoidCallback onToggle;
   final VoidCallback onOpen;
   final VoidCallback onClose;
+  final VoidCallback onExpand;
 
   const _LessonNotesDrawer({
     required this.lesson,
@@ -552,6 +591,7 @@ class _LessonNotesDrawer extends StatelessWidget {
     required this.onToggle,
     required this.onOpen,
     required this.onClose,
+    required this.onExpand,
   });
 
   @override
@@ -572,13 +612,17 @@ class _LessonNotesDrawer extends StatelessWidget {
             alignment: Alignment.centerRight,
             child: SizedBox(
               width: panelWidth,
-              child: LessonNotesPanel(lesson: lesson),
+              child: LessonNotesPanel(
+                lesson: lesson,
+                onToggleExpanded: onExpand,
+              ),
             ),
           ),
         ),
         Tooltip(
           message: isOpen ? 'Close notes' : 'Open notes',
           child: GestureDetector(
+            key: const ValueKey('lesson-notes-drawer-handle'),
             behavior: HitTestBehavior.opaque,
             onTap: onToggle,
             onHorizontalDragUpdate: (details) {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/backend_api.dart';
 import '../../core/lesson_models.dart';
 import '../../core/theme.dart';
+import '../workspace/expanded_panel_overlay.dart';
 
 class StudyBuddyPanel extends StatelessWidget {
   final LessonDefinition lesson;
@@ -18,6 +19,10 @@ class StudyBuddyPanel extends StatelessWidget {
   final VoidCallback onReopen;
   final VoidCallback onRefresh;
   final ValueChanged<String> onSendChatMessage;
+  final bool isExpanded;
+  final VoidCallback? onToggleExpanded;
+  final BorderRadiusGeometry borderRadius;
+  final double elevation;
 
   const StudyBuddyPanel({
     super.key,
@@ -34,24 +39,25 @@ class StudyBuddyPanel extends StatelessWidget {
     required this.onReopen,
     required this.onRefresh,
     required this.onSendChatMessage,
+    this.isExpanded = false,
+    this.onToggleExpanded,
+    this.borderRadius = const BorderRadius.only(
+      topRight: Radius.circular(24),
+      bottomRight: Radius.circular(24),
+    ),
+    this.elevation = 10,
   });
 
   @override
   Widget build(BuildContext context) {
     return Material(
       key: const ValueKey('study-buddy-panel'),
-      elevation: 10,
+      elevation: elevation,
       color: AppTheme.surfaceWhite,
-      borderRadius: const BorderRadius.only(
-        topRight: Radius.circular(24),
-        bottomRight: Radius.circular(24),
-      ),
+      borderRadius: borderRadius,
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: const BorderRadius.only(
-            topRight: Radius.circular(24),
-            bottomRight: Radius.circular(24),
-          ),
+          borderRadius: borderRadius,
           border: Border.all(color: AppTheme.borderLight),
         ),
         padding: const EdgeInsets.all(18),
@@ -64,6 +70,8 @@ class StudyBuddyPanel extends StatelessWidget {
               onDismiss: onDismiss,
               onReopen: onReopen,
               onRefresh: onRefresh,
+              isExpanded: isExpanded,
+              onToggleExpanded: onToggleExpanded,
             ),
             const SizedBox(height: 14),
             Expanded(
@@ -280,6 +288,8 @@ class _StudyBuddyHeader extends StatelessWidget {
   final VoidCallback onDismiss;
   final VoidCallback onReopen;
   final VoidCallback onRefresh;
+  final bool isExpanded;
+  final VoidCallback? onToggleExpanded;
 
   const _StudyBuddyHeader({
     required this.lessonTitle,
@@ -287,6 +297,8 @@ class _StudyBuddyHeader extends StatelessWidget {
     required this.onDismiss,
     required this.onReopen,
     required this.onRefresh,
+    required this.isExpanded,
+    required this.onToggleExpanded,
   });
 
   @override
@@ -328,6 +340,18 @@ class _StudyBuddyHeader extends StatelessWidget {
             ],
           ),
         ),
+        if (onToggleExpanded != null)
+          DrawerPanelResizeButton(
+            key: ValueKey(
+              isExpanded
+                  ? 'study-buddy-minimize-button'
+                  : 'study-buddy-expand-button',
+            ),
+            isExpanded: isExpanded,
+            expandTooltip: 'Expand Study Buddy',
+            minimizeTooltip: 'Minimize Study Buddy',
+            onPressed: onToggleExpanded!,
+          ),
         if (isDismissed)
           IconButton(
             tooltip: 'Open Study Buddy',

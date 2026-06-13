@@ -18,6 +18,7 @@ import '../features/onboarding/profile_completion_dialog.dart';
 import '../features/quiz/quiz_section.dart';
 import '../features/study_buddy/study_buddy_panel.dart';
 import '../features/workspace/component_micro_survey_dialog.dart';
+import '../features/workspace/expanded_panel_overlay.dart';
 import '../features/workspace/workspace_tabs.dart';
 
 class MainLayout extends StatefulWidget {
@@ -42,6 +43,7 @@ class _MainLayoutState extends State<MainLayout> {
   late final RLWorkbenchCubit _cubit;
   bool _onboardingShown = false;
   bool _studyBuddyDrawerOpen = false;
+  bool _studyBuddyExpanded = false;
   bool _profileDialogShowing = false;
   SurveyTemplateData? _videoSurveyTemplate;
   SurveyTemplateData? _replaySurveyTemplate;
@@ -191,6 +193,31 @@ class _MainLayoutState extends State<MainLayout> {
               onReopen: _cubit.reopenStudyBuddy,
               onRefresh: () => _cubit.refreshStudyBuddy(),
               onSendChatMessage: _cubit.sendStudyBuddyChat,
+              onToggleExpanded: () => setState(() {
+                _studyBuddyDrawerOpen = true;
+                _studyBuddyExpanded = true;
+              }),
+            );
+
+            final expandedStudyBuddyPanel = StudyBuddyPanel(
+              lesson: state.selectedLesson,
+              intervention: state.studyBuddyIntervention,
+              isLoading: state.studyBuddyLoading,
+              isDismissed: state.studyBuddyPanelDismissed,
+              isSubmissionTakingLong: state.isSubmissionTakingLong,
+              chatMessages: state.studyBuddyChatMessages,
+              isChatLoading: state.studyBuddyChatLoading,
+              chatError: state.studyBuddyChatError,
+              onDismiss: () => _cubit.dismissStudyBuddy(),
+              onComplete: () => _cubit.completeStudyBuddy(),
+              onReopen: _cubit.reopenStudyBuddy,
+              onRefresh: () => _cubit.refreshStudyBuddy(),
+              onSendChatMessage: _cubit.sendStudyBuddyChat,
+              isExpanded: true,
+              onToggleExpanded: () =>
+                  setState(() => _studyBuddyExpanded = false),
+              borderRadius: BorderRadius.zero,
+              elevation: 0,
             );
 
             if ((state.isSubmissionTakingLong ||
@@ -203,24 +230,40 @@ class _MainLayoutState extends State<MainLayout> {
               });
             }
 
+            final workspaceContent = Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: workspace),
+                _StudyBuddyDrawer(
+                  isOpen: _studyBuddyDrawerOpen,
+                  drawerWidth: _studyBuddyRailWidth(constraints.maxWidth),
+                  hasIntervention: state.studyBuddyIntervention != null ||
+                      state.isSubmissionTakingLong,
+                  onToggle: () => _setStudyBuddyDrawerOpen(
+                    !_studyBuddyDrawerOpen,
+                  ),
+                  onOpen: () => _setStudyBuddyDrawerOpen(true),
+                  onClose: () => _setStudyBuddyDrawerOpen(false),
+                  panel: studyBuddyPanel,
+                ),
+              ],
+            );
+
             return Padding(
               padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: Stack(
                 children: [
-                  Expanded(child: workspace),
-                  _StudyBuddyDrawer(
-                    isOpen: _studyBuddyDrawerOpen,
-                    drawerWidth: _studyBuddyRailWidth(constraints.maxWidth),
-                    hasIntervention: state.studyBuddyIntervention != null ||
-                        state.isSubmissionTakingLong,
-                    onToggle: () => _setStudyBuddyDrawerOpen(
-                      !_studyBuddyDrawerOpen,
+                  Positioned.fill(
+                    child: ExpandedPanelBackdrop(
+                      isActive: _studyBuddyExpanded,
+                      child: workspaceContent,
                     ),
-                    onOpen: () => _setStudyBuddyDrawerOpen(true),
-                    onClose: () => _setStudyBuddyDrawerOpen(false),
-                    panel: studyBuddyPanel,
                   ),
+                  if (_studyBuddyExpanded)
+                    ExpandedDrawerOverlay(
+                      key: const ValueKey('study-buddy-expanded-overlay'),
+                      child: expandedStudyBuddyPanel,
+                    ),
                 ],
               ),
             );
@@ -306,6 +349,9 @@ class _MainLayoutState extends State<MainLayout> {
     }
     setState(() {
       _studyBuddyDrawerOpen = isOpen;
+      if (!isOpen) {
+        _studyBuddyExpanded = false;
+      }
     });
   }
 

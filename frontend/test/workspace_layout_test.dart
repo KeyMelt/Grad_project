@@ -308,6 +308,83 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('workspace lesson notes expand and minimize over concept video', (
+    tester,
+  ) async {
+    await _pumpWorkspace(tester, const Size(1440, 900));
+
+    final handle = find.byKey(const ValueKey('lesson-notes-drawer-handle'));
+    expect(handle, findsOneWidget);
+
+    await tester.tap(handle);
+    await tester.pumpAndSettle();
+
+    final expandButton =
+        find.byKey(const ValueKey('lesson-notes-expand-button'));
+    expect(expandButton, findsOneWidget);
+
+    await tester.tap(expandButton);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('lesson-notes-expanded-overlay')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('lesson-notes-minimize-button')),
+      findsOneWidget,
+    );
+
+    await tester
+        .tap(find.byKey(const ValueKey('lesson-notes-minimize-button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('lesson-notes-expanded-overlay')),
+      findsNothing,
+    );
+    expect(expandButton, findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('workspace study buddy expands and minimizes from drawer', (
+    tester,
+  ) async {
+    await _pumpWorkspace(tester, const Size(1440, 900));
+
+    final handle = find.byKey(const ValueKey('study-buddy-drawer-handle'));
+    expect(handle, findsOneWidget);
+
+    await tester.drag(handle, const Offset(-180, 0));
+    await tester.pumpAndSettle();
+
+    final expandButton =
+        find.byKey(const ValueKey('study-buddy-expand-button'));
+    expect(expandButton, findsOneWidget);
+
+    await tester.tap(expandButton);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('study-buddy-expanded-overlay')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('study-buddy-minimize-button')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('study-buddy-minimize-button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('study-buddy-expanded-overlay')),
+      findsNothing,
+    );
+    expect(expandButton, findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('workspace study buddy drawer drags and coach actions send chat',
       (
     tester,
