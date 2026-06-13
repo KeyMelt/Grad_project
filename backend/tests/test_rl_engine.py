@@ -580,3 +580,80 @@ def test_monte_carlo_emits_blackjack_observation_and_return_ladder():
     assert return_payload["tables"]["kind"] == "returns_table"
     assert "First-visit Monte Carlo" in return_payload["explanation"]["why_correct"]
     assert return_payload["explanation"]["table_focus"] == "row 0, column 0"
+
+
+def test_monte_carlo_runtime_accepts_returned_value_table_style():
+    class FakeActionSpace:
+        def __init__(self):
+            self.actions = iter([1, 0])
+
+        def sample(self):
+            return next(self.actions)
+
+    class FakeEnv:
+        action_space = FakeActionSpace()
+
+    class FakeAdapter:
+        env = FakeEnv()
+
+        def __init__(self):
+            self.calls = 0
+
+        def reset(self, seed=None):
+            del seed
+            return (15, 10, False), {}
+
+        def step(self, action):
+            self.calls += 1
+            if self.calls == 1:
+                return (20, 10, False), 0.0, False, False, {"p": 1.0, "action": action}
+            return (20, 10, False), 1.0, True, False, {"p": 1.0, "action": action}
+
+        def capture_frame_png(self, prefix="step", state=None):
+            del prefix, state
+            return ""
+
+        def action_label(self, action):
+            return ["Stand", "Hit"][action]
+
+    class FakeLogger:
+        def __init__(self):
+            self.steps = []
+
+        def log_step(self, payload):
+            self.steps.append(payload)
+
+        def end_episode(self):
+            self.ended = True
+
+    def returned_value_table_mc(episode_trace, values, returns, gamma):
+        del returns
+        new_values = dict(values)
+        visited = set()
+        for index, (state, _action, _reward) in enumerate(episode_trace):
+            if state in visited:
+                continue
+            visited.add(state)
+            total = 0.0
+            discount = 1.0
+            for _state, _action, reward in episode_trace[index:]:
+                total += discount * reward
+                discount *= gamma
+            new_values[state] = total
+        return new_values
+
+    logger = FakeLogger()
+    rl_engine = RLEngine(FakeAdapter(), logger)
+    rl_engine._run_mc_first_visit(
+        returned_value_table_mc,
+        num_episodes=1,
+        hyperparameters={"gamma": 0.9},
+    )
+
+    return_payload = next(
+        step
+        for step in logger.steps
+        if step.get("equation_update", {}).get("kind") == "mc_first_visit"
+    )
+    assert return_payload["updated_values"]["V((15, 10, False))"] == 0.9
+    assert return_payload["equation_update"]["mc_details"]["returns_history"] == [0.9]

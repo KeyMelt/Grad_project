@@ -162,6 +162,11 @@ def create_app(services: ServiceContainer | None = None) -> FastAPI:
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
 
+    @app.get("/internal/quiz/catalog")
+    def quiz_catalog(x_internal_token: str | None = Header(default=None)):
+        _assert_internal_access(x_internal_token)
+        return svc.user_evaluation.quiz_catalog()
+
     @app.post("/internal/quiz/submit")
     def submit_quiz(
         request: QuizSubmissionRequest,

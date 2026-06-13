@@ -62,6 +62,13 @@ class RemoteUserEvaluationService:
         )
         return response.json()
 
+    def quiz_catalog(self) -> dict[str, Any]:
+        response = self._request(
+            "GET",
+            "/internal/quiz/catalog",
+        )
+        return response.json()
+
     def submit_quiz(
         self,
         student_id: str,

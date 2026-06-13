@@ -155,7 +155,8 @@ def _test_mc_first_visit(lesson_function: Callable[..., Any]) -> list[LessonTest
     ]
     values: dict[tuple[int, int, bool], float] = {}
     returns: dict[tuple[int, int, bool], list[float]] = {}
-    lesson_function(episode, values, returns, 1.0)
+    result = lesson_function(episode, values, returns, 1.0)
+    _apply_mc_prediction_result(result, values, returns)
 
     first_state = (16, 10, False)
     second_state = (18, 10, False)
@@ -173,6 +174,33 @@ def _test_mc_first_visit(lesson_function: Callable[..., Any]) -> list[LessonTest
             ),
         ),
     ]
+
+
+def _apply_mc_prediction_result(
+    result: Any,
+    values: dict[Any, float],
+    returns: dict[Any, list[float]],
+) -> None:
+    """Accept in-place and returned-table Monte Carlo prediction styles."""
+    if result is None:
+        return
+
+    if isinstance(result, dict):
+        returned_values = result.get("V") or result.get("values")
+        returned_returns = result.get("returns")
+        if isinstance(returned_values, dict):
+            values.update(returned_values)
+        elif "V" not in result and "values" not in result and "returns" not in result:
+            values.update(result)
+        if isinstance(returned_returns, dict):
+            returns.update(returned_returns)
+        return
+
+    if isinstance(result, (list, tuple)):
+        if len(result) >= 1 and isinstance(result[0], dict):
+            values.update(result[0])
+        if len(result) >= 2 and isinstance(result[1], dict):
+            returns.update(result[1])
 
 
 def _test_policy_evaluation(lesson_function: Callable[..., Any]) -> list[LessonTestCaseResult]:

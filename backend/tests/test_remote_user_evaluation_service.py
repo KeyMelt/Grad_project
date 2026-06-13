@@ -90,6 +90,27 @@ def test_quiz_start_raises_value_error_on_bad_request(monkeypatch):
         service.start_quiz("missing", "pretest")
 
 
+def test_quiz_catalog_proxies_to_user_service(monkeypatch):
+    def _fake_request(**kwargs):
+        assert kwargs["method"] == "GET"
+        assert kwargs["url"].endswith("/internal/quiz/catalog")
+        return _FakeResponse(
+            200,
+            {
+                "assessment_phases": [],
+                "category_quizzes": [],
+                "quiz_families": [{"id": "dp_policy_eval"}],
+            },
+        )
+
+    monkeypatch.setattr(requests, "request", _fake_request)
+    service = RemoteUserEvaluationService(user_service_base_url="http://127.0.0.1:8200")
+
+    payload = service.quiz_catalog()
+
+    assert payload["quiz_families"] == [{"id": "dp_policy_eval"}]
+
+
 def test_metrics_rows_are_unwrapped(monkeypatch):
     monkeypatch.setattr(
         requests,

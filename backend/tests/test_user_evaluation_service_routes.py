@@ -85,6 +85,13 @@ class _FakeUserEvaluationService:
             ],
         }
 
+    def quiz_catalog(self) -> dict[str, Any]:
+        return {
+            "assessment_phases": [],
+            "category_quizzes": [],
+            "quiz_families": [{"id": "dp_policy_eval"}],
+        }
+
     def submit_quiz(
         self,
         student_id: str,
@@ -208,6 +215,26 @@ def test_internal_quiz_start_omits_answer_key():
     assert response.status_code == 200
     question = response.json()["questions"][0]
     assert "correct_index" not in question
+
+
+def test_internal_quiz_catalog_requires_internal_token():
+    client = _make_client()
+
+    response = client.get("/internal/quiz/catalog")
+
+    assert response.status_code == 401
+
+
+def test_internal_quiz_catalog_returns_catalog():
+    client = _make_client()
+
+    response = client.get(
+        "/internal/quiz/catalog",
+        headers=_internal_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["quiz_families"] == [{"id": "dp_policy_eval"}]
 
 
 def test_internal_quiz_submit_returns_score_payload():

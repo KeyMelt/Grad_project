@@ -890,7 +890,18 @@ class RLEngine:
                 done = terminated or truncated
                 step_index += 1
 
-            lesson_function(episode_trace, values, returns, hyperparameters["gamma"])
+            return_lengths_before = {
+                state_key: len(history)
+                for state_key, history in returns.items()
+                if isinstance(history, list)
+            }
+            result = lesson_function(
+                episode_trace,
+                values,
+                returns,
+                hyperparameters["gamma"],
+            )
+            self._apply_mc_prediction_result(result, values, returns)
 
             visited_states = set()
             for index, (visited_state, action, _reward) in enumerate(episode_trace):
@@ -902,6 +913,14 @@ class RLEngine:
                     index,
                     hyperparameters["gamma"],
                 )
+                previous_return_count = return_lengths_before.get(visited_state, 0)
+                current_return_count = len(returns.get(visited_state, []))
+                if current_return_count <= previous_return_count:
+                    returns.setdefault(visited_state, []).append(discounted_return)
+                if visited_state not in values:
+                    values[visited_state] = (
+                        sum(returns[visited_state]) / len(returns[visited_state])
+                    )
 
                 frame_path = self.adapter.capture_frame_png(prefix="mc_return")
                 self._log_trace_step(
@@ -966,6 +985,33 @@ class RLEngine:
                 )
 
             self.logger.end_episode()
+
+    def _apply_mc_prediction_result(
+        self,
+        result: Any,
+        values: dict[Any, float],
+        returns: dict[Any, list[float]],
+    ) -> None:
+        """Accept in-place and returned-table Monte Carlo prediction styles."""
+        if result is None:
+            return
+
+        if isinstance(result, dict):
+            returned_values = result.get("V") or result.get("values")
+            returned_returns = result.get("returns")
+            if isinstance(returned_values, dict):
+                values.update(returned_values)
+            elif "V" not in result and "values" not in result and "returns" not in result:
+                values.update(result)
+            if isinstance(returned_returns, dict):
+                returns.update(returned_returns)
+            return
+
+        if isinstance(result, (list, tuple)):
+            if len(result) >= 1 and isinstance(result[0], dict):
+                values.update(result[0])
+            if len(result) >= 2 and isinstance(result[1], dict):
+                returns.update(result[1])
 
     def _run_q_learning(
         self, lesson_function, num_episodes: int, hyperparameters: Dict[str, float]

@@ -99,6 +99,13 @@ class _FakeUserEvaluationService:
             }
         ]
 
+    def quiz_catalog(self) -> dict[str, Any]:
+        return {
+            "assessment_phases": [],
+            "category_quizzes": [],
+            "quiz_families": [{"id": "dp_policy_eval"}],
+        }
+
     def start_quiz(self, student_id: str, phase: str):
         if self.get_dashboard(student_id) is None:
             raise ValueError("Unknown student_id.")
@@ -511,6 +518,15 @@ def test_lessons_returns_grouped_frontend_catalog():
     assert lesson["concept_video"]["stream_path"].endswith(".mp4")
     assert lesson["exercise"]["template_blanks"] == []
     assert lesson["exercise"]["success_criteria"]
+
+
+def test_quiz_catalog_returns_remote_service_catalog():
+    client = _make_client()
+
+    response = client.get("/quiz/catalog")
+
+    assert response.status_code == 200
+    assert response.json()["quiz_families"] == [{"id": "dp_policy_eval"}]
 
 
 def test_concept_video_serves_backend_media(tmp_path, monkeypatch):
