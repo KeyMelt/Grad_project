@@ -483,6 +483,13 @@ h1, h2, h3 {
   pointer-events: none;
 }
 
+.placeholder-screenshot {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 /* Brand Logo and Text Styles */
 .brand {
   display: flex;
