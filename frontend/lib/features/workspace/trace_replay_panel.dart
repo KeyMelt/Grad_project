@@ -13,6 +13,38 @@ import 'trace_replay/trace_step_markers.dart';
 import 'trace_replay/trace_td_error_bar.dart';
 import 'trace_replay/trace_value_sparkline.dart';
 
+/// Centralized design tokens for the Trace/Replay tab.
+///
+/// Grounded in dark-UI accessibility guidance: elevation is expressed through
+/// tonal surface steps + borders (not shadows, which are invisible on dark),
+/// text is soft-white rather than pure white, interactive surfaces clear the
+/// WCAG non-text 3:1 bar against their background, and the single primary
+/// action (Play) carries the highest contrast.
+class _Ink {
+  // Surface elevation ladder (canvas → panel → raised → control → hover).
+  static const canvas = Color(0xFF0B1120);
+  static const panel = Color(0xFF111C30);
+  static const raised = Color(0xFF1B2840);
+  static const control = Color(0xFF24344F);
+
+  // Borders: subtle for grouping, strong for anything interactive.
+  static const borderSubtle = Color(0xFF24344F);
+  static const borderStrong = Color(0xFF3E5170);
+
+  // Text.
+  static const textHigh = Color(0xFFF1F5F9);
+  static const textMed = Color(0xFFC7D2E1);
+  static const textLow = Color(0xFF93A4BC);
+
+  // Accents (slightly de-saturated so they don't vibrate on dark).
+  static const primary = Color(0xFF3B82F6);
+  static const primaryText = Colors.white;
+  static const state = Color(0xFF38BDF8);
+  static const success = Color(0xFF34D399);
+  static const warn = Color(0xFFFBBF24);
+  static const danger = Color(0xFFF87171);
+}
+
 class TraceReplayPanel extends StatefulWidget {
   final String runStatusLabel;
   final String statusMessage;
@@ -87,6 +119,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
   int _playbackMs = 1200;
   bool _guideExpanded = false;
   bool _guideDismissed = false;
+  bool _conceptCtaDismissed = false;
   bool _replayCompletionFired = false;
   int? _jumpState;
   VideoPlayerController? _replayController;
@@ -349,12 +382,12 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       onKeyEvent: _handleDebuggerKey,
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF020617),
+          color: _Ink.canvas,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFF1E293B)),
+          border: Border.all(color: _Ink.borderSubtle),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(14),
           child: LayoutBuilder(
             builder: (context, constraints) => _buildDebuggerBody(
               context,
@@ -459,76 +492,82 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     List<_ReplayBinderSection> sections,
     int selectedIndex,
   ) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 1220;
-        final selector = compact
-            ? DropdownButtonHideUnderline(
-                child: DropdownButton<_ReplayBinderSection>(
-                  value: sections[selectedIndex],
-                  isExpanded: true,
-                  dropdownColor: const Color(0xFF111827),
-                  iconEnabledColor: const Color(0xFF93C5FD),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-                  items: [
-                    for (final section in sections)
-                      DropdownMenuItem(
-                        value: section,
-                        child: Row(
-                          children: [
-                            Icon(section.icon,
-                                color: const Color(0xFF93C5FD), size: 18),
-                            const SizedBox(width: 8),
-                            Text(section.label),
-                          ],
-                        ),
-                      ),
-                  ],
-                  onChanged: (section) {
-                    if (section == null) return;
-                    setState(() {
-                      _selectedBinderIndex = sections.indexOf(section);
-                    });
-                  },
-                ),
-              )
-            : SegmentedButton<_ReplayBinderSection>(
-                segments: [
-                  for (final section in sections)
-                    ButtonSegment(
-                      value: section,
-                      icon: Icon(section.icon),
-                      label: Text(section.label),
-                    ),
-                ],
-                selected: {sections[selectedIndex]},
-                onSelectionChanged: (selection) {
-                  setState(() {
-                    _selectedBinderIndex = sections.indexOf(selection.first);
-                  });
-                },
-                showSelectedIcon: false,
-              );
+    // A custom pill bar (not Material SegmentedButton/Dropdown) so the section
+    // labels always paint with the intended contrast. It WRAPS rather than
+    // scrolls, so every section stays visible/reachable at narrow widths
+    // instead of hiding off-screen.
+    final selector = Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (var i = 0; i < sections.length; i++)
+          _sectionPill(
+            sections[i],
+            i == selectedIndex,
+            () => setState(() => _selectedBinderIndex = i),
+          ),
+      ],
+    );
 
-        return Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: const Color(0xFF0F172A),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFF1E293B)),
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: _Ink.panel,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _Ink.borderSubtle),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: selector),
+          const SizedBox(width: 8),
+          _buildVisibilityMenu(sections),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionPill(
+    _ReplayBinderSection section,
+    bool active,
+    VoidCallback onTap,
+  ) {
+    return Tooltip(
+      message: section.label,
+      child: Material(
+        color: active ? _Ink.primary : _Ink.raised,
+        borderRadius: BorderRadius.circular(11),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(
+                color: active ? _Ink.primary : _Ink.borderStrong,
+                width: 1.2,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(section.icon,
+                    size: 18, color: active ? Colors.white : _Ink.state),
+                const SizedBox(width: 8),
+                Text(
+                  section.label,
+                  style: TextStyle(
+                    color: active ? Colors.white : _Ink.textMed,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: Row(
-            children: [
-              Expanded(child: selector),
-              const SizedBox(width: 10),
-              _buildVisibilityMenu(sections),
-            ],
-          ),
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -568,9 +607,9 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
           width: 44,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: const Color(0xFF111827),
+            color: _Ink.control,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFF334155)),
+            border: Border.all(color: _Ink.borderStrong, width: 1.2),
           ),
           child: const Icon(
             Icons.tune_rounded,
@@ -616,21 +655,24 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
         ],
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(child: _buildCurrentStepSummary(context, step)),
-        const SizedBox(height: 12),
-        SizedBox(height: 180, child: _buildTraceOutline(context)),
-      ],
+    // On narrow/short viewports the toolbar is taller (options wrap), so let
+    // the overview scroll instead of clipping the summary against the outline.
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildCurrentStepSummary(context, step),
+          const SizedBox(height: 12),
+          SizedBox(height: 180, child: _buildTraceOutline(context)),
+        ],
+      ),
     );
   }
 
   Widget _buildRunBinderPage(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final panels = <Widget>[
-          _buildMetricsPanel(context),
+        final secondary = <Widget>[
           _buildReadGuide(context, true),
           if (widget.conceptVideo != null &&
               widget.conceptVideo!.streamPath.isNotEmpty &&
@@ -642,34 +684,36 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
           if (widget.runStatusLabel == 'Failed') _buildErrorPanel(context),
           if (widget.testResults.isNotEmpty) _buildSampleTests(context),
         ];
-        if (constraints.maxWidth >= 980 && panels.length > 1) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: panels.first),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (var index = 1; index < panels.length; index++) ...[
-                      if (index > 1) const SizedBox(height: 12),
-                      Flexible(child: panels[index]),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          );
-        }
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var index = 0; index < panels.length; index++) ...[
-              if (index > 0) const SizedBox(height: 12),
-              Flexible(child: panels[index]),
-            ],
-          ],
+
+        Widget stack(List<Widget> children) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < children.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 12),
+                  children[i],
+                ],
+              ],
+            );
+
+        // The Run page is a stack of natural-height info panels — let it scroll
+        // rather than forcing everything into the fixed binder viewport (which
+        // is what produced the clipped/overflowing panels).
+        final wide = constraints.maxWidth >= 980 && secondary.isNotEmpty;
+        final body = wide
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _buildMetricsPanel(context)),
+                  const SizedBox(width: 12),
+                  Expanded(child: stack(secondary)),
+                ],
+              )
+            : stack([_buildMetricsPanel(context), ...secondary]);
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: body,
         );
       },
     );
@@ -679,16 +723,17 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     final video = widget.conceptVideo;
     if (video == null ||
         video.streamPath.isEmpty ||
-        widget.onWatchConcept == null) {
+        widget.onWatchConcept == null ||
+        _conceptCtaDismissed) {
       return const SizedBox.shrink();
     }
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF1E3A8A), Color(0xFF0F172A)],
+          colors: [Color(0xFF1E3A8A), Color(0xFF111C30)],
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFF3B82F6)),
@@ -696,38 +741,42 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       child: Row(
         children: [
           const Icon(Icons.ondemand_video_rounded,
-              color: Color(0xFF93C5FD), size: 28),
-          const SizedBox(width: 12),
+              color: Color(0xFFBFDBFE), size: 28),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    const Text(
-                      'New to this algorithm?',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
+                    const Flexible(
+                      child: Text(
+                        'New to this algorithm?',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                        ),
                       ),
                     ),
                     if (video.durationLabel.isNotEmpty) ...[
                       const SizedBox(width: 8),
-                      _buildTag(video.durationLabel, const Color(0xFF93C5FD)),
+                      _buildTag(video.durationLabel, const Color(0xFFBFDBFE)),
                     ],
                   ],
                 ),
                 if (video.summary.isNotEmpty) ...[
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Text(
                     video.summary,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: Color(0xFFCBD5E1),
-                      height: 1.35,
-                      fontSize: 12,
+                      color: Color(0xFFDCE6F4),
+                      height: 1.4,
+                      fontSize: 12.5,
                     ),
                   ),
                 ],
@@ -739,6 +788,14 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
             onPressed: widget.onWatchConcept,
             icon: const Icon(Icons.play_arrow_rounded),
             label: const Text('Watch'),
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            tooltip: 'Dismiss',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => setState(() => _conceptCtaDismissed = true),
+            icon: const Icon(Icons.close_rounded,
+                color: Color(0xFFBFDBFE), size: 20),
           ),
         ],
       ),
@@ -793,32 +850,100 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
   }
 
   Widget _buildQuizToggle() {
+    return _controlPill(
+      icon: Icons.psychology_alt_rounded,
+      label: 'Quiz',
+      tooltip: 'Predict each step before revealing it',
+      active: _quizMode,
+      onTap: () => setState(() {
+        _quizMode = !_quizMode;
+        if (_quizMode) _stopTracePlayback();
+      }),
+    );
+  }
+
+  /// A circular icon button with deliberate contrast — the primary (Play)
+  /// variant is the highest-contrast control in the tab; secondary variants
+  /// use a raised tonal surface + a strong border so they never disappear into
+  /// the panel. Disabled state dims rather than vanishing.
+  Widget _circleIconButton({
+    required IconData icon,
+    required VoidCallback? onTap,
+    required String tooltip,
+    bool primary = false,
+    double size = 46,
+  }) {
+    final enabled = onTap != null;
+    final Color bg = primary ? _Ink.primary : _Ink.raised;
+    final Color fg = primary ? _Ink.primaryText : _Ink.textHigh;
     return Tooltip(
-      message: 'Predict each step before revealing it',
-      child: FilterChip(
-        label: const Text('Quiz'),
-        avatar: Icon(
-          Icons.psychology_alt_rounded,
-          size: 18,
-          color: _quizMode ? Colors.white : const Color(0xFF93C5FD),
+      message: tooltip,
+      child: Opacity(
+        opacity: enabled ? 1 : 0.38,
+        child: Material(
+          color: bg,
+          shape: CircleBorder(
+            side: primary
+                ? BorderSide.none
+                : const BorderSide(color: _Ink.borderStrong, width: 1.4),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: SizedBox(
+              width: size,
+              height: size,
+              child: Icon(icon, color: fg, size: primary ? 26 : 22),
+            ),
+          ),
         ),
-        selected: _quizMode,
-        showCheckmark: false,
-        selectedColor: const Color(0xFF1D4ED8),
-        backgroundColor: const Color(0xFF111827),
-        labelStyle: TextStyle(
-          color: _quizMode ? Colors.white : const Color(0xFFCBD5E1),
-          fontWeight: FontWeight.w700,
-        ),
-        side: BorderSide(
-          color: _quizMode ? const Color(0xFF60A5FA) : const Color(0xFF334155),
-        ),
-        onSelected: (value) => setState(() {
-          _quizMode = value;
-          if (value) _stopTracePlayback();
-        }),
       ),
     );
+  }
+
+  /// A compact, high-contrast control pill (icon + label) used for the speed
+  /// and quiz toggles so they read clearly against the dark toolbar.
+  Widget _controlPill({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    String? tooltip,
+    bool active = false,
+  }) {
+    final pill = Material(
+      color: active ? _Ink.primary : _Ink.control,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: active ? _Ink.primary : _Ink.borderStrong,
+              width: 1.2,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: active ? Colors.white : _Ink.state),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: active ? Colors.white : _Ink.textHigh,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    return tooltip == null ? pill : Tooltip(message: tooltip, child: pill);
   }
 
   Widget _buildSpeedSelector() {
@@ -831,6 +956,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       message: 'Playback speed',
       child: PopupMenuButton<int>(
         initialValue: _playbackMs,
+        color: _Ink.raised,
         onSelected: (ms) => setState(() => _playbackMs = ms),
         itemBuilder: (context) => const [
           PopupMenuItem(value: 2400, child: Text('0.5× (slow)')),
@@ -838,25 +964,28 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
           PopupMenuItem(value: 600, child: Text('2× (fast)')),
         ],
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: const Color(0xFF111827),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFF334155)),
+            color: _Ink.control,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _Ink.borderStrong, width: 1.2),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.speed_rounded,
-                  size: 16, color: Color(0xFF93C5FD)),
-              const SizedBox(width: 6),
+              const Icon(Icons.speed_rounded, size: 18, color: _Ink.state),
+              const SizedBox(width: 8),
               Text(
                 label,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: _Ink.textHigh,
                   fontWeight: FontWeight.w700,
                 ),
               ),
+              const SizedBox(width: 4),
+              const Icon(Icons.arrow_drop_down_rounded,
+                  size: 18, color: _Ink.textLow),
             ],
           ),
         ),
@@ -868,176 +997,250 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     final steps = _currentEpisodeSteps;
     final totalSteps = steps.length;
     final step = steps[_currentStepIndex];
+
+    final transport = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _circleIconButton(
+          icon: Icons.chevron_left_rounded,
+          tooltip: 'Previous step',
+          onTap: _currentStepIndex > 0
+              ? () => _selectTraceStep(_currentStepIndex - 1)
+              : null,
+        ),
+        const SizedBox(width: 10),
+        _circleIconButton(
+          icon:
+              _isTracePlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+          tooltip: _isTracePlaying ? 'Pause trace' : 'Play trace',
+          primary: true,
+          size: 52,
+          onTap: totalSteps > 1 ? _toggleTracePlayback : null,
+        ),
+        const SizedBox(width: 10),
+        _circleIconButton(
+          icon: Icons.chevron_right_rounded,
+          tooltip: 'Next step',
+          onTap: _currentStepIndex < totalSteps - 1
+              ? () => _selectTraceStep(_currentStepIndex + 1)
+              : null,
+        ),
+      ],
+    );
+
+    // The options (episode/speed/quiz). At narrow widths a single segmented
+    // control can be wider than the remaining row space, and a Wrap cannot
+    // break inside one child — so below a threshold we stack options under the
+    // transport on their own full-width line instead of squeezing them beside.
+    Widget optionsWrap(WrapAlignment alignment) => Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: alignment,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            if (_hasMultipleEpisodes) _buildEpisodeSelector(context),
+            _buildSpeedSelector(),
+            _buildQuizToggle(),
+          ],
+        );
+
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF1E293B)),
+        color: _Ink.panel,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _Ink.borderSubtle),
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          // Stack the toolbar vertically until there is comfortably room for the
-          // single-row layout (controls + episode selector + slider + summary +
-          // speed/quiz). Matches the debugger's wide breakpoint.
-          final isCompact = constraints.maxWidth < 980;
-          final controls = Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Tooltip(
-                message: 'Previous step',
-                child: IconButton.outlined(
-                  onPressed: _currentStepIndex > 0
-                      ? () => _selectTraceStep(_currentStepIndex - 1)
-                      : null,
-                  icon: const Icon(Icons.chevron_left_rounded),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Tooltip(
-                message: _isTracePlaying ? 'Pause trace' : 'Play trace',
-                child: IconButton.filled(
-                  onPressed: totalSteps > 1 ? _toggleTracePlayback : null,
-                  icon: Icon(
-                    _isTracePlaying
-                        ? Icons.pause_rounded
-                        : Icons.play_arrow_rounded,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Tooltip(
-                message: 'Next step',
-                child: IconButton.outlined(
-                  onPressed: _currentStepIndex < totalSteps - 1
-                      ? () => _selectTraceStep(_currentStepIndex + 1)
-                      : null,
-                  icon: const Icon(Icons.chevron_right_rounded),
-                ),
-              ),
-            ],
-          );
-          final extras = Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [_buildSpeedSelector(), _buildQuizToggle()],
-          );
-          final summary = Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildTag('Step ${_currentStepIndex + 1} / $totalSteps',
-                  const Color(0xFF38BDF8)),
-              _buildTag('s${step.state} -> ${step.nextState}',
-                  const Color(0xFF7DD3FC)),
-              _buildTag(
-                'a${step.action}',
-                const Color(0xFF06B6D4),
-              ),
-              _buildTag(
-                'r ${step.reward.toStringAsFixed(2)}',
-                step.reward < 0
-                    ? const Color(0xFFF87171)
-                    : const Color(0xFFFBBF24),
-              ),
-            ],
-          );
-          if (isCompact) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (_hasMultipleEpisodes) ...[
-                  _buildEpisodeSelector(context, fillWidth: true),
-                  const SizedBox(height: 10),
-                ],
-                Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Tier 1 — transport (left) + options (right, wrapping).
+          LayoutBuilder(
+            builder: (context, c) {
+              if (c.maxWidth < 640) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    controls,
-                    const SizedBox(width: 12),
-                    Expanded(child: summary),
+                    Row(children: [transport, const Spacer()]),
+                    const SizedBox(height: 12),
+                    optionsWrap(WrapAlignment.start),
                   ],
-                ),
-                const SizedBox(height: 10),
-                extras,
-                const SizedBox(height: 10),
-                _buildStepSlider(totalSteps),
-              ],
-            );
-          }
-          return Row(
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  transport,
+                  const SizedBox(width: 12),
+                  Expanded(child: optionsWrap(WrapAlignment.end)),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          // Tier 2 — full-width scrubber with an inline step counter.
+          Row(
             children: [
-              controls,
-              const SizedBox(width: 16),
-              if (_hasMultipleEpisodes) ...[
-                _buildEpisodeSelector(context),
-                const SizedBox(width: 16),
-              ],
+              _counterChip(_currentStepIndex + 1, totalSteps),
+              const SizedBox(width: 14),
               Expanded(child: _buildStepSlider(totalSteps)),
-              const SizedBox(width: 16),
-              summary,
-              const SizedBox(width: 12),
-              extras,
             ],
-          );
-        },
+          ),
+          const SizedBox(height: 12),
+          // Tier 3 — at-a-glance transition context (wraps freely).
+          _buildTransitionChips(step),
+        ],
       ),
+    );
+  }
+
+  Widget _counterChip(int current, int total) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      decoration: BoxDecoration(
+        color: _Ink.raised,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _Ink.borderStrong),
+      ),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            const TextSpan(
+              text: 'Step ',
+              style: TextStyle(color: _Ink.textLow, fontSize: 12),
+            ),
+            TextSpan(
+              text: '$current',
+              style: const TextStyle(
+                color: _Ink.state,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            TextSpan(
+              text: ' / $total',
+              style: const TextStyle(
+                color: _Ink.textLow,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTransitionChips(ExecutionTraceStep step) {
+    final actionLabel = (step.gridMetadata?.actionLabel.isNotEmpty ?? false)
+        ? step.gridMetadata!.actionLabel
+        : (step.equationUpdate?.mcDetails?.actionLabel.isNotEmpty ?? false)
+            ? step.equationUpdate!.mcDetails!.actionLabel
+            : (step.action >= 0 ? 'a${step.action}' : '');
+    final rewardColor = step.reward < 0
+        ? _Ink.danger
+        : (step.reward > 0 ? _Ink.success : _Ink.warn);
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _buildTag('s${step.state}  →  s${step.nextState}', _Ink.state),
+        if (actionLabel.isNotEmpty)
+          _buildTag(actionLabel, const Color(0xFF22D3EE)),
+        _buildTag('reward ${step.reward.toStringAsFixed(2)}', rewardColor),
+      ],
     );
   }
 
   bool get _hasMultipleEpisodes =>
       widget.traceEpisodes.length > 1 || widget.episodeSummaries.length > 1;
 
-  Widget _buildEpisodeSelector(
-    BuildContext context, {
-    bool fillWidth = false,
-  }) {
-    final episodeIndexes = _episodeIndexes;
+  // A custom segmented control (not Material SegmentedButton) so the
+  // Early/Mid/Late labels are guaranteed to paint with the contrast we set —
+  // and so it matches the speed/quiz pills visually.
+  Widget _buildEpisodeSelector(BuildContext context) {
+    final curated = _curatedEpisodeIndexes;
+    final selected = curated.contains(_selectedEpisodeIndex)
+        ? _selectedEpisodeIndex
+        : curated.last;
     return Semantics(
       label: 'Trace episode selector',
-      button: true,
-      child: SizedBox(
-        width: fillWidth ? double.infinity : 280,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(
-            color: const Color(0xFF111827),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFF334155)),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<int>(
-              isExpanded: true,
-              value: episodeIndexes.contains(_selectedEpisodeIndex)
-                  ? _selectedEpisodeIndex
-                  : episodeIndexes.last,
-              dropdownColor: const Color(0xFF111827),
-              iconEnabledColor: const Color(0xFF93C5FD),
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        decoration: BoxDecoration(
+          color: _Ink.control,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _Ink.borderStrong, width: 1.2),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(left: 2, right: 6),
+              child:
+                  Icon(Icons.timeline_rounded, size: 16, color: _Ink.textLow),
+            ),
+            for (final index in curated)
+              _episodeSegment(
+                _episodeRole(index, curated),
+                index == selected,
+                () => _selectEpisode(index),
+                _episodeLabel(index),
               ),
-              items: [
-                for (final index in episodeIndexes)
-                  DropdownMenuItem<int>(
-                    value: index,
-                    child: Text(
-                      _episodeLabel(index),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-              ],
-              onChanged: (value) {
-                if (value != null) {
-                  _selectEpisode(value);
-                }
-              },
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _episodeSegment(
+    String label,
+    bool active,
+    VoidCallback onTap,
+    String tooltip,
+  ) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: active ? _Ink.primary : Colors.transparent,
+        borderRadius: BorderRadius.circular(9),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            height: 32,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 13),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: active ? Colors.white : _Ink.textMed,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
             ),
           ),
         ),
       ),
     );
+  }
+
+  /// Curate the episode set to Early / Mid / Late so a long training run reads
+  /// as a 3-beat learning story, not an overwhelming dump of every episode.
+  List<int> get _curatedEpisodeIndexes {
+    final all = _episodeIndexes;
+    if (all.length <= 3) return all;
+    return [all.first, all[(all.length - 1) ~/ 2], all.last];
+  }
+
+  String _episodeRole(int index, List<int> curated) {
+    final pos = curated.indexOf(index);
+    if (curated.length >= 3) {
+      if (pos <= 0) return 'Early';
+      if (pos >= curated.length - 1) return 'Late';
+      return 'Mid';
+    }
+    if (curated.length == 2) return pos == 0 ? 'Early' : 'Late';
+    return 'Run';
   }
 
   List<int> get _episodeIndexes {
@@ -1119,17 +1322,17 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
         final showSubtitle = constraints.maxWidth >= 420;
         final showRunTags = constraints.maxWidth >= 560;
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            color: const Color(0xFF0F172A),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFF1E293B)),
+            color: _Ink.panel,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _Ink.borderSubtle),
           ),
           child: Row(
             children: [
               const Icon(
                 Icons.account_tree_rounded,
-                color: Color(0xFF38BDF8),
+                color: _Ink.state,
                 size: 24,
               ),
               const SizedBox(width: 12),

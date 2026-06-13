@@ -34,7 +34,14 @@ logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parents[2]
 TRACE_SCENE_FILE = ROOT / "manim_service" / "trace_scenes" / "trace_replay_scene.py"
 TRACE_SCENE_CLASS = "TraceReplayScene"
-TRACE_VISUAL_HELPERS = (ROOT / "manim_service" / "scenes" / "rl_visuals.py",)
+TRACE_VISUAL_HELPERS = (
+    ROOT / "manim_service" / "scenes" / "rl_visuals.py",
+    # The overhauled trace renderer is split across these sibling modules; include
+    # them in the source signature so edits correctly invalidate the render cache.
+    ROOT / "manim_service" / "trace_scenes" / "trace_common.py",
+    ROOT / "manim_service" / "trace_scenes" / "trace_boards.py",
+    ROOT / "manim_service" / "trace_scenes" / "trace_update_card.py",
+)
 
 QUALITY_TO_DIR: dict[str, str] = {
     "l": "480p15",

@@ -409,7 +409,9 @@ void main() {
     expect(find.text('FrozenLake grid'), findsOneWidget);
     expect(find.text('state 0'), findsOneWidget);
     expect(find.text('next 1'), findsOneWidget);
-    expect(find.text('Right'), findsOneWidget);
+    // The action label now appears both in the grid companion and in the
+    // always-visible toolbar transition chip.
+    expect(find.text('Right'), findsWidgets);
   });
 
   testWidgets('selects complete trace episodes and resets the step cursor',
@@ -497,16 +499,16 @@ void main() {
       ),
     );
 
-    expect(find.textContaining('Episode 2'), findsOneWidget);
+    // The curated selector defaults to the last ("Late") episode.
+    expect(find.text('Early'), findsOneWidget);
+    expect(find.text('Late'), findsOneWidget);
     expect(find.text('Episode two first step.'), findsWidgets);
     expect(find.text('s5 -> 6'), findsWidgets);
 
-    await tester.tap(find.byType(DropdownButton<int>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('Episode 1').last);
+    // Switch to the early episode via the curated Early/Mid/Late control.
+    await tester.tap(find.text('Early'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Episode 1'), findsOneWidget);
     expect(find.text('Episode one first step.'), findsWidgets);
     expect(find.text('s0 -> 1'), findsWidgets);
     expect(find.text('Episode two first step.'), findsNothing);
@@ -591,16 +593,16 @@ void main() {
 
         expect(tester.takeException(), isNull, reason: 'breakpoint $size');
         expect(find.text('Generated Step Replay'), findsOneWidget);
-        expect(find.textContaining('Episode 2'), findsOneWidget);
+        // Curated Early/Late episode selector instead of a per-episode dump.
+        expect(find.text('Late'), findsOneWidget, reason: 'breakpoint $size');
         expect(find.text('Why this update is correct'), findsOneWidget,
             reason: 'breakpoint $size');
         await _selectBinderSection(tester, 'Equation');
         expect(find.text('Q-learning numeric update'), findsOneWidget);
         expect(find.byType(Slider), findsOneWidget);
-        expect(
-          find.byWidgetPredicate((widget) => widget is DropdownButton<int>),
-          findsOneWidget,
-        );
+        // Curated episode selector renders its Early/Late labels.
+        expect(find.text('Early'), findsOneWidget);
+        expect(find.text('Late'), findsOneWidget);
       }
     } finally {
       semantics.dispose();
