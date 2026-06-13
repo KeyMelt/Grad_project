@@ -81,6 +81,12 @@ class _HomeDashboardState extends State<HomeDashboard> {
                       child: _buildHeroCard(totalLessons),
                     ),
                   ),
+                  const SliverPadding(
+                    padding: EdgeInsets.fromLTRB(20, _sectionSpacing, 20, 0),
+                    sliver: SliverToBoxAdapter(
+                      child: _PlatformPreviewStrip(),
+                    ),
+                  ),
                   if (widget.learner != null) ...[
                     SliverPadding(
                       padding: const EdgeInsets.fromLTRB(
@@ -643,6 +649,117 @@ String _formatConceptLabel(String conceptId) {
       .where((part) => part.isNotEmpty)
       .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
       .join(' ');
+}
+
+class _PlatformPreviewStrip extends StatelessWidget {
+  const _PlatformPreviewStrip();
+
+  static const _previews = [
+    (
+      asset: 'assets/screenshots/workspace.jpg',
+      label: 'Coding Workspace',
+      sub: 'Guided exercises with live feedback',
+    ),
+    (
+      asset: 'assets/screenshots/trace_replay.jpg',
+      label: 'Step Replay',
+      sub: 'Inspect every agent decision step by step',
+    ),
+    (
+      asset: 'assets/screenshots/study_buddy.jpg',
+      label: 'Study Buddy',
+      sub: 'AI coach that finds your blockers',
+    ),
+    (
+      asset: 'assets/screenshots/home.jpg',
+      label: 'Lesson Library',
+      sub: 'Structured lessons across RL families',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'What\'s Inside',
+          style: textTheme.titleLarge?.copyWith(
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'A full-stack RL learning environment — from equations to code to replay.',
+          style: textTheme.bodyMedium?.copyWith(fontSize: 14),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 260,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            itemCount: _previews.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 16),
+            itemBuilder: (context, i) {
+              final p = _previews[i];
+              return _PreviewCard(asset: p.asset, label: p.label, sub: p.sub);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PreviewCard extends StatelessWidget {
+  final String asset;
+  final String label;
+  final String sub;
+
+  const _PreviewCard({
+    required this.asset,
+    required this.label,
+    required this.sub,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return SizedBox(
+      width: 340,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppConstants.cardRadius),
+              child: Image.asset(
+                asset,
+                fit: BoxFit.cover,
+                width: double.infinity,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            label,
+            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            sub,
+            style: textTheme.bodyMedium?.copyWith(
+              fontSize: 13,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _LessonSummaryCard extends StatelessWidget {
