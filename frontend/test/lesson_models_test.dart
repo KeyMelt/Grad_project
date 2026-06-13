@@ -11,6 +11,9 @@ void main() {
           'title': 'Policy Evaluation',
           'category': 'Dynamic Programming',
           'description': 'Evaluate a fixed policy.',
+          'required_function': 'policy_evaluation',
+          'environment_name': 'FrozenLake',
+          'env_params': {'map_name': '4x4', 'is_slippery': true},
           'starter_code': 'def policy_evaluation(): pass',
           'backend_enabled': true,
           'concept_video': {
@@ -49,6 +52,7 @@ void main() {
             ],
             'success_criteria': ['The function returns values.'],
             'code_tip': 'Tune DISCOUNT_FACTOR in code.',
+            'execution_contract_notes': ['Q is list-backed.'],
           },
         },
       ],
@@ -57,6 +61,10 @@ void main() {
     final lesson = section.lessons.single;
     expect(section.title, 'Dynamic Programming');
     expect(lesson.id, 'dp_policy_eval');
+    expect(lesson.requiredFunction, 'policy_evaluation');
+    expect(lesson.environmentName, 'FrozenLake');
+    expect(lesson.environmentParams['map_name'], '4x4');
+    expect(lesson.environmentParams['is_slippery'], isTrue);
     expect(lesson.conceptVideo.durationLabel, '03:30');
     expect(lesson.conceptVideo.effectiveStreamPath,
         '/media/concept-videos/dp_policy_eval_concept.mp4');
@@ -67,5 +75,6 @@ void main() {
         'policy_eval_expectation');
     expect(
         lesson.exercise.successCriteria.single, 'The function returns values.');
+    expect(lesson.exercise.executionContractNotes.single, 'Q is list-backed.');
   });
 }

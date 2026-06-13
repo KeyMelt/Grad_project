@@ -72,6 +72,12 @@ class ExerciseBriefPanel extends StatelessWidget {
               bullets: lesson.exercise.successCriteria,
             ),
             const SizedBox(height: 18),
+            _SectionBlock(
+              title: 'Execution Contract',
+              accent: const Color(0xFF7C3AED),
+              bullets: _executionContractBullets(lesson),
+            ),
+            const SizedBox(height: 18),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
@@ -103,6 +109,25 @@ class ExerciseBriefPanel extends StatelessWidget {
       ),
     );
   }
+}
+
+List<String> _executionContractBullets(LessonDefinition lesson) {
+  final bullets = <String>[];
+  if (lesson.requiredFunction.isNotEmpty) {
+    bullets.add('Required function: ${lesson.requiredFunction}.');
+  }
+  if (lesson.environmentName.isNotEmpty) {
+    final params = lesson.environmentParams.entries
+        .map((entry) => '${entry.key}=${entry.value}')
+        .join(', ');
+    bullets.add(
+      params.isEmpty
+          ? 'Environment: ${lesson.environmentName}.'
+          : 'Environment: ${lesson.environmentName} ($params).',
+    );
+  }
+  bullets.addAll(lesson.exercise.executionContractNotes);
+  return bullets;
 }
 
 class WorkspaceFeedbackPanel extends StatelessWidget {

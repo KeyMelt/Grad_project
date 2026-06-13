@@ -163,6 +163,7 @@ class LessonExerciseBrief {
   final List<LessonTemplateBlank> templateBlanks;
   final List<String> successCriteria;
   final String codeTip;
+  final List<String> executionContractNotes;
 
   const LessonExerciseBrief({
     required this.title,
@@ -171,6 +172,7 @@ class LessonExerciseBrief {
     this.templateBlanks = const [],
     required this.successCriteria,
     required this.codeTip,
+    this.executionContractNotes = const [],
   });
 
   factory LessonExerciseBrief.fromJson(Map<String, dynamic> json) {
@@ -191,6 +193,10 @@ class LessonExerciseBrief {
           .map((value) => value.toString())
           .toList(growable: false),
       codeTip: json['code_tip'] as String? ?? '',
+      executionContractNotes:
+          (json['execution_contract_notes'] as List<dynamic>? ?? const [])
+              .map((value) => value.toString())
+              .toList(growable: false),
     );
   }
 
@@ -202,6 +208,7 @@ class LessonExerciseBrief {
       'template_blanks': templateBlanks.map((blank) => blank.toJson()).toList(),
       'success_criteria': successCriteria,
       'code_tip': codeTip,
+      'execution_contract_notes': executionContractNotes,
     };
   }
 
@@ -212,6 +219,7 @@ class LessonExerciseBrief {
     List<LessonTemplateBlank>? templateBlanks,
     List<String>? successCriteria,
     String? codeTip,
+    List<String>? executionContractNotes,
   }) {
     return LessonExerciseBrief(
       title: title ?? this.title,
@@ -220,6 +228,8 @@ class LessonExerciseBrief {
       templateBlanks: templateBlanks ?? this.templateBlanks,
       successCriteria: successCriteria ?? this.successCriteria,
       codeTip: codeTip ?? this.codeTip,
+      executionContractNotes:
+          executionContractNotes ?? this.executionContractNotes,
     );
   }
 }
@@ -267,6 +277,9 @@ class LessonDefinition {
   final String title;
   final String description;
   final String category;
+  final String requiredFunction;
+  final String environmentName;
+  final Map<String, dynamic> environmentParams;
   final String starterCode;
   final LessonConceptVideo conceptVideo;
   final LessonExerciseBrief exercise;
@@ -277,6 +290,9 @@ class LessonDefinition {
     required this.title,
     required this.description,
     required this.category,
+    this.requiredFunction = '',
+    this.environmentName = '',
+    this.environmentParams = const {},
     required this.starterCode,
     required this.conceptVideo,
     required this.exercise,
@@ -291,6 +307,10 @@ class LessonDefinition {
       title: json['title'] as String? ?? '',
       description: json['description'] as String? ?? '',
       category: json['category'] as String? ?? '',
+      requiredFunction: json['required_function'] as String? ?? '',
+      environmentName: json['environment_name'] as String? ?? '',
+      environmentParams:
+          (json['env_params'] as Map?)?.cast<String, dynamic>() ?? const {},
       starterCode: json['starter_code'] as String? ?? '',
       conceptVideo: conceptVideo is Map<String, dynamic>
           ? LessonConceptVideo.fromJson(conceptVideo)
@@ -319,6 +339,9 @@ class LessonDefinition {
       'title': title,
       'description': description,
       'category': category,
+      'required_function': requiredFunction,
+      'environment_name': environmentName,
+      'env_params': environmentParams,
       'starter_code': starterCode,
       'concept_video': conceptVideo.toJson(),
       'exercise': exercise.toJson(),
@@ -333,6 +356,9 @@ class LessonDefinition {
     String? title,
     String? description,
     String? category,
+    String? requiredFunction,
+    String? environmentName,
+    Map<String, dynamic>? environmentParams,
     String? starterCode,
     LessonConceptVideo? conceptVideo,
     LessonExerciseBrief? exercise,
@@ -343,6 +369,9 @@ class LessonDefinition {
       title: title ?? this.title,
       description: description ?? this.description,
       category: category ?? this.category,
+      requiredFunction: requiredFunction ?? this.requiredFunction,
+      environmentName: environmentName ?? this.environmentName,
+      environmentParams: environmentParams ?? this.environmentParams,
       starterCode: starterCode ?? this.starterCode,
       conceptVideo: conceptVideo ?? this.conceptVideo,
       exercise: exercise ?? this.exercise,

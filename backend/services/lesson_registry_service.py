@@ -30,6 +30,94 @@ from backend.persistence import Database
 
 _CORE_LESSONS: list[dict[str, Any]] = [
     {
+        "id": "rl_mdp_core",
+        "title": "MDP Foundations",
+        "description": "Build the prerequisite mental model for reinforcement learning: states, actions, rewards, transitions, returns, and discounting.",
+        "category": "Foundations",
+        "required_function": "",
+        "environment_name": "",
+        "env_params": {},
+        "template_kind": "reading_only",
+        "backend_enabled": False,
+        "starter_code": "",
+        "template_blanks": [],
+        "success_criteria": [
+            "Explain the agent-environment loop in terms of state, action, reward, and next state.",
+            "Distinguish immediate reward from long-run return.",
+            "Describe how discounting changes the weight of future rewards.",
+        ],
+        "concept_video": {
+            "stream_path": "/media/concept-videos/rl_mdp_core_concept.mp4",
+            "caption_path": "/media/concept-videos/rl_mdp_core_captions.vtt",
+            "duration_label": "Concept video",
+            "summary": "A prerequisite overview of Markov decision processes and the agent-environment loop used throughout the course.",
+            "highlights": [
+                "How observations, actions, rewards, and next states form an RL timestep.",
+                "Why transition dynamics make the next state uncertain.",
+                "How return and discounting connect immediate rewards to long-run goals.",
+            ],
+        },
+        "exercise": {
+            "title": "Review the RL problem setup",
+            "overview": "Use this preparatory lesson to anchor the vocabulary used by the later coding exercises.",
+            "tasks": [
+                "Identify the state, action, reward, and next-state pieces in a sample transition.",
+                "Explain why a policy maps states to action choices.",
+                "Connect discounting to the tradeoff between near-term and future rewards.",
+            ],
+            "success_criteria": [
+                "You can describe one full agent-environment interaction step.",
+                "You can state what a policy controls.",
+                "You can explain why discounted return is not the same as immediate reward.",
+            ],
+            "code_tip": "This is a preparatory concept lesson. There is no code submission for this lesson.",
+        },
+    },
+    {
+        "id": "policies_values_bellman",
+        "title": "Policies, Values, and Bellman Backups",
+        "description": "Prepare for the equation-focused lessons by connecting policies, state values, action values, and Bellman backup notation.",
+        "category": "Foundations",
+        "required_function": "",
+        "environment_name": "",
+        "env_params": {},
+        "template_kind": "reading_only",
+        "backend_enabled": False,
+        "starter_code": "",
+        "template_blanks": [],
+        "success_criteria": [
+            "Distinguish a policy from a value function.",
+            "Explain the difference between state values and action values.",
+            "Read a Bellman backup as an expected one-step lookahead plus discounted continuation value.",
+        ],
+        "concept_video": {
+            "stream_path": "/media/concept-videos/policies_values_bellman_concept.mp4",
+            "caption_path": "/media/concept-videos/policies_values_bellman_captions.vtt",
+            "duration_label": "Concept video",
+            "summary": "A prerequisite walkthrough of policy notation, value functions, action values, and the Bellman backup shape reused across the course.",
+            "highlights": [
+                "How policies choose actions while value functions evaluate outcomes.",
+                "Why state values and action values answer different questions.",
+                "How Bellman backups combine reward, transition probabilities, and discounted future value.",
+            ],
+        },
+        "exercise": {
+            "title": "Read the Bellman notation",
+            "overview": "Use this preparatory lesson before the dynamic programming and temporal-difference coding exercises.",
+            "tasks": [
+                "Name the policy, transition, reward, and value terms in a Bellman expression.",
+                "Separate state-value notation from action-value notation.",
+                "Explain why Bellman backups are recursive.",
+            ],
+            "success_criteria": [
+                "You can identify the role of each term in a Bellman backup.",
+                "You can explain how policy probabilities affect an expectation.",
+                "You can connect the backup shape to later policy evaluation and value iteration lessons.",
+            ],
+            "code_tip": "This is a preparatory concept lesson. There is no code submission for this lesson.",
+        },
+    },
+    {
         "id": "dp_policy_eval",
         "title": "Policy Evaluation",
         "description": "Evaluate a fixed policy over FrozenLake using Bellman expectation backups and iterative sweeps.",
@@ -339,6 +427,9 @@ _CORE_LESSONS: list[dict[str, Any]] = [
                 "The value table update passes the sample first-visit Monte Carlo test.",
             ],
             "code_tip": "EPISODE_COUNT and DISCOUNT_FACTOR are defined in the submitted code so experiments stay visible.",
+            "execution_contract_notes": [
+                "Episode rows are (state, action, reward); Blackjack state is a tuple like (player sum, dealer card, usable ace).",
+            ],
         },
     },
     {

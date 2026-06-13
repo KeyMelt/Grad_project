@@ -89,7 +89,7 @@ class LessonCard extends StatelessWidget {
                     border: Border.all(color: const Color(0xFFF59E0B)),
                   ),
                   child: const Text(
-                    'Draft content',
+                    'Concept lesson',
                     style: TextStyle(
                       color: Color(0xFFB45309),
                       fontWeight: FontWeight.w700,

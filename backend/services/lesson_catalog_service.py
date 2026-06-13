@@ -26,6 +26,7 @@ CONCEPT_VIDEO_ROUTE_PREFIX = os.environ.get(
 ).rstrip("/")
 
 _DEFAULT_SECTION_ORDER = (
+    "Foundations",
     "Dynamic Programming",
     "Monte Carlo Methods",
     "Temporal Difference",
@@ -92,6 +93,9 @@ def _serialize_payload_for_client(payload: dict[str, Any]) -> dict[str, Any]:
         "title": payload.get("title", ""),
         "description": payload.get("description", ""),
         "category": payload.get("category", ""),
+        "required_function": payload.get("required_function", ""),
+        "environment_name": payload.get("environment_name", ""),
+        "env_params": payload.get("env_params", {}),
         "starter_code": payload.get("starter_code", ""),
         "backend_enabled": bool(payload.get("backend_enabled", True)),
         "concept_video": concept_video,
