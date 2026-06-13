@@ -81,6 +81,33 @@ class CodeValidatorTest(unittest.TestCase):
         self.assertEqual(result.errors, [])
         self.assertTrue(all(test["passed"] for test in result.test_results))
 
+    def test_accepts_first_visit_monte_carlo_submission_style(self):
+        result = self.validator.validate_code(
+            (
+                "DISCOUNT_FACTOR = 0.95\n"
+                "EPISODE_COUNT = 6\n\n"
+                "def mc_first_visit_prediction(episode, V, returns, gamma=DISCOUNT_FACTOR):\n"
+                "    visited_states = set()\n\n"
+                "    for index, (state, _action, _reward) in enumerate(episode):\n"
+                "        if state in visited_states:\n"
+                "            continue\n\n"
+                "        visited_states.add(state)\n\n"
+                "        G = 0.0\n"
+                "        discount = 1.0\n"
+                "        for _next_state, _next_action, reward in episode[index:]:\n"
+                "            G += discount * reward\n"
+                "            discount *= gamma\n\n"
+                "        returns.setdefault(state, []).append(G)\n"
+                "        V[state] = sum(returns[state]) / len(returns[state])\n\n"
+                "    return V\n"
+            ),
+            "mc_first_visit",
+        )
+
+        self.assertTrue(result.is_valid)
+        self.assertEqual(result.errors, [])
+        self.assertTrue(all(test["passed"] for test in result.test_results))
+
     def test_rejects_forbidden_imports(self):
         result = self.validator.validate_code(
             "import os\n\ndef q_learning_update(*args):\n    return []\n",

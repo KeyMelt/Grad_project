@@ -7,9 +7,36 @@ const _backendLesson = LessonDefinition(
   title: 'Backend Policy Evaluation',
   description: '',
   category: 'Dynamic Programming',
+  requiredFunction: 'policy_evaluation',
+  environmentName: 'FrozenLake',
   starterCode: 'def policy_evaluation():\n    return []\n',
   conceptVideo: LessonConceptVideo(
     streamPath: '/media/concept-videos/dp_policy_eval_concept.mp4',
+    durationLabel: '',
+    summary: '',
+    highlights: [],
+  ),
+  exercise: LessonExerciseBrief(
+    title: '',
+    overview: '',
+    tasks: [],
+    successCriteria: [],
+    codeTip: '',
+  ),
+);
+
+const _mcLesson = LessonDefinition(
+  id: 'mc_first_visit',
+  title: 'First-Visit Monte Carlo',
+  description: '',
+  category: 'Monte Carlo Methods',
+  requiredFunction: 'mc_first_visit_prediction',
+  environmentName: 'Blackjack',
+  environmentParams: {'sab': true},
+  starterCode:
+      'def mc_first_visit_prediction(episode, V, returns):\n    return V\n',
+  conceptVideo: LessonConceptVideo(
+    streamPath: '/media/concept-videos/mc_first_visit_concept.mp4',
     durationLabel: '',
     summary: '',
     highlights: [],
@@ -46,6 +73,7 @@ class _FakeBackendApi extends BackendApi {
   int _workspacePollCount = 0;
   String? _token;
   Map<String, dynamic>? latestChatRequest;
+  Map<String, dynamic>? latestSubmitRequest;
 
   @override
   String? get accessToken => _token;
@@ -160,7 +188,12 @@ class _FakeBackendApi extends BackendApi {
     String? studentId,
     String? sessionId,
   }) async {
-    if (sessionId != null) {}
+    latestSubmitRequest = {
+      'lesson_id': lessonId,
+      'code': code,
+      'student_id': studentId,
+      'session_id': sessionId,
+    };
     return const SubmittedExecutionTask(
       taskId: 'task-1',
       status: ExecutionTaskStatus.queued,
@@ -451,6 +484,42 @@ void main() {
       cubit.state.studentFeedback?.summary,
       'The submission still contains guided blanks.',
     );
+
+    await cubit.close();
+  });
+
+  test('cubit does not submit code from stale workspace session', () async {
+    final api = _FakeBackendApi(
+      lessonSections: const [
+        LessonSection(
+          title: 'Dynamic Programming',
+          lessons: [_backendLesson],
+        ),
+        LessonSection(
+          title: 'Monte Carlo Methods',
+          lessons: [_mcLesson],
+        ),
+      ],
+    );
+    final cubit = RLWorkbenchCubit(api: api);
+
+    await cubit.loadBackendLessonCatalog();
+    await cubit.signIn('Maya', 'Password123!');
+    cubit.openLesson(_mcLesson);
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    cubit.updateCode(
+      'def mc_first_visit_prediction(episode, V, returns):\n    return V\n',
+    );
+
+    await cubit.submit();
+
+    expect(api.latestSubmitRequest?['lesson_id'], 'mc_first_visit');
+    expect(
+      api.latestSubmitRequest?['code'],
+      contains('mc_first_visit_prediction'),
+    );
+    expect(api.latestSubmitRequest?['code'],
+        isNot(contains('print("workspace")')));
 
     await cubit.close();
   });

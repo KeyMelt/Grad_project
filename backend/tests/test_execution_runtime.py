@@ -5,7 +5,11 @@ from dataclasses import dataclass
 
 import backend.execution_runtime as execution_runtime
 import backend.lesson_registry as lesson_registry
-from backend.execution_runtime import _derive_timeout_seconds, _run_execution_pipeline
+from backend.execution_runtime import (
+    _derive_timeout_seconds,
+    _resolve_submission_lesson_contract,
+    _run_execution_pipeline,
+)
 from backend.rl_engine.engine import RLEngine
 from backend.validation.validator import ValidationResult
 
@@ -15,6 +19,7 @@ class _Lesson:
     id: str = "demo_lesson"
     title: str = "Demo Lesson"
     environment_name: str = "FrozenLake"
+    required_function: str = "demo"
 
 
 class _FakeValidator:
@@ -153,6 +158,46 @@ def test_derived_submission_timeout_scales_but_remains_capped(monkeypatch):
     )
 
     assert timeout_seconds == 900
+
+
+def test_submission_lesson_contract_resolves_stale_selected_lesson(monkeypatch):
+    lessons = {
+        "dp_policy_eval": _Lesson(
+            id="dp_policy_eval",
+            title="Policy Evaluation",
+            required_function="policy_evaluation",
+        ),
+        "mc_first_visit": _Lesson(
+            id="mc_first_visit",
+            title="First-Visit Monte Carlo",
+            required_function="mc_first_visit_prediction",
+        ),
+    }
+    monkeypatch.setattr(
+        "backend.execution_runtime.get_lesson_definition",
+        lambda lesson_id: lessons.get(lesson_id),
+    )
+    monkeypatch.setattr(
+        "backend.execution_runtime.list_lesson_definitions",
+        lambda: list(lessons.values()),
+    )
+
+    resolved = _resolve_submission_lesson_contract(
+        {
+            "lesson_id": "dp_policy_eval",
+            "code": (
+                "def mc_first_visit_prediction(episode, V, returns, gamma=0.95):\n"
+                "    return V\n"
+            ),
+        }
+    )
+
+    assert resolved["lesson_id"] == "mc_first_visit"
+    assert resolved["requested_lesson_id"] == "dp_policy_eval"
+    assert (
+        resolved["lesson_contract_resolved_from_function"]
+        == "mc_first_visit_prediction"
+    )
 
 
 def test_execution_trace_frame_paths_are_absolute(monkeypatch, tmp_path):

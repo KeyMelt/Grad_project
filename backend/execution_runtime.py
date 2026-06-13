@@ -13,13 +13,13 @@ import time
 import uuid
 from typing import Any
 
-from backend.lesson_registry import get_lesson_definition
+from backend.lesson_registry import get_lesson_definition, list_lesson_definitions
 from backend.logger.event_logger import EventLogger, NpEncoder
 from backend.rl_engine.engine import EnvironmentAdapter, RLEngine
 from backend.services.student_feedback_service import StudentFeedbackService
 from backend.services.visualization_service import VisualizationService
 from backend.settings import ExecutionSettings
-from backend.user_code import load_user_context
+from backend.user_code import defined_function_names, load_user_context
 from backend.validation.validator import CodeValidator
 
 _PROCESS_REGISTRY_DATABASE = None
@@ -38,6 +38,7 @@ def run_submission_with_timeout(
 ) -> dict[str, Any]:
     """Run one lesson submission in a spawned process with a hard timeout."""
     _ensure_process_lesson_registry()
+    submission_payload = _resolve_submission_lesson_contract(submission_payload)
     effective_timeout = timeout_seconds or _derive_timeout_seconds(submission_payload)
     lesson = get_lesson_definition(submission_payload["lesson_id"])
     feedback_service = StudentFeedbackService()
@@ -111,6 +112,7 @@ def run_submission_with_timeout(
 
 def _execution_worker(submission_payload: dict[str, Any], result_conn: Any) -> None:
     _ensure_process_lesson_registry()
+    submission_payload = _resolve_submission_lesson_contract(submission_payload)
     lesson = get_lesson_definition(submission_payload["lesson_id"])
     feedback_service = StudentFeedbackService()
     try:
@@ -197,6 +199,49 @@ def _run_execution_pipeline(submission_payload: dict[str, Any]) -> dict[str, Any
         validation_result=validation_result,
         submission_payload=submission_payload,
     )
+
+
+def _resolve_submission_lesson_contract(
+    submission_payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Correct stale UI lesson ids when code clearly matches another lesson.
+
+    The workspace editor can lag behind lesson selection. If the learner submits
+    a program that defines exactly one known lesson function, use that function's
+    lesson instead of grading the code against a stale selected lesson.
+    """
+    requested_lesson = get_lesson_definition(submission_payload["lesson_id"])
+    submitted_code = str(submission_payload.get("code") or "")
+    if requested_lesson is None or not submitted_code.strip():
+        return submission_payload
+
+    try:
+        function_names = defined_function_names(submitted_code)
+    except Exception:
+        return submission_payload
+
+    if requested_lesson.required_function in function_names:
+        return submission_payload
+
+    lessons_by_required_function = {
+        lesson.required_function: lesson
+        for lesson in list_lesson_definitions()
+        if lesson.required_function
+    }
+    matching_lessons = [
+        lessons_by_required_function[name]
+        for name in function_names
+        if name in lessons_by_required_function
+    ]
+    if len(matching_lessons) != 1:
+        return submission_payload
+
+    inferred_lesson = matching_lessons[0]
+    resolved = dict(submission_payload)
+    resolved["lesson_id"] = inferred_lesson.id
+    resolved["requested_lesson_id"] = submission_payload["lesson_id"]
+    resolved["lesson_contract_resolved_from_function"] = inferred_lesson.required_function
+    return resolved
 
 
 def _validate_and_prepare(

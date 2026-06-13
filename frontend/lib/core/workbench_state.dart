@@ -2613,6 +2613,10 @@ def lesson_function(*args, **kwargs):
     }
 
     try {
+      final session = await _api.getWorkspaceSession(sessionId);
+      if (session.lessonId != state.selectedLesson.id) {
+        return state.code;
+      }
       final snapshot = await _api.getWorkspaceFile(sessionId: sessionId);
       emit(
         state.copyWith(

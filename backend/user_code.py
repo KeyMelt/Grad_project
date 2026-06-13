@@ -79,6 +79,18 @@ def load_user_function(submitted_code: str, required_function: str) -> Callable[
     return function
 
 
+def defined_function_names(submitted_code: str) -> set[str]:
+    """Return top-level function names from syntactically valid submitted code."""
+    submitted_code = normalize_submitted_code(submitted_code)
+    _validate_user_code(submitted_code)
+    tree = ast.parse(submitted_code)
+    return {
+        node.name
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+    }
+
+
 def _validate_user_code(submitted_code: str) -> None:
     tree = ast.parse(submitted_code)
     for node in ast.walk(tree):
