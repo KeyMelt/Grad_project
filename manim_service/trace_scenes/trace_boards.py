@@ -38,13 +38,19 @@ def _gym_img_dir() -> Path:
 # ============================================================ FrozenLake board
 class FrozenLakeBoard:
     is_spatial = True
-    _HOLES = {(1, 1), (1, 3), (2, 3), (3, 0)}
-    _GOAL = (3, 3)
+    # Fallback ONLY if a trace step carries no grid_metadata. The real map
+    # (rows/cols/holes/goal) is read from the run's trace so the board reflects
+    # the user's actual environment, never a hardcoded layout.
+    _STD_HOLES = {(1, 1), (1, 3), (2, 3), (3, 0)}
+    _STD_GOAL = (3, 3)
 
-    def __init__(self, width=5.2, at=(-3.6, 0.2)):
+    def __init__(self, first_step=None, width=5.2, at=(-3.6, 0.2)):
         from manim_service.scenes.rl_visuals import EnvironmentValueHeatmap
-        self.hm = EnvironmentValueHeatmap(values=[0.0] * 16, holes=self._HOLES,
-                                          goal=self._GOAL, width=width, label_precision=2)
+        rows, cols, holes, goal, start = self._map_from_step(first_step)
+        self._rows, self._cols = rows, cols
+        self.hm = EnvironmentValueHeatmap(
+            rows=rows, cols=cols, values=[0.0] * (rows * cols),
+            holes=holes, goal=goal, start=start, width=width, label_precision=2)
         for lbl in self.hm.labels.values():
             lbl.set_opacity(0.0)
         for sh in self.hm.label_shadows.values():
@@ -52,6 +58,30 @@ class FrozenLakeBoard:
         self.hm.move_to([at[0], at[1], 0.0])
         self._ring = None
         self._shown: dict[tuple[int, int], float] = {}
+
+    @classmethod
+    def _map_from_step(cls, first_step):
+        """Derive (rows, cols, holes, goal, start) from the trace's grid_metadata
+        so the rendered map matches the user's actual run; fall back to the
+        standard 4x4 FrozenLake map only when metadata is absent."""
+        gm = (first_step or {}).get("grid_metadata") or {}
+        cells = gm.get("cells")
+        rows, cols = gm.get("rows"), gm.get("columns")
+        if (isinstance(cells, list) and cells
+                and isinstance(rows, int) and isinstance(cols, int)):
+            holes, goal, start = set(), None, None
+            for c in cells:
+                rc = (c.get("row"), c.get("column"))
+                tile = c.get("tile_type")
+                if tile == "H":
+                    holes.add(rc)
+                elif tile == "G":
+                    goal = rc
+                elif tile == "S":
+                    start = rc
+            return rows, cols, holes, (goal or (rows - 1, cols - 1)), \
+                (start or (0, 0))
+        return 4, 4, set(cls._STD_HOLES), cls._STD_GOAL, (0, 0)
 
     @property
     def mob(self):
@@ -75,12 +105,12 @@ class FrozenLakeBoard:
                 if row:
                     fv = C.as_float(row[0])
                     if fv is not None:
-                        target[divmod(i, 4)] = fv
+                        target[divmod(i, self._cols)] = fv
         eu = step.get("equation_update") or {}
         nv = C.as_float(eu.get("new_value"))
         st = step.get("state")
         if isinstance(st, int) and nv is not None:
-            target[divmod(int(st), 4)] = nv
+            target[divmod(int(st), self._cols)] = nv
         return target
 
     def _apply_values(self, scene, step, *, run_time=0.3):
@@ -139,6 +169,31 @@ class FrozenLakeBoard:
                 self._ring = new_ring
                 scene.play(FadeIn(self._ring), run_time=run_time * 0.6)
         self._apply_values(scene, step)
+
+    # -- fine-grained hooks for the paced step director ---------------------
+    def focus(self, scene, state, *, run_time=0.5):
+        """Move the focus ring onto the state being backed up (no value fill yet)."""
+        if not isinstance(state, int):
+            return
+        new_ring = self.ring(state)
+        if getattr(self, "_ring", None) is not None:
+            scene.play(Transform(self._ring, new_ring), run_time=run_time)
+        else:
+            self._ring = new_ring
+            scene.play(FadeIn(self._ring), run_time=run_time)
+
+    def flash(self, scene, state, *, color=C.TEAL, run_time=0.4):
+        """Transient highlight of a neighbour cell being LOOKED UP (V(s'))."""
+        if not isinstance(state, int):
+            return
+        rect = SurroundingRectangle(self.hm.cell_bbox(int(state)), color=color,
+                                    buff=0.02, stroke_width=4.0).set_z_index(29)
+        scene.play(FadeIn(rect), run_time=run_time * 0.45)
+        scene.play(FadeOut(rect), run_time=run_time * 0.55)
+
+    def commit(self, scene, step, *, run_time=0.5):
+        """Write the freshly-computed value into the grid cell."""
+        self._apply_values(scene, step, run_time=run_time)
 
 
 # ============================================================ CliffWalking board
@@ -233,6 +288,17 @@ class CliffWalkingBoard:
         scene.play(self.elf.animate.move_to(self.center(ns)), run_time=run_time)
         self._state = ns
 
+    def flash(self, scene, state, *, color=C.TEAL, run_time=0.4):
+        """Transient highlight of the bootstrap cell Q(s', ·) being looked up."""
+        try:
+            r, c = divmod(int(state), self.COLS)
+        except (TypeError, ValueError):
+            return
+        rect = SurroundingRectangle(self.cells[r * self.COLS + c], color=color,
+                                    buff=0.0, stroke_width=4.0).set_z_index(39)
+        scene.play(FadeIn(rect), run_time=run_time * 0.45)
+        scene.play(FadeOut(rect), run_time=run_time * 0.55)
+
 
 # ============================================================ Blackjack board
 class BlackjackBoard:
@@ -315,4 +381,6 @@ def make_board(env: str, first_step: dict):
         return CliffWalkingBoard()
     if env == "Blackjack":
         return BlackjackBoard()
-    return FrozenLakeBoard()
+    # FrozenLake reads its actual map (rows/cols/holes/goal) from the run's
+    # trace metadata rather than assuming the standard 4x4 layout.
+    return FrozenLakeBoard(first_step)

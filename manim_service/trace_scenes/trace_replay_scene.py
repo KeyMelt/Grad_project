@@ -23,12 +23,12 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from manim import (  # noqa: E402
-    DOWN, FadeIn, FadeOut, Scene, Text, Transform, ReplacementTransform, VGroup, UP,
+    DOWN, FadeIn, Scene, Text, Transform, UP,
 )
 
 from manim_service.trace_scenes import trace_common as C  # noqa: E402
 from manim_service.trace_scenes.trace_boards import make_board  # noqa: E402
-from manim_service.trace_scenes.trace_update_card import make_update_card  # noqa: E402
+from manim_service.trace_scenes.trace_step_director import play_step  # noqa: E402
 
 DATA_PATH = os.environ.get("TRACE_DATA_PATH", "")
 EPISODE_LABEL = os.environ.get("TRACE_EPISODE_LABEL", "")
@@ -81,38 +81,29 @@ class TraceReplayScene(Scene):
         header = Text(header_txt, font_size=26, color=C.TEXT).to_edge(UP, buff=0.3)
         counter = self._counter(1, len(steps)).next_to(header, DOWN, buff=0.12)
 
-        # ---- board + first card ------------------------------------------
+        # ---- board --------------------------------------------------------
         board = make_board(env, steps[0])
-        card_pos = [0.0, -2.2, 0.0] if env == "CliffWalking" else [3.35, 0.15, 0.0]
-        card = make_update_card(steps[0], env)
-        card.move_to(card_pos)
-        if card.width > (5.9 if env != "CliffWalking" else 6.4):
-            card.scale_to_fit_width(5.9 if env != "CliffWalking" else 6.4)
+        # CliffWalking is a wide 4x12 grid -> a wide card sits below it; the
+        # other envs leave room for a tall card on the right.
+        if env == "CliffWalking":
+            card_pos, card_w = [0.0, -2.35, 0.0], 9.4
+        else:
+            card_pos, card_w = [3.4, 0.1, 0.0], 5.7
 
         self.play(FadeIn(header), FadeIn(counter), FadeIn(board.mob), run_time=0.6)
-        board.place(self, steps[0], run_time=0.35)
-        self.play(FadeIn(card), run_time=0.4)
-        self.wait(0.3)
+        self.wait(0.2)
 
-        # ---- step loop ----------------------------------------------------
+        # ---- step loop: each step is a deliberately paced beat sequence ----
         n = len(steps)
-        step_rt = max(0.22, min(0.5, 36.0 / n))
-        card_rt = max(0.2, min(0.4, 30.0 / n))
-        for idx, step in enumerate(steps[1:], start=2):
-            board.step(self, step, run_time=step_rt)
-            new_card = make_update_card(step, env).move_to(card_pos)
-            if new_card.width > (5.9 if env != "CliffWalking" else 6.4):
-                new_card.scale_to_fit_width(5.9 if env != "CliffWalking" else 6.4)
+        for idx, step in enumerate(steps, start=1):
             new_counter = self._counter(idx, n).next_to(header, DOWN, buff=0.12)
-            self.play(
-                ReplacementTransform(card, new_card),
-                Transform(counter, new_counter),
-                run_time=card_rt,
-            )
-            card = new_card
-            self.wait(max(0.12, step_rt * 0.4))
+            self.play(Transform(counter, new_counter), run_time=0.25)
+            card = play_step(self, board, step, env,
+                             pos=card_pos, width=card_w, first=(idx == 1))
+            if idx < n:
+                card.fade()
 
-        self.wait(1.0)
+        self.wait(1.2)
 
     def _counter(self, i: int, n: int) -> Text:
         return Text(f"step {i} / {n}", font_size=18, color=C.MUTED)
