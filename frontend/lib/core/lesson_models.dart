@@ -284,6 +284,7 @@ class LessonDefinition {
   final LessonConceptVideo conceptVideo;
   final LessonExerciseBrief exercise;
   final bool backendEnabled;
+  final bool hasCodeExercise;
 
   const LessonDefinition({
     required this.id,
@@ -297,6 +298,7 @@ class LessonDefinition {
     required this.conceptVideo,
     required this.exercise,
     this.backendEnabled = true,
+    this.hasCodeExercise = true,
   });
 
   factory LessonDefinition.fromJson(Map<String, dynamic> json) {
@@ -330,6 +332,7 @@ class LessonDefinition {
               codeTip: '',
             ),
       backendEnabled: json['backend_enabled'] as bool? ?? true,
+      hasCodeExercise: json['has_code_exercise'] as bool? ?? true,
     );
   }
 
@@ -346,6 +349,7 @@ class LessonDefinition {
       'concept_video': conceptVideo.toJson(),
       'exercise': exercise.toJson(),
       'backend_enabled': backendEnabled,
+      'has_code_exercise': hasCodeExercise,
     };
   }
 
@@ -363,6 +367,7 @@ class LessonDefinition {
     LessonConceptVideo? conceptVideo,
     LessonExerciseBrief? exercise,
     bool? backendEnabled,
+    bool? hasCodeExercise,
   }) {
     return LessonDefinition(
       id: id ?? this.id,
@@ -376,6 +381,7 @@ class LessonDefinition {
       conceptVideo: conceptVideo ?? this.conceptVideo,
       exercise: exercise ?? this.exercise,
       backendEnabled: backendEnabled ?? this.backendEnabled,
+      hasCodeExercise: hasCodeExercise ?? this.hasCodeExercise,
     );
   }
 }

@@ -1941,7 +1941,7 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
       _activeTaskId = task.taskId;
       emit(
         state.copyWith(
-          statusMessage: 'Queued. Task ${task.taskId}.',
+          statusMessage: 'Your submission is in the queue...',
         ),
       );
 
@@ -2164,6 +2164,7 @@ def lesson_function(*args, **kwargs):
     required String codeTip,
     required String starterCode,
     required bool backendEnabled,
+    required bool hasCodeExercise,
   }) {
     if (!state.canAccessAuthoring) {
       emit(state.copyWith(
@@ -2188,6 +2189,7 @@ def lesson_function(*args, **kwargs):
       starterCode:
           starterCode.trim().isEmpty ? existingLesson.starterCode : starterCode,
       backendEnabled: backendEnabled,
+      hasCodeExercise: hasCodeExercise,
       conceptVideo: existingLesson.conceptVideo.copyWith(
         streamPath: conceptVideoStreamPath.trim().isEmpty
             ? existingLesson.conceptVideo.streamPath
@@ -2783,14 +2785,14 @@ def lesson_function(*args, **kwargs):
           emit(state.copyWith(
             statusMessage: longRunningNoticeShown
                 ? _longRunningSubmissionStatusMessage
-                : 'Task $taskId queued.',
+                : 'Your submission is in the queue...',
           ));
           break;
         case ExecutionTaskStatus.running:
           emit(state.copyWith(
             statusMessage: longRunningNoticeShown
                 ? _longRunningSubmissionStatusMessage
-                : 'Task $taskId running.',
+                : 'Running your agent, please wait...',
           ));
           break;
         case ExecutionTaskStatus.succeeded:

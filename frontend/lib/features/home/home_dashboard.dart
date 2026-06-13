@@ -14,9 +14,6 @@ class HomeDashboard extends StatefulWidget {
   final bool isSigningIn;
   final bool canAccessAuthoring;
   final String message;
-  final void Function(String displayName, String password) onSignIn;
-  final void Function(String email, String password) onSignUp;
-  final VoidCallback onSignInWithGoogle;
   final ValueChanged<LessonDefinition> onOpenLesson;
   final VoidCallback onOpenQuiz;
   final VoidCallback onOpenFlashcards;
@@ -33,9 +30,6 @@ class HomeDashboard extends StatefulWidget {
     required this.isSigningIn,
     required this.canAccessAuthoring,
     required this.message,
-    required this.onSignIn,
-    required this.onSignUp,
-    required this.onSignInWithGoogle,
     required this.onOpenLesson,
     required this.onOpenQuiz,
     required this.onOpenFlashcards,

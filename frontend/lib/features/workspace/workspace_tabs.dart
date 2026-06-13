@@ -50,6 +50,7 @@ class WorkspaceTabs extends StatefulWidget {
   final bool canShareSessionFeedback;
   final VoidCallback? onOpenSessionFeedback;
   final bool showExerciseBriefInCodePane;
+  final bool isAuthenticated;
 
   const WorkspaceTabs({
     super.key,
@@ -91,6 +92,7 @@ class WorkspaceTabs extends StatefulWidget {
     this.canShareSessionFeedback = false,
     this.onOpenSessionFeedback,
     this.showExerciseBriefInCodePane = true,
+    this.isAuthenticated = false,
   });
 
   @override
@@ -134,6 +136,13 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
         _tabController.index == _activeTabIndex) {
       return;
     }
+    final newIndex = _tabController.index;
+    if (!widget.lesson.hasCodeExercise && newIndex != 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _tabController.animateTo(_activeTabIndex);
+      });
+      return;
+    }
     _emitFocusSession();
     setState(() {
       _activeTabIndex = _tabController.index;
@@ -165,6 +174,8 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
   @override
   Widget build(BuildContext context) {
     final lesson = widget.lesson;
+    final hasCode = lesson.hasCodeExercise;
+    final isAuthenticated = widget.isAuthenticated;
     final code = widget.code;
     final workspaceSessionId = widget.workspaceSessionId;
     final workspaceReady = widget.workspaceReady;
@@ -220,54 +231,85 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
+                  physics: const NeverScrollableScrollPhysics(),
                   children: [
                     VideoPlayerTab(
                       lesson: lesson,
                       onSessionEnded: widget.onConceptVideoSession,
                       onVideoCompleted: widget.onVideoMicroSurveyRequest,
                     ),
-                    _CodeExercisePane(
-                      lesson: lesson,
-                      code: code,
-                      workspaceSessionId: workspaceSessionId,
-                      workspaceReady: workspaceReady,
-                      editorConnectionStatus: editorConnectionStatus,
-                      consoleConnectionStatus: consoleConnectionStatus,
-                      editorShellUrl: editorShellUrl,
-                      scriptVersion: scriptVersion,
-                      statusMessage: statusMessage,
-                      runStatusLabel: runStatusLabel,
-                      failureKind: failureKind,
-                      unresolvedBlanks: unresolvedBlanks,
-                      studentFeedback: studentFeedback,
-                      feedbackDismissed: feedbackDismissed,
-                      testResults: testResults,
-                      onSubmit: widget.onSubmit,
-                      onStop: widget.onStop,
-                      onReset: widget.onReset,
-                      onReconnectWorkspace: widget.onReconnectWorkspace,
-                      onDismissFeedback: widget.onDismissFeedback,
-                      showExerciseBrief: widget.showExerciseBriefInCodePane,
-                    ),
-                    TraceReplayPanel(
-                      runStatusLabel: runStatusLabel,
-                      statusMessage: statusMessage,
-                      totalReward: totalReward,
-                      averageReward: averageReward,
-                      bestEpisodeReward: bestEpisodeReward,
-                      episodesCompleted: episodesCompleted,
-                      stepsRecorded: stepsRecorded,
-                      videoPath: videoPath,
-                      replayRenderStatus: replayRenderStatus,
-                      replayRenderError: replayRenderError,
-                      testResults: testResults,
-                      stepTrace: stepTrace,
-                      traceEpisodes: traceEpisodes,
-                      episodeSummaries: episodeSummaries,
-                      conceptVideo: lesson.conceptVideo,
-                      onWatchConcept: () => _tabController.animateTo(0),
-                      onReplayCompleted: widget.onReplayMicroSurveyRequest,
-                    ),
+                    if (!hasCode)
+                      const _TabGateCard(
+                        icon: Icons.code_off_rounded,
+                        title: 'No Coding Exercise',
+                        message:
+                            'This lesson is concept-only and does not include a coding exercise.',
+                      )
+                    else if (!isAuthenticated)
+                      const _TabGateCard(
+                        icon: Icons.lock_outline,
+                        title: 'Sign In Required',
+                        message:
+                            'Sign in to access the interactive coding workspace.',
+                      )
+                    else
+                      _CodeExercisePane(
+                        lesson: lesson,
+                        code: code,
+                        workspaceSessionId: workspaceSessionId,
+                        workspaceReady: workspaceReady,
+                        editorConnectionStatus: editorConnectionStatus,
+                        consoleConnectionStatus: consoleConnectionStatus,
+                        editorShellUrl: editorShellUrl,
+                        scriptVersion: scriptVersion,
+                        statusMessage: statusMessage,
+                        runStatusLabel: runStatusLabel,
+                        failureKind: failureKind,
+                        unresolvedBlanks: unresolvedBlanks,
+                        studentFeedback: studentFeedback,
+                        feedbackDismissed: feedbackDismissed,
+                        testResults: testResults,
+                        onSubmit: widget.onSubmit,
+                        onStop: widget.onStop,
+                        onReset: widget.onReset,
+                        onReconnectWorkspace: widget.onReconnectWorkspace,
+                        onDismissFeedback: widget.onDismissFeedback,
+                        showExerciseBrief: widget.showExerciseBriefInCodePane,
+                      ),
+                    if (!hasCode)
+                      const _TabGateCard(
+                        icon: Icons.code_off_rounded,
+                        title: 'No Coding Exercise',
+                        message:
+                            'This lesson is concept-only and does not include a coding exercise.',
+                      )
+                    else if (!isAuthenticated)
+                      const _TabGateCard(
+                        icon: Icons.lock_outline,
+                        title: 'Sign In Required',
+                        message:
+                            'Sign in to access the trace replay viewer.',
+                      )
+                    else
+                      TraceReplayPanel(
+                        runStatusLabel: runStatusLabel,
+                        statusMessage: statusMessage,
+                        totalReward: totalReward,
+                        averageReward: averageReward,
+                        bestEpisodeReward: bestEpisodeReward,
+                        episodesCompleted: episodesCompleted,
+                        stepsRecorded: stepsRecorded,
+                        videoPath: videoPath,
+                        replayRenderStatus: replayRenderStatus,
+                        replayRenderError: replayRenderError,
+                        testResults: testResults,
+                        stepTrace: stepTrace,
+                        traceEpisodes: traceEpisodes,
+                        episodeSummaries: episodeSummaries,
+                        conceptVideo: lesson.conceptVideo,
+                        onWatchConcept: () => _tabController.animateTo(0),
+                        onReplayCompleted: widget.onReplayMicroSurveyRequest,
+                      ),
                   ],
                 ),
               ),
@@ -293,10 +335,28 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
             labelColor: AppTheme.primaryBlue,
             unselectedLabelColor: const Color(0xFF6B7280),
             indicatorSize: TabBarIndicatorSize.tab,
-            tabs: const [
-              Tab(height: 36, text: 'Concept'),
-              Tab(height: 36, text: 'Code'),
-              Tab(height: 36, text: 'Replay'),
+            tabs: [
+              const Tab(height: 36, text: 'Concept'),
+              Tooltip(
+                message: hasCode ? '' : 'No coding exercise for this lesson',
+                child: Tab(
+                  height: 36,
+                  child: Opacity(
+                    opacity: hasCode ? 1.0 : 0.35,
+                    child: const Text('Code'),
+                  ),
+                ),
+              ),
+              Tooltip(
+                message: hasCode ? '' : 'No coding exercise for this lesson',
+                child: Tab(
+                  height: 36,
+                  child: Opacity(
+                    opacity: hasCode ? 1.0 : 0.35,
+                    child: const Text('Replay'),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -573,6 +633,60 @@ class _BriefAndFeedbackPanel extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _TabGateCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String message;
+
+  const _TabGateCard({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: Card(
+          elevation: 0,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(20)),
+            side: BorderSide(color: Color(0xFFE5E7EB)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 42, color: AppTheme.primaryBlue),
+                const SizedBox(height: 18),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Color(0xFF6B7280),
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

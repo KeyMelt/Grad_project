@@ -40,6 +40,7 @@ class AdminConsole extends StatefulWidget {
     required String codeTip,
     required String starterCode,
     required bool backendEnabled,
+    required bool hasCodeExercise,
   }) onSaveLesson;
 
   /// Called when the instructor picks a .md file to upload as lecture notes.
@@ -97,6 +98,7 @@ class _AdminConsoleState extends State<AdminConsole> {
   late final TextEditingController _codeTipController;
   late final TextEditingController _starterCodeController;
   bool _backendEnabled = true;
+  bool _hasCodeExercise = true;
   String? _loadedLessonId;
   _AdminSection _activeSection = _AdminSection.lessonStudio;
   bool _notesUploading = false;
@@ -652,6 +654,21 @@ class _AdminConsoleState extends State<AdminConsole> {
                     ),
                   ),
                 ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: SwitchListTile(
+                    title: const Text('Has coding exercise'),
+                    subtitle: const Text('Disable to grey out Code & Replay tabs'),
+                    value: _hasCodeExercise,
+                    onChanged: (value) =>
+                        setState(() => _hasCodeExercise = value),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: const BorderSide(color: AppTheme.borderLight),
+                    ),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 14),
@@ -765,6 +782,7 @@ class _AdminConsoleState extends State<AdminConsole> {
                     codeTip: _codeTipController.text,
                     starterCode: _starterCodeController.text,
                     backendEnabled: _backendEnabled,
+                    hasCodeExercise: _hasCodeExercise,
                   ),
                   icon: const Icon(Icons.save_outlined),
                   label: const Text('Save lesson content'),
@@ -1017,6 +1035,7 @@ class _AdminConsoleState extends State<AdminConsole> {
     _codeTipController.text = lesson.exercise.codeTip;
     _starterCodeController.text = lesson.starterCode;
     _backendEnabled = lesson.backendEnabled;
+    _hasCodeExercise = lesson.hasCodeExercise;
     if (mounted) {
       setState(() {});
     }

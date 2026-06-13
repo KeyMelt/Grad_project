@@ -119,9 +119,6 @@ class _MainLayoutState extends State<MainLayout> {
           isSigningIn: state.isSigningIn,
           canAccessAuthoring: state.canAccessAuthoring,
           message: state.homeMessage,
-          onSignIn: _cubit.signIn,
-          onSignUp: _cubit.signUp,
-          onSignInWithGoogle: _cubit.signInWithGoogle,
           onOpenLesson: _cubit.openLesson,
           onOpenQuiz: () => _cubit.navigateTo(AppSection.quiz),
           onOpenFlashcards: () => _cubit.navigateTo(AppSection.flashcards),
@@ -173,6 +170,7 @@ class _MainLayoutState extends State<MainLayout> {
               canShareSessionFeedback: _canShareSessionFeedback(state),
               onOpenSessionFeedback: _showSessionFeedbackDialog,
               showExerciseBriefInCodePane: true,
+              isAuthenticated: state.isAuthenticated,
               onVideoMicroSurveyRequest:
                   state.isAuthenticated ? _showVideoMicroSurvey : null,
               onReplayMicroSurveyRequest:
@@ -306,9 +304,6 @@ class _MainLayoutState extends State<MainLayout> {
             canAccessAuthoring: state.canAccessAuthoring,
             message:
                 'Authoring is available to instructor and admin roles only.',
-            onSignIn: _cubit.signIn,
-            onSignUp: _cubit.signUp,
-            onSignInWithGoogle: _cubit.signInWithGoogle,
             onOpenLesson: _cubit.openLesson,
             onOpenQuiz: () => _cubit.navigateTo(AppSection.quiz),
             onOpenFlashcards: () => _cubit.navigateTo(AppSection.flashcards),
