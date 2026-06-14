@@ -15,6 +15,7 @@ from typing import Any
 
 from backend.lesson_registry import get_lesson_definition, list_lesson_definitions
 from backend.logger.event_logger import EventLogger, NpEncoder
+from backend.replay_contract import normalize_replay_state
 from backend.rl_engine.engine import EnvironmentAdapter, RLEngine
 from backend.services.student_feedback_service import StudentFeedbackService
 from backend.services.visualization_service import VisualizationService
@@ -426,15 +427,22 @@ def _build_success_response(
         for index, episode in enumerate(log_data)
     ]
     replay_render = replay_render or {}
+    video_path = str(replay_render.get("video_path") or "")
     render_status = str(replay_render.get("replay_render_status") or "unavailable")
+    replay_state = normalize_replay_state(
+        render_status,
+        video_path=video_path,
+        error=replay_render.get("error"),
+    )
     return {
         "status": "success",
         "message": "Execution pipeline completed.",
         "lesson": {"id": lesson.id, "title": lesson.title},
-        "video_path": str(replay_render.get("video_path") or ""),
-        "visualization_ready": bool(replay_render.get("video_path")),
+        "video_path": video_path,
+        "visualization_ready": bool(video_path),
         "replay_render_job_id": str(replay_render.get("replay_render_job_id") or ""),
         "replay_render_status": render_status,
+        "replay_state": replay_state,
         "replay_episode_indices": replay_render.get("replay_episode_indices") or [],
         "test_results": validation_result.test_results,
         "step_trace": latest_episode,

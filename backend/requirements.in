@@ -1,0 +1,15 @@
+fastapi==0.135.1
+python-multipart==0.0.30
+uvicorn==0.41.0
+gymnasium[toy-text]==1.2.3
+numpy==2.3.4
+manim==0.19.1
+pydantic==2.12.5
+requests==2.32.5
+sqlmodel==0.0.37
+openpyxl==3.1.5
+psycopg[binary]==3.3.3
+firebase-admin==7.3.0
+websockets==16.0
+google-genai==1.72.0
+zeroconf==0.148.0

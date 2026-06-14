@@ -9,6 +9,7 @@ import 'expanded_panel_overlay.dart';
 import 'lesson_notes_panel.dart';
 import 'trace_replay_panel.dart';
 import 'video_player.dart';
+import 'workspace_tab_policy.dart';
 
 class WorkspaceTabs extends StatefulWidget {
   final LessonDefinition lesson;
@@ -51,6 +52,7 @@ class WorkspaceTabs extends StatefulWidget {
   final VoidCallback? onOpenSessionFeedback;
   final bool showExerciseBriefInCodePane;
   final bool isAuthenticated;
+  final ValueChanged<String>? onActiveTabChanged;
 
   const WorkspaceTabs({
     super.key,
@@ -93,6 +95,7 @@ class WorkspaceTabs extends StatefulWidget {
     this.onOpenSessionFeedback,
     this.showExerciseBriefInCodePane = true,
     this.isAuthenticated = false,
+    this.onActiveTabChanged,
   });
 
   @override
@@ -102,7 +105,7 @@ class WorkspaceTabs extends StatefulWidget {
 class _WorkspaceTabsState extends State<WorkspaceTabs>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-  int _activeTabIndex = 0;
+  WorkspaceTabId _activeTab = WorkspaceTabId.concept;
   DateTime _focusStartedAt = DateTime.now();
   bool _lessonNotesOpen = false;
   bool _lessonNotesExpanded = false;
@@ -112,6 +115,11 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(_handleTabChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _notifyActiveTabChanged();
+      }
+    });
   }
 
   @override
@@ -132,43 +140,44 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
   }
 
   void _handleTabChanged() {
-    if (_tabController.indexIsChanging ||
-        _tabController.index == _activeTabIndex) {
+    final nextTab = WorkspaceTabPolicy.orderedTabs[_tabController.index];
+    if (_tabController.indexIsChanging || nextTab == _activeTab) {
       return;
     }
-    final newIndex = _tabController.index;
-    if (!widget.lesson.hasCodeExercise && newIndex != 0) {
+    if (!_isTabAvailable(nextTab)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _tabController.animateTo(_activeTabIndex);
+        if (mounted) {
+          _tabController.animateTo(_activeTab.index);
+        }
       });
       return;
     }
     _emitFocusSession();
     setState(() {
-      _activeTabIndex = _tabController.index;
-      if (_activeTabIndex != 0) {
+      _activeTab = nextTab;
+      if (_activeTab != WorkspaceTabId.concept) {
         _lessonNotesExpanded = false;
       }
     });
     _focusStartedAt = DateTime.now();
+    _notifyActiveTabChanged();
   }
 
   void _emitFocusSession() {
     final duration = DateTime.now().difference(_focusStartedAt);
-    widget.onWorkspaceFocusSession?.call(_tabId(_activeTabIndex), duration);
+    widget.onWorkspaceFocusSession?.call(_activeTab.value, duration);
   }
 
-  String _tabId(int index) {
-    switch (index) {
-      case 0:
-        return 'concept';
-      case 1:
-        return 'code';
-      case 2:
-        return 'replay';
-      default:
-        return 'unknown';
-    }
+  bool _isTabAvailable(WorkspaceTabId tab) {
+    return WorkspaceTabPolicy.isAvailable(lesson: widget.lesson, tab: tab);
+  }
+
+  double _tabLabelOpacity(WorkspaceTabId tab) {
+    return WorkspaceTabPolicy.labelOpacity(lesson: widget.lesson, tab: tab);
+  }
+
+  void _notifyActiveTabChanged() {
+    widget.onActiveTabChanged?.call(_activeTab.value);
   }
 
   @override
@@ -208,7 +217,7 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (_activeTabIndex == 0)
+              if (_activeTab == WorkspaceTabId.concept)
                 _LessonNotesDrawer(
                   lesson: lesson,
                   isOpen: _lessonNotesOpen,
@@ -287,8 +296,7 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
                       const _TabGateCard(
                         icon: Icons.lock_outline,
                         title: 'Sign In Required',
-                        message:
-                            'Sign in to access the trace replay viewer.',
+                        message: 'Sign in to access the trace replay viewer.',
                       )
                     else
                       TraceReplayPanel(
@@ -337,7 +345,8 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
                 child: Tab(
                   height: 36,
                   child: Opacity(
-                    opacity: hasCode ? 1.0 : 0.35,
+                    key: const ValueKey('workspace-tab-code-opacity'),
+                    opacity: _tabLabelOpacity(WorkspaceTabId.code),
                     child: const Text('Code'),
                   ),
                 ),
@@ -347,7 +356,8 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
                 child: Tab(
                   height: 36,
                   child: Opacity(
-                    opacity: hasCode ? 1.0 : 0.35,
+                    key: const ValueKey('workspace-tab-replay-opacity'),
+                    opacity: _tabLabelOpacity(WorkspaceTabId.replay),
                     child: const Text('Replay'),
                   ),
                 ),

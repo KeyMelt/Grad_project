@@ -3,8 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rl_ide/core/backend_api.dart';
 import 'package:rl_ide/features/workspace/trace_replay_panel.dart';
+import 'package:video_player/video_player.dart';
+
+import 'support/fake_video_player_platform.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  installFakeVideoPlayerPlatform();
+
   testWidgets('renders TD equation card and Q-table inspector on wide layouts',
       (tester) async {
     tester.view.physicalSize = const Size(1400, 1000);
@@ -608,7 +614,7 @@ void main() {
     }
   });
 
-  testWidgets('customizes visible replay binder sections', (tester) async {
+  testWidgets('keeps replay binder sections deterministic', (tester) async {
     tester.view.physicalSize = const Size(1500, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -617,21 +623,287 @@ void main() {
     await tester.pumpWidget(_traceReplayHarness());
     await tester.pumpAndSettle();
 
+    expect(find.text('Step'), findsOneWidget);
     expect(find.text('Math'), findsOneWidget);
+    expect(find.text('Replay'), findsOneWidget);
+    expect(find.byIcon(Icons.tune_rounded), findsNothing);
+    expect(find.text('Customize visible binder sections'), findsNothing);
+  });
 
-    await tester.tap(find.byIcon(Icons.tune_rounded));
-    await tester.pumpAndSettle();
-    await tester.tap(_visibleBinderMenuItem('Math').last);
-    await tester.pumpAndSettle();
-
-    expect(find.text('Math'), findsNothing);
-
-    await tester.tap(find.byIcon(Icons.tune_rounded));
-    await tester.pumpAndSettle();
-    await tester.tap(_visibleBinderMenuItem('Math').last);
+  testWidgets('shows generated replay video even when step trace is empty',
+      (tester) async {
+    await tester.pumpWidget(
+      _replayOnlyHarness(
+        videoPath: '/tmp/generated-replay.mp4',
+        replayRenderStatus: 'ready',
+      ),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.text('Math'), findsOneWidget);
+    expect(find.text('Manim Equation Replay'), findsOneWidget);
+    expect(find.byKey(const ValueKey('replay-video-frame')), findsOneWidget);
+    expect(find.byType(VideoProgressIndicator), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('replay-video-status-chip')), findsOneWidget);
+    expect(find.text('Ready'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('replay-video-timeline')),
+      findsOneWidget,
+    );
+    expect(find.text('00:00 / 02:00'), findsOneWidget);
+    expect(find.text('Run code to see replay steps here.'), findsNothing);
+    expect(
+      find.text(
+        'Generated video links each agent step to the Bellman or TD numeric update.',
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('swaps from replay render status placeholder to loaded video',
+      (tester) async {
+    await tester.pumpWidget(
+      _replayOnlyHarness(
+        videoPath: '',
+        replayRenderStatus: 'rendering',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('replay-video-status-message')),
+      findsOneWidget,
+    );
+    expect(find.text('Rendering'), findsOneWidget);
+    expect(
+      find.text(
+          'The generated MP4 is rendering. Use the interactive trace meanwhile.'),
+      findsOneWidget,
+    );
+    expect(find.byType(VideoProgressIndicator), findsNothing);
+
+    await tester.pumpWidget(
+      _replayOnlyHarness(
+        videoPath: '/tmp/generated-replay.mp4',
+        replayRenderStatus: 'ready',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(VideoProgressIndicator), findsOneWidget);
+    expect(find.text('Ready'), findsOneWidget);
+    expect(find.text('00:00 / 02:00'), findsOneWidget);
+    expect(
+      find.text(
+          'The generated MP4 is rendering. Use the interactive trace meanwhile.'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('shows queued replay placeholder state', (tester) async {
+    await tester.pumpWidget(
+      _replayOnlyHarness(
+        videoPath: '',
+        replayRenderStatus: 'queued',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Queued'), findsOneWidget);
+    expect(
+      find.text(
+          'The generated MP4 is queued. Use the interactive trace meanwhile.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('shows failed replay placeholder state', (tester) async {
+    await tester.pumpWidget(
+      _replayOnlyHarness(
+        videoPath: '',
+        replayRenderStatus: 'failed',
+        replayRenderError: 'render crashed',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Failed'), findsOneWidget);
+    expect(find.text('render crashed'), findsOneWidget);
+  });
+
+  testWidgets('shows timeout replay placeholder state', (tester) async {
+    await tester.pumpWidget(
+      _replayOnlyHarness(
+        videoPath: '',
+        replayRenderStatus: 'timeout',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Running'), findsOneWidget);
+    expect(
+      find.text('The generated MP4 is still running in the background.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('shows unavailable replay placeholder state', (tester) async {
+    await tester.pumpWidget(
+      _replayOnlyHarness(
+        videoPath: '',
+        replayRenderStatus: 'unavailable',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Unavailable'), findsOneWidget);
+    expect(
+      find.text(
+          'Interactive replay is available. Generated video is not ready.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('replay placeholder can jump back to the interactive step trace',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(_traceReplayHarness());
+    await tester.pumpAndSettle();
+
+    await _selectBinderSection(tester, 'Replay');
+    expect(find.text('Pending'), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('replay-open-step-trace')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('replay-open-step-trace-inline')),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('replay-open-step-trace')),
+    );
+    await tester.tap(find.byKey(const ValueKey('replay-open-step-trace')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('What This Step Means'), findsOneWidget);
+    expect(find.text('Trace Outline'), findsOneWidget);
+  });
+
+  testWidgets('toolbar jump pills move to reward and terminal steps',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TraceReplayPanel(
+            runStatusLabel: 'Passed',
+            statusMessage: 'ok',
+            totalReward: 0,
+            averageReward: 0,
+            bestEpisodeReward: 1,
+            episodesCompleted: 1,
+            stepsRecorded: 3,
+            videoPath: '',
+            testResults: const [],
+            stepTrace: [
+              ExecutionTraceStep.fromJson({
+                'state': 0,
+                'action': 0,
+                'next_state': 1,
+                'reward': 0,
+                'agent_caption': 'Opening step.',
+              }),
+              ExecutionTraceStep.fromJson({
+                'state': 1,
+                'action': 1,
+                'next_state': 2,
+                'reward': 1,
+                'agent_caption': 'Reward step.',
+              }),
+              ExecutionTraceStep.fromJson({
+                'state': 2,
+                'action': 2,
+                'next_state': 3,
+                'reward': 0,
+                'agent_caption': 'Terminal step.',
+                'grid_metadata': {
+                  'environment': 'FrozenLake',
+                  'rows': 2,
+                  'columns': 2,
+                  'state': 2,
+                  'next_state': 3,
+                  'state_coordinates': {'row': 1, 'column': 0},
+                  'next_state_coordinates': {'row': 1, 'column': 1},
+                  'action': 2,
+                  'action_label': 'Right',
+                  'reward': 0,
+                  'terminated': true,
+                  'truncated': false,
+                  'cells': [
+                    {
+                      'state': 0,
+                      'row': 0,
+                      'column': 0,
+                      'tile_type': 'S',
+                      'terminal': false,
+                    },
+                    {
+                      'state': 1,
+                      'row': 0,
+                      'column': 1,
+                      'tile_type': 'F',
+                      'terminal': false,
+                    },
+                    {
+                      'state': 2,
+                      'row': 1,
+                      'column': 0,
+                      'tile_type': 'F',
+                      'terminal': false,
+                    },
+                    {
+                      'state': 3,
+                      'row': 1,
+                      'column': 1,
+                      'tile_type': 'G',
+                      'terminal': true,
+                    },
+                  ],
+                },
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Reward'), findsOneWidget);
+    expect(find.text('Terminal'), findsOneWidget);
+    expect(find.text('End'), findsOneWidget);
+
+    await tester.tap(find.text('Reward'));
+    await tester.pumpAndSettle();
+    expect(find.text('Step 2 / 3'), findsOneWidget);
+    expect(find.text('Reward step.'), findsWidgets);
+
+    await tester.tap(find.text('Terminal'));
+    await tester.pumpAndSettle();
+    expect(find.text('Step 3 / 3'), findsOneWidget);
+    expect(find.text('Terminal step.'), findsWidgets);
+
+    await tester.tap(find.text('Start'));
+    await tester.pumpAndSettle();
+    expect(find.text('Step 1 / 3'), findsOneWidget);
+    expect(find.text('Opening step.'), findsWidgets);
   });
 }
 
@@ -651,15 +923,6 @@ Future<void> _selectBinderSection(WidgetTester tester, String label) async {
   await tester.pumpAndSettle();
   await tester.tap(find.text(label).last);
   await tester.pumpAndSettle();
-}
-
-Finder _visibleBinderMenuItem(String label) {
-  return find.ancestor(
-    of: find.text(label).last,
-    matching: find.byWidgetPredicate(
-      (widget) => widget is CheckedPopupMenuItem,
-    ),
-  );
 }
 
 Widget _traceReplayHarness() {
@@ -707,6 +970,33 @@ Widget _traceReplayHarness() {
             truncated: false,
           ),
         ],
+      ),
+    ),
+  );
+}
+
+Widget _replayOnlyHarness({
+  required String videoPath,
+  required String replayRenderStatus,
+  String? replayRenderError,
+}) {
+  return MaterialApp(
+    home: Scaffold(
+      body: TraceReplayPanel(
+        runStatusLabel: 'Passed',
+        statusMessage: 'ok',
+        totalReward: 0,
+        averageReward: 0,
+        bestEpisodeReward: 0,
+        episodesCompleted: 0,
+        stepsRecorded: 0,
+        videoPath: videoPath,
+        replayRenderStatus: replayRenderStatus,
+        replayRenderError: replayRenderError,
+        testResults: const [],
+        stepTrace: const [],
+        traceEpisodes: const [],
+        episodeSummaries: const [],
       ),
     ),
   );

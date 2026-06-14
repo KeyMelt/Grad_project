@@ -12,12 +12,14 @@ import '../core/workbench_state.dart';
 import '../features/admin/admin_console.dart';
 import '../features/flashcards/flashcards_section.dart';
 import '../features/home/home_dashboard.dart';
+import '../features/lessons/lesson_browser.dart';
 import '../features/onboarding/onboarding_tutorial.dart';
 import '../features/onboarding/profile_completion_dialog.dart';
 import '../features/quiz/quiz_section.dart';
 import '../features/study_buddy/study_buddy_panel.dart';
 import '../features/workspace/component_micro_survey_dialog.dart';
 import '../features/workspace/expanded_panel_overlay.dart';
+import '../features/workspace/workspace_tab_policy.dart';
 import '../features/workspace/workspace_tabs.dart';
 
 class MainLayout extends StatefulWidget {
@@ -49,6 +51,7 @@ class _MainLayoutState extends State<MainLayout> {
   bool _videoSurveyShown = false;
   bool _replaySurveyShown = false;
   String? _currentSurveyLessonId;
+  WorkspaceTabId _workspaceActiveTab = WorkspaceTabId.concept;
 
   @override
   void initState() {
@@ -170,6 +173,7 @@ class _MainLayoutState extends State<MainLayout> {
               onOpenSessionFeedback: _showSessionFeedbackDialog,
               showExerciseBriefInCodePane: true,
               isAuthenticated: state.isAuthenticated,
+              onActiveTabChanged: _setWorkspaceActiveTab,
               onVideoMicroSurveyRequest:
                   state.isAuthenticated ? _showVideoMicroSurvey : null,
               onReplayMicroSurveyRequest:
@@ -349,6 +353,16 @@ class _MainLayoutState extends State<MainLayout> {
     });
   }
 
+  void _setWorkspaceActiveTab(String tabId) {
+    final nextTab = WorkspaceTabId.fromValue(tabId);
+    if (_workspaceActiveTab == nextTab) {
+      return;
+    }
+    setState(() {
+      _workspaceActiveTab = nextTab;
+    });
+  }
+
   bool _canShareSessionFeedback(RLWorkbenchState state) {
     if (state.learner == null || state.postStudySurveyCompleted) {
       return false;
@@ -489,11 +503,59 @@ class _MainLayoutState extends State<MainLayout> {
   PreferredSizeWidget _buildAppBar(
       BuildContext context, RLWorkbenchState state) {
     final isWorkspace = state.currentSection == AppSection.workspace;
+    PreferredSizeWidget? bottomBar;
+
+    if (isWorkspace &&
+        WorkspaceTabPolicy.showsCourseOutline(_workspaceActiveTab)) {
+      final orderedLessons = state.sections
+          .expand((section) => section.lessons)
+          .toList(growable: false);
+      final currentLessonIndex = orderedLessons.indexWhere(
+        (lesson) => lesson.id == state.selectedLesson.id,
+      );
+      final canGoPrevious = currentLessonIndex > 0;
+      final canGoNext = currentLessonIndex >= 0 &&
+          currentLessonIndex < orderedLessons.length - 1;
+
+      bottomBar = PreferredSize(
+        preferredSize: const Size.fromHeight(42),
+        child: Container(
+          decoration: const BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: AppTheme.borderLight),
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(10, 0, 10, 5),
+          child: Center(
+            child: CourseOutlineLauncher(
+              selectedLesson: state.selectedLesson,
+              canGoPrevious: canGoPrevious,
+              canGoNext: canGoNext,
+              onPrevious: canGoPrevious
+                  ? () => _cubit
+                      .selectLesson(orderedLessons[currentLessonIndex - 1])
+                  : () {},
+              onNext: canGoNext
+                  ? () => _cubit
+                      .selectLesson(orderedLessons[currentLessonIndex + 1])
+                  : () {},
+              onOpenOutline: () => showCourseOutlineDialog(
+                context: context,
+                sections: state.sections,
+                selectedLesson: state.selectedLesson,
+                onLessonSelected: _cubit.selectLesson,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return AppBar(
       primary: false,
       elevation: 0,
       toolbarHeight: 56,
+      bottom: bottomBar,
       title: LayoutBuilder(
         builder: (context, constraints) {
           final showLogo = constraints.maxWidth > 300;
@@ -564,8 +626,6 @@ class _MainLayoutState extends State<MainLayout> {
                   ),
                 )
               else
-                // Reclaim the space freed by the removed Course Outline bar for
-                // the current lesson's identity.
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8),

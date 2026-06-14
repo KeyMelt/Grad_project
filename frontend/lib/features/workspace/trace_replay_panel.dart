@@ -4,11 +4,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter/services.dart';
-import 'package:video_player/video_player.dart';
 
 import '../../core/backend_api.dart';
 import '../../core/lesson_models.dart';
+import '../../core/replay_contract.dart';
+import 'trace_replay/replay_media_auth.dart';
+import 'trace_replay/replay_video_pane.dart';
 import 'trace_replay/trace_predict_prompt.dart';
+import 'trace_replay/trace_replay_controls.dart';
 import 'trace_replay/trace_step_markers.dart';
 import 'trace_replay/trace_td_error_bar.dart';
 import 'trace_replay/trace_value_sparkline.dart';
@@ -16,19 +19,7 @@ import 'trace_replay/trace_value_sparkline.dart';
 /// Design tokens for the Trace/Replay tab.
 class _Ink {
   static const canvas = Color(0xFF0B1120);
-  static const panel = Color(0xFF111C30);
-  static const raised = Color(0xFF1B2840);
-  static const control = Color(0xFF24344F);
-
   static const borderSubtle = Color(0xFF24344F);
-  static const borderStrong = Color(0xFF3E5170);
-
-  static const textHigh = Color(0xFFF1F5F9);
-  static const textMed = Color(0xFFC7D2E1);
-  static const textLow = Color(0xFF93A4BC);
-
-  static const primary = Color(0xFF3B82F6);
-  static const primaryText = Colors.white;
   static const state = Color(0xFF38BDF8);
   static const success = Color(0xFF34D399);
   static const warn = Color(0xFFFBBF24);
@@ -93,12 +84,7 @@ enum _ReplayBinderSection {
 class _TraceReplayPanelState extends State<TraceReplayPanel> {
   int _selectedEpisodeIndex = 0;
   int _currentStepIndex = 0;
-  int _selectedBinderIndex = 0;
-  final Set<_ReplayBinderSection> _visibleBinderSections = {
-    _ReplayBinderSection.step,
-    _ReplayBinderSection.math,
-    _ReplayBinderSection.replay,
-  };
+  _ReplayBinderSection _selectedBinderSection = _ReplayBinderSection.step;
   bool _quizMode = false;
   int _playbackMs = 1200;
   bool _guideExpanded = false;
@@ -106,20 +92,14 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
   bool _conceptCtaDismissed = false;
   bool _replayCompletionFired = false;
   int? _jumpState;
-  VideoPlayerController? _replayController;
   Timer? _tracePlaybackTimer;
   bool _isTracePlaying = false;
-  bool _isReplayVideoLoading = false;
-  String? _replayVideoError;
   final FocusNode _debuggerFocusNode = FocusNode(debugLabel: 'Trace debugger');
 
   @override
   void initState() {
     super.initState();
     _selectedEpisodeIndex = _initialEpisodeIndex();
-    if (widget.videoPath.isNotEmpty) {
-      _initializeReplayVideo();
-    }
   }
 
   @override
@@ -138,94 +118,15 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       _stopTracePlayback(notify: false);
     }
     if (oldWidget.videoPath != widget.videoPath) {
-      _disposeReplayController();
-      if (widget.videoPath.isNotEmpty) {
-        _initializeReplayVideo();
-      }
+      _replayCompletionFired = false;
     }
   }
 
   @override
   void dispose() {
     _stopTracePlayback(notify: false);
-    _disposeReplayController();
     _debuggerFocusNode.dispose();
     super.dispose();
-  }
-
-  Future<void> _initializeReplayVideo() async {
-    if (_isReplayVideoLoading || widget.videoPath.isEmpty) {
-      return;
-    }
-
-    setState(() {
-      _isReplayVideoLoading = true;
-      _replayVideoError = null;
-    });
-
-    final uri = _replayVideoUri(widget.videoPath);
-    try {
-      final controller = VideoPlayerController.networkUrl(
-        uri,
-        httpHeaders: _authHeaders(),
-      );
-      await controller.initialize().timeout(const Duration(seconds: 45));
-      await controller.setLooping(false);
-      controller.addListener(_onReplayControllerChanged);
-      if (!mounted) {
-        await controller.dispose();
-        return;
-      }
-      setState(() {
-        _replayController = controller;
-        _isReplayVideoLoading = false;
-      });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isReplayVideoLoading = false;
-        _replayVideoError = 'Replay video could not be loaded: $error';
-      });
-    }
-  }
-
-  Uri _replayVideoUri(String path) {
-    final base = Uri.parse(BackendConnectionManager().baseUrl);
-    return base.replace(
-      path: '/visualization/video',
-      queryParameters: {'path': path},
-    );
-  }
-
-  Map<String, String> _authHeaders() {
-    final token = AuthSessionStore.accessToken;
-    if (token == null || token.isEmpty) {
-      return const <String, String>{};
-    }
-    return {'Authorization': 'Bearer $token'};
-  }
-
-  void _onReplayControllerChanged() {
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  Future<void> _toggleReplayPlayback() async {
-    final controller = _replayController;
-    if (controller == null || !controller.value.isInitialized) {
-      return;
-    }
-    if (controller.value.isPlaying) {
-      await controller.pause();
-    } else {
-      await controller.play();
-    }
-    if (mounted) {
-      setState(() {});
-    }
   }
 
   void _toggleTracePlayback() {
@@ -348,12 +249,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     return _currentStepIndex;
   }
 
-  void _disposeReplayController() {
-    _replayController?.removeListener(_onReplayControllerChanged);
-    _replayController?.dispose();
-    _replayController = null;
-  }
-
   @override
   Widget build(BuildContext context) {
     final steps = _currentEpisodeSteps;
@@ -407,13 +302,21 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     return 0;
   }
 
+  bool get _hasReplayMediaOrStatus {
+    return ReplayStateSnapshot.resolve(
+      rawStatus: widget.replayRenderStatus,
+      videoPath: widget.videoPath,
+      error: widget.replayRenderError,
+    ).hasStatusOrError;
+  }
+
   Widget _buildDebuggerBody(
     BuildContext context, {
     required bool hasTrace,
     required ExecutionTraceStep? step,
     required bool isWide,
   }) {
-    if (!hasTrace || step == null) {
+    if (!hasTrace && !_hasReplayMediaOrStatus) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -424,17 +327,19 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       );
     }
 
-    final sections = _activeBinderSections(hasTrace: hasTrace, step: step);
-    final selectedIndex = _selectedBinderIndex.clamp(0, sections.length - 1);
-    final selectedSection = sections[selectedIndex];
+    final sections = _activeBinderSections(hasTrace: hasTrace);
+    final selectedSection = sections.contains(_selectedBinderSection)
+        ? _selectedBinderSection
+        : sections.last;
     // The Replay tab is the video on its own — the step transport/scrubber and
     // quiz prompt only apply to the inspectable Step/Math tabs.
-    final showStepToolbar = selectedSection != _ReplayBinderSection.replay;
+    final showStepToolbar =
+        hasTrace && selectedSection != _ReplayBinderSection.replay;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildBinderControls(context, sections, selectedIndex),
+        _buildBinderControls(context, sections, selectedSection),
         if (showStepToolbar) ...[
           const SizedBox(height: 8),
           _buildStepToolbar(context),
@@ -459,160 +364,64 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
 
   List<_ReplayBinderSection> _activeBinderSections({
     required bool hasTrace,
-    required ExecutionTraceStep? step,
   }) {
     final sections = <_ReplayBinderSection>[
-      _ReplayBinderSection.step,
+      if (hasTrace) _ReplayBinderSection.step,
       if (hasTrace) _ReplayBinderSection.math,
-      _ReplayBinderSection.replay,
-    ].where(_visibleBinderSections.contains).toList(growable: false);
-    return sections.isEmpty ? [_ReplayBinderSection.step] : sections;
+      if (hasTrace || _hasReplayMediaOrStatus) _ReplayBinderSection.replay,
+    ];
+    if (sections.isNotEmpty) {
+      return sections;
+    }
+    return [hasTrace ? _ReplayBinderSection.step : _ReplayBinderSection.replay];
   }
 
   Widget _buildBinderControls(
     BuildContext context,
     List<_ReplayBinderSection> sections,
-    int selectedIndex,
+    _ReplayBinderSection selectedSection,
   ) {
-    final selector = Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (var i = 0; i < sections.length; i++)
-          _sectionPill(
-            sections[i],
-            i == selectedIndex,
-            () => setState(() => _selectedBinderIndex = i),
+    return TraceReplayBinderControls<_ReplayBinderSection>(
+      options: [
+        for (final section in sections)
+          TraceReplaySectionOption<_ReplayBinderSection>(
+            value: section,
+            icon: section.icon,
+            label: section.label,
           ),
       ],
-    );
-
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: _Ink.panel,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: _Ink.borderSubtle),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: selector),
-          const SizedBox(width: 8),
-          _buildVisibilityMenu(sections),
-        ],
-      ),
-    );
-  }
-
-  Widget _sectionPill(
-    _ReplayBinderSection section,
-    bool active,
-    VoidCallback onTap,
-  ) {
-    return Tooltip(
-      message: section.label,
-      child: Material(
-        color: active ? _Ink.primary : _Ink.raised,
-        borderRadius: BorderRadius.circular(4),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Container(
-            height: 40,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                color: active ? _Ink.primary : _Ink.borderStrong,
-                width: 1.2,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(section.icon,
-                    size: 18, color: active ? Colors.white : _Ink.state),
-                const SizedBox(width: 8),
-                Text(
-                  section.label,
-                  style: TextStyle(
-                    color: active ? Colors.white : _Ink.textMed,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVisibilityMenu(List<_ReplayBinderSection> activeSections) {
-    return Tooltip(
-      message: 'Customize visible binder sections',
-      child: PopupMenuButton<_ReplayBinderSection>(
-        tooltip: 'Customize visible binder sections',
-        onSelected: (section) {
-          setState(() {
-            if (_visibleBinderSections.contains(section) &&
-                _visibleBinderSections.length > 1) {
-              _visibleBinderSections.remove(section);
-              _selectedBinderIndex =
-                  _selectedBinderIndex.clamp(0, activeSections.length - 1);
-            } else {
-              _visibleBinderSections.add(section);
-            }
-          });
-        },
-        itemBuilder: (context) => [
-          for (final section in _ReplayBinderSection.values)
-            CheckedPopupMenuItem(
-              value: section,
-              checked: _visibleBinderSections.contains(section),
-              child: Row(
-                children: [
-                  Icon(section.icon, size: 18, color: const Color(0xFF1D4ED8)),
-                  const SizedBox(width: 8),
-                  Text(section.label),
-                ],
-              ),
-            ),
-        ],
-        child: Container(
-          height: 44,
-          width: 44,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: _Ink.control,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: _Ink.borderStrong, width: 1.2),
-          ),
-          child: const Icon(
-            Icons.tune_rounded,
-            color: Color(0xFF93C5FD),
-          ),
-        ),
-      ),
+      selectedValue: selectedSection,
+      onSelected: (section) => setState(() => _selectedBinderSection = section),
     );
   }
 
   Widget _buildBinderPage(
     BuildContext context,
     _ReplayBinderSection section,
-    ExecutionTraceStep step, {
+    ExecutionTraceStep? step, {
     required bool isWide,
   }) {
     final child = switch (section) {
-      _ReplayBinderSection.step =>
+      _ReplayBinderSection.step when step != null =>
         _buildStepBinderPage(context, step, isWide: isWide),
-      _ReplayBinderSection.math =>
+      _ReplayBinderSection.math when step != null =>
         _buildMathBinderPage(context, step, isWide: isWide),
+      _ReplayBinderSection.step ||
+      _ReplayBinderSection.math =>
+        _buildReplayMissingTracePanel(context),
       _ReplayBinderSection.replay => _buildReplayBinderPage(context),
     };
     return ClipRect(
       child: child,
+    );
+  }
+
+  Widget _buildReplayMissingTracePanel(BuildContext context) {
+    return SingleChildScrollView(
+      child: _stack([
+        _buildWaitingPanel(context),
+        _buildMetricsPanel(context),
+      ]),
     );
   }
 
@@ -848,276 +657,40 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     return labels.toList();
   }
 
-  Widget _buildQuizToggle() {
-    return _controlPill(
-      icon: Icons.psychology_alt_rounded,
-      label: 'Quiz',
-      tooltip: 'Predict each step before revealing it',
-      active: _quizMode,
-      onTap: () => setState(() {
-        _quizMode = !_quizMode;
-        if (_quizMode) _stopTracePlayback();
-      }),
-    );
-  }
-
-  Widget _circleIconButton({
-    required IconData icon,
-    required VoidCallback? onTap,
-    required String tooltip,
-    bool primary = false,
-    double size = 46,
-  }) {
-    final enabled = onTap != null;
-    final Color bg = primary ? _Ink.primary : _Ink.raised;
-    final Color fg = primary ? _Ink.primaryText : _Ink.textHigh;
-    return Tooltip(
-      message: tooltip,
-      child: Opacity(
-        opacity: enabled ? 1 : 0.38,
-        child: Material(
-          color: bg,
-          shape: CircleBorder(
-            side: primary
-                ? BorderSide.none
-                : const BorderSide(color: _Ink.borderStrong, width: 1.4),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            child: SizedBox(
-              width: size,
-              height: size,
-              child: Icon(icon, color: fg, size: primary ? 26 : 22),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _controlPill({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    String? tooltip,
-    bool active = false,
-  }) {
-    final pill = Material(
-      color: active ? _Ink.primary : _Ink.control,
-      borderRadius: BorderRadius.circular(6),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: active ? _Ink.primary : _Ink.borderStrong,
-              width: 1.2,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 18, color: active ? Colors.white : _Ink.state),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  color: active ? Colors.white : _Ink.textHigh,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    return tooltip == null ? pill : Tooltip(message: tooltip, child: pill);
-  }
-
-  Widget _buildSpeedSelector() {
-    final label = switch (_playbackMs) {
-      2400 => '0.5×',
-      600 => '2×',
-      _ => '1×',
-    };
-    return Tooltip(
-      message: 'Playback speed',
-      child: PopupMenuButton<int>(
-        initialValue: _playbackMs,
-        color: _Ink.raised,
-        onSelected: (ms) => setState(() => _playbackMs = ms),
-        itemBuilder: (context) => const [
-          PopupMenuItem(value: 2400, child: Text('0.5× (slow)')),
-          PopupMenuItem(value: 1200, child: Text('1× (normal)')),
-          PopupMenuItem(value: 600, child: Text('2× (fast)')),
-        ],
-        child: Container(
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: _Ink.control,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: _Ink.borderStrong, width: 1.2),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.speed_rounded, size: 18, color: _Ink.state),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: _Ink.textHigh,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 4),
-              const Icon(Icons.arrow_drop_down_rounded,
-                  size: 18, color: _Ink.textLow),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildStepToolbar(BuildContext context) {
     final steps = _currentEpisodeSteps;
     final totalSteps = steps.length;
     final step = steps[_currentStepIndex];
-
-    final transport = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _circleIconButton(
-          icon: Icons.chevron_left_rounded,
-          tooltip: 'Previous step',
-          size: 38,
-          onTap: _currentStepIndex > 0
-              ? () => _selectTraceStep(_currentStepIndex - 1)
-              : null,
-        ),
-        const SizedBox(width: 8),
-        _circleIconButton(
-          icon:
-              _isTracePlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-          tooltip: _isTracePlaying ? 'Pause trace' : 'Play trace',
-          primary: true,
-          size: 44,
-          onTap: totalSteps > 1 ? _toggleTracePlayback : null,
-        ),
-        const SizedBox(width: 8),
-        _circleIconButton(
-          icon: Icons.chevron_right_rounded,
-          tooltip: 'Next step',
-          size: 38,
-          onTap: _currentStepIndex < totalSteps - 1
-              ? () => _selectTraceStep(_currentStepIndex + 1)
-              : null,
-        ),
-      ],
-    );
-
-    Widget optionsWrap(WrapAlignment alignment) => Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          alignment: alignment,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            if (_hasMultipleEpisodes) _buildEpisodeSelector(context),
-            _buildSpeedSelector(),
-            _buildQuizToggle(),
-          ],
-        );
-
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: _Ink.panel,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _Ink.borderSubtle),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          LayoutBuilder(
-            builder: (context, c) {
-              if (c.maxWidth < 640) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(children: [transport, const Spacer()]),
-                    const SizedBox(height: 8),
-                    optionsWrap(WrapAlignment.start),
-                  ],
-                );
-              }
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  transport,
-                  const SizedBox(width: 12),
-                  Expanded(child: optionsWrap(WrapAlignment.end)),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _counterChip(_currentStepIndex + 1, totalSteps),
-              const SizedBox(width: 12),
-              Expanded(child: _buildStepSlider(totalSteps)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          _buildTransitionChips(step),
-        ],
-      ),
+    return TraceReplayStepToolbar(
+      currentStep: _currentStepIndex + 1,
+      totalSteps: totalSteps,
+      isPlaying: _isTracePlaying,
+      playbackMs: _playbackMs,
+      onPrevious: _currentStepIndex > 0
+          ? () => _selectTraceStep(_currentStepIndex - 1)
+          : null,
+      onPlayPause: totalSteps > 1 ? _toggleTracePlayback : null,
+      onNext: _currentStepIndex < totalSteps - 1
+          ? () => _selectTraceStep(_currentStepIndex + 1)
+          : null,
+      onPlaybackSpeedChanged: (ms) => setState(() => _playbackMs = ms),
+      onSliderChanged:
+          totalSteps > 1 ? (value) => _selectTraceStep(value.round()) : null,
+      quizMode: _quizMode,
+      onToggleQuiz: () => setState(() {
+        _quizMode = !_quizMode;
+        if (_quizMode) {
+          _stopTracePlayback();
+        }
+      }),
+      episodeOptions: _episodeToolbarOptions(),
+      jumpPills: _buildStepJumpPills(),
+      transitionTags: _transitionTagData(step),
+      markers: _stepMarkers(),
     );
   }
 
-  Widget _counterChip(int current, int total) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-      decoration: BoxDecoration(
-        color: _Ink.raised,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: _Ink.borderStrong),
-      ),
-      child: Text.rich(
-        TextSpan(
-          children: [
-            const TextSpan(
-              text: 'Step ',
-              style: TextStyle(color: _Ink.textLow, fontSize: 12),
-            ),
-            TextSpan(
-              text: '$current',
-              style: const TextStyle(
-                color: _Ink.state,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            TextSpan(
-              text: ' / $total',
-              style: const TextStyle(
-                color: _Ink.textLow,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTransitionChips(ExecutionTraceStep step) {
+  List<TraceReplayTagData> _transitionTagData(ExecutionTraceStep step) {
     final actionLabel = (step.gridMetadata?.actionLabel.isNotEmpty ?? false)
         ? step.gridMetadata!.actionLabel
         : (step.equationUpdate?.mcDetails?.actionLabel.isNotEmpty ?? false)
@@ -1126,87 +699,120 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     final rewardColor = step.reward < 0
         ? _Ink.danger
         : (step.reward > 0 ? _Ink.success : _Ink.warn);
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        _buildTag('s${step.state}  →  s${step.nextState}', _Ink.state),
-        if (actionLabel.isNotEmpty)
-          _buildTag(actionLabel, const Color(0xFF22D3EE)),
-        _buildTag('reward ${step.reward.toStringAsFixed(2)}', rewardColor),
-      ],
-    );
+    return [
+      TraceReplayTagData(
+        label: 's${step.state}  →  s${step.nextState}',
+        accent: _Ink.state,
+      ),
+      if (actionLabel.isNotEmpty)
+        TraceReplayTagData(
+          label: actionLabel,
+          accent: const Color(0xFF22D3EE),
+        ),
+      TraceReplayTagData(
+        label: 'reward ${step.reward.toStringAsFixed(2)}',
+        accent: rewardColor,
+      ),
+    ];
   }
 
   bool get _hasMultipleEpisodes =>
       widget.traceEpisodes.length > 1 || widget.episodeSummaries.length > 1;
 
-  Widget _buildEpisodeSelector(BuildContext context) {
+  List<TraceReplayActionPill> _buildStepJumpPills() {
+    final rewardStep = _nextRewardStepIndex();
+    final terminalStep = _terminalStepIndex();
+    final lastStep = _currentEpisodeSteps.length - 1;
+    final pills = <TraceReplayActionPill>[
+      TraceReplayActionPill(
+        icon: Icons.first_page_rounded,
+        label: 'Start',
+        tooltip: 'Jump to the first step',
+        onTap: () => _selectTraceStep(0),
+      ),
+    ];
+    if (rewardStep != null) {
+      pills.add(
+        TraceReplayActionPill(
+          icon: rewardStep > _currentStepIndex
+              ? Icons.arrow_forward_rounded
+              : Icons.flag_rounded,
+          label: 'Reward',
+          tooltip: 'Jump to the next reward-bearing step',
+          onTap: () => _selectTraceStep(rewardStep),
+        ),
+      );
+    }
+    if (terminalStep != null) {
+      pills.add(
+        TraceReplayActionPill(
+          icon: Icons.outlined_flag_rounded,
+          label: 'Terminal',
+          tooltip: 'Jump to the terminal or truncated step',
+          onTap: () => _selectTraceStep(terminalStep),
+        ),
+      );
+    }
+    if (lastStep > 0) {
+      pills.add(
+        TraceReplayActionPill(
+          icon: Icons.last_page_rounded,
+          label: 'End',
+          tooltip: 'Jump to the final step',
+          onTap: () => _selectTraceStep(lastStep),
+        ),
+      );
+    }
+    return pills;
+  }
+
+  int? _nextRewardStepIndex() {
+    for (var index = _currentStepIndex + 1;
+        index < _currentEpisodeSteps.length;
+        index++) {
+      if (_currentEpisodeSteps[index].reward != 0) {
+        return index;
+      }
+    }
+    for (var index = 0; index < _currentStepIndex; index++) {
+      if (_currentEpisodeSteps[index].reward != 0) {
+        return index;
+      }
+    }
+    return null;
+  }
+
+  int? _terminalStepIndex() {
+    for (var index = 0; index < _currentEpisodeSteps.length; index++) {
+      final step = _currentEpisodeSteps[index];
+      final isTerminal = step.gridMetadata?.terminated == true ||
+          step.gridMetadata?.truncated == true ||
+          step.equationUpdate?.mcDetails?.terminated == true ||
+          step.equationUpdate?.mcDetails?.truncated == true;
+      if (isTerminal) {
+        return index;
+      }
+    }
+    return null;
+  }
+
+  List<TraceReplayEpisodeOption> _episodeToolbarOptions() {
+    if (!_hasMultipleEpisodes) {
+      return const [];
+    }
     final curated = _curatedEpisodeIndexes;
     final selected = curated.contains(_selectedEpisodeIndex)
         ? _selectedEpisodeIndex
         : curated.last;
-    return Semantics(
-      label: 'Trace episode selector',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        decoration: BoxDecoration(
-          color: _Ink.control,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: _Ink.borderStrong, width: 1.2),
+    return [
+      for (final index in curated)
+        TraceReplayEpisodeOption(
+          label: _episodeRole(index, curated),
+          tooltip: _episodeLabel(index),
+          active: index == selected,
+          onTap: () => _selectEpisode(index),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.only(left: 2, right: 6),
-              child:
-                  Icon(Icons.timeline_rounded, size: 16, color: _Ink.textLow),
-            ),
-            for (final index in curated)
-              _episodeSegment(
-                _episodeRole(index, curated),
-                index == selected,
-                () => _selectEpisode(index),
-                _episodeLabel(index),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _episodeSegment(
-    String label,
-    bool active,
-    VoidCallback onTap,
-    String tooltip,
-  ) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: active ? _Ink.primary : Colors.transparent,
-        borderRadius: BorderRadius.circular(9),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Container(
-            height: 32,
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 13),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: active ? Colors.white : _Ink.textMed,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+    ];
   }
 
   /// Curate the episode set to Early / Mid / Late.
@@ -1251,34 +857,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       return 'Episode ${index + 1}';
     }
     return 'Episode ${index + 1} · ${summary.stepCount} steps · r ${summary.totalReward.toStringAsFixed(2)}';
-  }
-
-  Widget _buildStepSlider(int totalSteps) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        TraceStepMarkers(
-          totalSteps: totalSteps,
-          markers: _stepMarkers(),
-        ),
-        Semantics(
-          label: 'Trace step slider',
-          value: 'Step ${_currentStepIndex + 1} of $totalSteps',
-          slider: true,
-          child: Slider(
-            value: _currentStepIndex.toDouble(),
-            min: 0,
-            max: totalSteps > 1 ? (totalSteps - 1).toDouble() : 1.0,
-            divisions: totalSteps > 1 ? totalSteps - 1 : 1,
-            semanticFormatterCallback: (value) =>
-                'Step ${value.round() + 1} of $totalSteps',
-            onChanged: totalSteps > 1
-                ? (value) => _selectTraceStep(value.round())
-                : null,
-          ),
-        ),
-      ],
-    );
   }
 
   List<({int index, TraceMarkerKind kind})> _stepMarkers() {
@@ -1961,7 +1539,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       ).replace(queryParameters: {'path': framePath});
       return Image.network(
         frameUri.toString(),
-        headers: _authHeaders(),
+        headers: replayMediaAuthHeaders(),
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) =>
             _buildMissingFramePlaceholder(framePath),
@@ -3188,219 +2766,29 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
   }
 
   Widget _buildManimReplayPanel(BuildContext context) {
-    final controller = _replayController;
-    final isReady = controller?.value.isInitialized ?? false;
-    final isPlaying = controller?.value.isPlaying ?? false;
-
     return _panelShell(
       title: 'Manim Equation Replay',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Generated video links each agent step to the Bellman or TD numeric update.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFFE2E8F0),
-                  height: 1.45,
-                ),
-          ),
-          const SizedBox(height: 14),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              color: Colors.black,
-              child: AspectRatio(
-                aspectRatio: isReady ? controller!.value.aspectRatio : 16 / 9,
-                child: isReady && controller != null
-                    ? _buildReplayVideoSurface(controller, isPlaying)
-                    : _buildReplayVideoPlaceholder(context),
-              ),
+          ReplayVideoPane(
+            key: ValueKey<String>(
+              '${widget.videoPath}|${widget.replayRenderStatus}|${widget.replayRenderError ?? ''}',
             ),
+            videoPath: widget.videoPath,
+            replayRenderStatus: widget.replayRenderStatus,
+            replayRenderError: widget.replayRenderError,
+            onCompleted: _fireReplayCompleted,
+            showInteractiveTraceAction: _currentEpisodeSteps.isNotEmpty,
+            onOpenInteractiveTrace: _currentEpisodeSteps.isNotEmpty
+                ? () => setState(
+                      () => _selectedBinderSection = _ReplayBinderSection.step,
+                    )
+                : null,
           ),
-          const SizedBox(height: 12),
-          _buildReplayVideoControls(context, controller, isReady, isPlaying),
         ],
       ),
     );
-  }
-
-  Widget _buildReplayVideoSurface(
-    VideoPlayerController controller,
-    bool isPlaying,
-  ) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        FittedBox(
-          fit: BoxFit.contain,
-          child: SizedBox(
-            width: controller.value.size.width,
-            height: controller.value.size.height,
-            child: VideoPlayer(controller),
-          ),
-        ),
-        Positioned.fill(
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: _toggleReplayPlayback,
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 180),
-                opacity: isPlaying ? 0 : 1,
-                child: const Center(
-                  child: Icon(
-                    Icons.play_circle_fill_rounded,
-                    color: Colors.white,
-                    size: 82,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildReplayVideoPlaceholder(BuildContext context) {
-    final message = _isReplayVideoLoading
-        ? 'Preparing generated replay video...'
-        : (_replayVideoError ??
-            widget.replayRenderError ??
-            _renderStatusMessage());
-    return Container(
-      alignment: Alignment.center,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_isReplayVideoLoading)
-            const CircularProgressIndicator(color: Color(0xFF38BDF8))
-          else
-            const Icon(
-              Icons.ondemand_video_outlined,
-              color: Color(0xFF94A3B8),
-              size: 42,
-            ),
-          const SizedBox(height: 12),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFFE2E8F0),
-                ),
-          ),
-          if (!_isReplayVideoLoading) ...[
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: _initializeReplayVideo,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Retry'),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  String _renderStatusMessage() {
-    return switch (widget.replayRenderStatus) {
-      'queued' =>
-        'The generated MP4 is queued. Use the interactive trace meanwhile.',
-      'rendering' =>
-        'The generated MP4 is rendering. Use the interactive trace meanwhile.',
-      'failed' =>
-        'The generated MP4 failed, but the interactive trace is ready.',
-      'timeout' => 'The generated MP4 is still running in the background.',
-      'unavailable' =>
-        'Interactive replay is available. Generated video is not ready.',
-      _ => 'Generated replay video is not ready.',
-    };
-  }
-
-  Widget _buildReplayVideoControls(
-    BuildContext context,
-    VideoPlayerController? controller,
-    bool isReady,
-    bool isPlaying,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF111827),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFF1E293B)),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              IconButton.filled(
-                onPressed: isReady ? _toggleReplayPlayback : null,
-                icon: Icon(
-                  isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  _replayTimelineLabel(controller),
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-              ),
-              Text(
-                isPlaying ? 'Playing' : 'Paused',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFFCBD5E1),
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          if (isReady && controller != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: VideoProgressIndicator(
-                controller,
-                allowScrubbing: true,
-                padding: EdgeInsets.zero,
-                colors: const VideoProgressColors(
-                  playedColor: Color(0xFF38BDF8),
-                  bufferedColor: Color(0xFF1D4ED8),
-                  backgroundColor: Color(0xFF334155),
-                ),
-              ),
-            )
-          else
-            Container(
-              height: 6,
-              decoration: BoxDecoration(
-                color: const Color(0xFF334155),
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  String _replayTimelineLabel(VideoPlayerController? controller) {
-    if (controller == null || !controller.value.isInitialized) {
-      return _isReplayVideoLoading
-          ? 'Loading generated replay...'
-          : 'Replay unavailable';
-    }
-    return '${_formatDuration(controller.value.position)} / ${_formatDuration(controller.value.duration)}';
-  }
-
-  String _formatDuration(Duration duration) {
-    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
   }
 
   Widget _buildReadGuide(BuildContext context, bool hasTrace) {

@@ -17,6 +17,9 @@ permissions:
   contents: read
   packages: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   backend:
     name: Backend checks
@@ -25,14 +28,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: backend/requirements*.txt
 
       - name: Install backend system dependencies
         run: |
@@ -46,10 +49,18 @@ jobs:
             libsdl2-2.0-0 \
             libsdl2-ttf-2.0-0
 
+      - name: Verify compiled backend dependency locks
+        run: |
+          python -m pip install --upgrade pip pip-tools
+          python -m piptools compile --quiet --resolver=backtracking --strip-extras \
+            --output-file backend/requirements.txt backend/requirements.in
+          python -m piptools compile --quiet --resolver=backtracking --strip-extras \
+            --output-file backend/requirements-dev.txt backend/requirements-dev.in
+          git diff --exit-code -- backend/requirements.txt backend/requirements-dev.txt
+
       - name: Install backend dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r backend/requirements.txt
+          python -m pip install -r backend/requirements-dev.txt
 
       - name: Pytest
         run: |
@@ -74,7 +85,7 @@ jobs:
 
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: backend-coverage-xml
           path: coverage.xml
@@ -91,7 +102,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -117,7 +128,7 @@ jobs:
           cp web/flutter_service_worker.js build/web/flutter_service_worker.js
 
       - name: Upload web build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: frontend-web-build
           path: frontend/build/web
@@ -133,7 +144,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set image names
         run: |
@@ -146,14 +157,14 @@ jobs:
 
       - name: Log in to GitHub Container Registry
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build backend cloud image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile.cloud
@@ -165,7 +176,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=backend-cloud
 
       - name: Build frontend image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile.frontend
@@ -204,7 +215,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set image names
         run: |

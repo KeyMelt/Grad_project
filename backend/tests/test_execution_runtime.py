@@ -273,6 +273,40 @@ def test_execution_response_includes_episode_summaries_and_traces(monkeypatch, t
     ]
 
 
+def test_build_success_response_exposes_normalized_replay_state():
+    validation_result = ValidationResult(
+        is_valid=True,
+        errors=[],
+        test_results=[],
+        unresolved_blanks=[],
+    )
+    log_data = [[{"state": 0, "action": 1, "next_state": 1, "reward": 0.0}]]
+
+    queued_response = execution_runtime._build_success_response(
+        lesson=_Lesson(),
+        log_data=log_data,
+        validation_result=validation_result,
+        replay_render={
+            "replay_render_job_id": "job-1",
+            "replay_render_status": "queued",
+            "video_path": "",
+        },
+    )
+    ready_response = execution_runtime._build_success_response(
+        lesson=_Lesson(),
+        log_data=log_data,
+        validation_result=validation_result,
+        replay_render={
+            "replay_render_job_id": "job-1",
+            "replay_render_status": "complete",
+            "video_path": "/tmp/replay.mp4",
+        },
+    )
+
+    assert queued_response["replay_state"] == "queued"
+    assert ready_response["replay_state"] == "ready"
+
+
 def test_mc_first_visit_runtime_handles_tuple_observation_states():
     logger = _FakeTraceLogger()
     engine = RLEngine(adapter=_FakeBlackjackAdapter(), logger=logger)

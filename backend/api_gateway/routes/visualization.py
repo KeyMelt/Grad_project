@@ -13,6 +13,7 @@ from backend.auth.dependencies import (
     build_optional_principal_dependency,
 )
 from backend.auth.roles import PlatformRole, Principal
+from backend.replay_contract import normalize_replay_state
 from backend.settings import GatewaySettings
 
 try:
@@ -203,9 +204,15 @@ def build_visualization_router(services: Any) -> APIRouter:
                 if video_url.startswith("/")
                 else video_url
             )
+        raw_status = data.get("status") or "unknown"
         return {
             "job_id": data.get("job_id") or job_id,
-            "status": data.get("status") or "unknown",
+            "status": raw_status,
+            "replay_state": normalize_replay_state(
+                str(raw_status),
+                video_path=video_path,
+                error=data.get("error"),
+            ),
             "video_path": video_path,
             "video_url": video_path,
             "error": data.get("error"),

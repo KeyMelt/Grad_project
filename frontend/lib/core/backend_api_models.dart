@@ -1,3 +1,5 @@
+import 'replay_contract.dart';
+
 class AuthSessionStore {
   static String? accessToken;
 }
@@ -1338,10 +1340,11 @@ class ExecutionResult {
             .map(ExecutionEpisodeSummary.fromJson)
             .toList(growable: false);
 
+    final videoPath = json['video_path'] as String? ?? '';
     return ExecutionResult(
       message: json['message'] as String? ?? 'Execution completed.',
       lessonTitle: lesson['title'] as String? ?? '',
-      videoPath: json['video_path'] as String? ?? '',
+      videoPath: videoPath,
       visualizationReady: json['visualization_ready'] as bool? ?? false,
       metrics: ExecutionMetrics.fromJson(metrics),
       testResults: testResults,
@@ -1349,8 +1352,11 @@ class ExecutionResult {
       traceEpisodes: traceEpisodes,
       episodeSummaries: episodeSummaries,
       replayRenderJobId: json['replay_render_job_id'] as String? ?? '',
-      replayRenderStatus:
-          json['replay_render_status'] as String? ?? 'unavailable',
+      replayRenderStatus: ReplayStateSnapshot.resolve(
+        rawStatus: (json['replay_state'] as String?) ??
+            (json['replay_render_status'] as String? ?? 'unavailable'),
+        videoPath: videoPath,
+      ).statusId,
       replayEpisodeIndices:
           (json['replay_episode_indices'] as List<dynamic>? ?? const [])
               .map((value) => (value as num?)?.toInt())
@@ -1373,16 +1379,23 @@ class ReplayRenderStatus {
     this.error,
   });
 
-  bool get isComplete => status == 'complete' && videoPath.isNotEmpty;
+  bool get isComplete => status == 'ready' && videoPath.isNotEmpty;
   bool get isFailed => status == 'failed';
 
   factory ReplayRenderStatus.fromJson(Map<String, dynamic> json) {
+    final videoPath =
+        (json['video_path'] as String?) ?? (json['video_url'] as String? ?? '');
+    final error = json['error'] as String?;
     return ReplayRenderStatus(
       jobId: json['job_id'] as String? ?? '',
-      status: json['status'] as String? ?? 'unknown',
-      videoPath: (json['video_path'] as String?) ??
-          (json['video_url'] as String? ?? ''),
-      error: json['error'] as String?,
+      status: ReplayStateSnapshot.resolve(
+        rawStatus: (json['replay_state'] as String?) ??
+            (json['status'] as String? ?? ''),
+        videoPath: videoPath,
+        error: error,
+      ).statusId,
+      videoPath: videoPath,
+      error: error,
     );
   }
 }

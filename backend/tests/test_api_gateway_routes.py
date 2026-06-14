@@ -7,6 +7,7 @@ from typing import Any
 from fastapi.testclient import TestClient
 
 from backend.api_gateway.base import ServiceContainer, create_app
+from backend.api_gateway.routes import visualization as visualization_routes
 from backend.auth.roles import AccountStatus, PlatformRole, Principal
 from backend.execution_runtime import ExecutionPipelineError
 
@@ -798,6 +799,78 @@ def test_visualization_video_rejects_paths_outside_output_root(tmp_path, monkeyp
 
     assert response.status_code == 403
     os.remove(outside_path)
+
+
+def test_replay_render_status_exposes_normalized_ready_state(monkeypatch):
+    monkeypatch.setattr(
+        visualization_routes,
+        "_get_manim_job",
+        lambda job_id: {
+            "job_id": job_id,
+            "status": "complete",
+            "video_url": "/videos/replay.mp4",
+            "error": None,
+        },
+    )
+
+    client = _make_client()
+    response = client.get(
+        "/visualization/replay-render/job-1",
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "complete"
+    assert payload["replay_state"] == "ready"
+    assert payload["video_path"].endswith("/videos/replay.mp4")
+
+
+def test_replay_render_status_exposes_normalized_non_ready_states(monkeypatch):
+    cases = [
+        (
+            {"job_id": "job-queued", "status": "queued", "video_url": "", "error": None},
+            "queued",
+        ),
+        (
+            {
+                "job_id": "job-rendering",
+                "status": "rendering",
+                "video_url": "",
+                "error": None,
+            },
+            "rendering",
+        ),
+        (
+            {
+                "job_id": "job-failed",
+                "status": "failed",
+                "video_url": "",
+                "error": "render crashed",
+            },
+            "failed",
+        ),
+        (
+            {"job_id": "job-missing", "status": "complete", "video_url": "", "error": None},
+            "unavailable",
+        ),
+    ]
+
+    client = _make_client()
+    for job_payload, expected_state in cases:
+        monkeypatch.setattr(
+            visualization_routes,
+            "_get_manim_job",
+            lambda job_id, payload=job_payload: {**payload, "job_id": job_id},
+        )
+        response = client.get(
+            f"/visualization/replay-render/{job_payload['job_id']}",
+            headers=_auth_headers(),
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["replay_state"] == expected_state
 
 
 def test_sign_in_error_maps_to_http_400():

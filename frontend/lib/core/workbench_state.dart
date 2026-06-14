@@ -11,6 +11,7 @@ import 'export_file_saver.dart';
 import 'http_backend_api.dart';
 import 'flashcard_catalog.dart';
 import 'lesson_models.dart';
+import 'replay_contract.dart';
 export 'lesson_models.dart';
 
 /// Current run lifecycle shown in the workspace controls and status strip.
@@ -2718,12 +2719,18 @@ def lesson_function(*args, **kwargs):
         if (isClosed || state.replayRenderJobId != jobId) {
           return;
         }
+        final replayState = ReplayStateSnapshot.resolve(
+          rawStatus: status.status,
+          videoPath: status.videoPath,
+          error: status.error,
+        );
         emit(
           state.copyWith(
-            replayRenderStatus: status.status,
+            replayRenderStatus: replayState.statusId,
             replayRenderError: status.error,
-            videoPath: status.isComplete ? status.videoPath : state.videoPath,
-            statusMessage: status.isComplete
+            videoPath:
+                replayState.hasVideo ? status.videoPath : state.videoPath,
+            statusMessage: replayState.hasVideo
                 ? 'Execution pipeline completed. Replay ready.'
                 : state.statusMessage,
           ),
