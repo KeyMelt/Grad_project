@@ -91,18 +91,18 @@ void main() {
       ),
     );
 
-    await _selectBinderSection(tester, 'Equation');
+    await _selectBinderSection(tester, 'Math');
     expect(find.text('SARSA numeric update'), findsOneWidget);
-    await _selectBinderSection(tester, 'Table');
+    await _selectBinderSection(tester, 'Math');
     expect(find.text('Q-table Inspector'), findsOneWidget);
     expect(find.text('active s1, a0'), findsOneWidget);
     expect(find.text('bootstrap s0, a1'), findsOneWidget);
-    await _selectBinderSection(tester, 'Equation');
+    await _selectBinderSection(tester, 'Math');
     expect(find.textContaining('0.0 + 0.1'), findsOneWidget);
-    await _selectBinderSection(tester, 'Code');
+    await _selectBinderSection(tester, 'Math');
     expect(
         find.byKey(const ValueKey('trace-code-focus-line-0')), findsOneWidget);
-    await _selectBinderSection(tester, 'Overview');
+    await _selectBinderSection(tester, 'Step');
     expect(find.text('Why this update is correct'), findsOneWidget);
     expect(
       find.text('SARSA uses the sampled next action in the TD target.'),
@@ -197,13 +197,13 @@ void main() {
       ),
     );
 
-    await _selectBinderSection(tester, 'Equation');
+    await _selectBinderSection(tester, 'Math');
     expect(find.text('Value iteration action comparison'), findsOneWidget);
     expect(find.text('Selected action'), findsOneWidget);
     expect(find.text('Left'), findsWidgets);
-    await _selectBinderSection(tester, 'Table');
+    await _selectBinderSection(tester, 'Math');
     expect(find.text('Value Table Inspector'), findsOneWidget);
-    await _selectBinderSection(tester, 'Equation');
+    await _selectBinderSection(tester, 'Math');
     expect(find.textContaining('1.00*(r 1.00 + V 1.00)'), findsOneWidget);
   });
 
@@ -314,14 +314,14 @@ void main() {
       ),
     );
 
-    await _selectBinderSection(tester, 'Environment');
+    await _selectBinderSection(tester, 'Step');
     expect(find.text('Blackjack observation'), findsOneWidget);
-    await _selectBinderSection(tester, 'Equation');
+    await _selectBinderSection(tester, 'Math');
     expect(find.text('First-visit return update'), findsOneWidget);
-    await _selectBinderSection(tester, 'Table');
+    await _selectBinderSection(tester, 'Math');
     expect(find.text('Monte Carlo Episode Inspector'), findsOneWidget);
     expect(find.text('Return ladder'), findsOneWidget);
-    await _selectBinderSection(tester, 'Environment');
+    await _selectBinderSection(tester, 'Step');
     expect(find.text('Player sum'), findsOneWidget);
     expect(find.text('15'), findsWidgets);
   });
@@ -405,7 +405,7 @@ void main() {
       ),
     );
 
-    await _selectBinderSection(tester, 'Environment');
+    await _selectBinderSection(tester, 'Step');
     expect(find.text('FrozenLake grid'), findsOneWidget);
     expect(find.text('state 0'), findsOneWidget);
     expect(find.text('next 1'), findsOneWidget);
@@ -559,7 +559,7 @@ void main() {
       ),
     );
 
-    await _selectBinderSection(tester, 'Equation');
+    await _selectBinderSection(tester, 'Math');
 
     expect(find.text('First step math'), findsOneWidget);
     expect(find.text('Second step math'), findsNothing);
@@ -592,12 +592,11 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(tester.takeException(), isNull, reason: 'breakpoint $size');
-        expect(find.text('Generated Step Replay'), findsOneWidget);
         // Curated Early/Late episode selector instead of a per-episode dump.
         expect(find.text('Late'), findsOneWidget, reason: 'breakpoint $size');
         expect(find.text('Why this update is correct'), findsOneWidget,
             reason: 'breakpoint $size');
-        await _selectBinderSection(tester, 'Equation');
+        await _selectBinderSection(tester, 'Math');
         expect(find.text('Q-learning numeric update'), findsOneWidget);
         expect(find.byType(Slider), findsOneWidget);
         // Curated episode selector renders its Early/Late labels.
@@ -618,21 +617,21 @@ void main() {
     await tester.pumpWidget(_traceReplayHarness());
     await tester.pumpAndSettle();
 
-    expect(find.text('Code'), findsOneWidget);
+    expect(find.text('Math'), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.tune_rounded));
     await tester.pumpAndSettle();
-    await tester.tap(_visibleBinderMenuItem('Code').last);
+    await tester.tap(_visibleBinderMenuItem('Math').last);
     await tester.pumpAndSettle();
 
-    expect(find.text('Code'), findsNothing);
+    expect(find.text('Math'), findsNothing);
 
     await tester.tap(find.byIcon(Icons.tune_rounded));
     await tester.pumpAndSettle();
-    await tester.tap(_visibleBinderMenuItem('Code').last);
+    await tester.tap(_visibleBinderMenuItem('Math').last);
     await tester.pumpAndSettle();
 
-    expect(find.text('Code'), findsOneWidget);
+    expect(find.text('Math'), findsOneWidget);
   });
 }
 

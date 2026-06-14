@@ -80,12 +80,9 @@ class TraceReplayPanel extends StatefulWidget {
 }
 
 enum _ReplayBinderSection {
-  overview(Icons.dashboard_customize_rounded, 'Overview'),
-  environment(Icons.public_rounded, 'Environment'),
-  math(Icons.functions_rounded, 'Equation'),
-  code(Icons.code_rounded, 'Code'),
-  table(Icons.grid_on_rounded, 'Table'),
-  run(Icons.analytics_rounded, 'Run');
+  step(Icons.dashboard_customize_rounded, 'Step'),
+  math(Icons.functions_rounded, 'Math'),
+  replay(Icons.movie_rounded, 'Replay');
 
   const _ReplayBinderSection(this.icon, this.label);
 
@@ -98,12 +95,9 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
   int _currentStepIndex = 0;
   int _selectedBinderIndex = 0;
   final Set<_ReplayBinderSection> _visibleBinderSections = {
-    _ReplayBinderSection.overview,
-    _ReplayBinderSection.environment,
+    _ReplayBinderSection.step,
     _ReplayBinderSection.math,
-    _ReplayBinderSection.code,
-    _ReplayBinderSection.table,
-    _ReplayBinderSection.run,
+    _ReplayBinderSection.replay,
   };
   bool _quizMode = false;
   int _playbackMs = 1200;
@@ -373,7 +367,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       child: Container(
         decoration: BoxDecoration(
           color: _Ink.canvas,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(color: _Ink.borderSubtle),
         ),
         child: Padding(
@@ -423,8 +417,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildCompactHeader(context, hasTrace),
-          const SizedBox(height: 12),
           Expanded(child: _buildWaitingPanel(context)),
           const SizedBox(height: 12),
           _buildMetricsPanel(context),
@@ -435,20 +427,23 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     final sections = _activeBinderSections(hasTrace: hasTrace, step: step);
     final selectedIndex = _selectedBinderIndex.clamp(0, sections.length - 1);
     final selectedSection = sections[selectedIndex];
+    // The Replay tab is the video on its own — the step transport/scrubber and
+    // quiz prompt only apply to the inspectable Step/Math tabs.
+    final showStepToolbar = selectedSection != _ReplayBinderSection.replay;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildCompactHeader(context, hasTrace),
-        const SizedBox(height: 8),
-        _buildStepToolbar(context),
-        if (_quizMode &&
-            _currentStepIndex < _currentEpisodeSteps.length - 1) ...[
-          const SizedBox(height: 8),
-          _buildQuizPrompt(),
-        ],
-        const SizedBox(height: 8),
         _buildBinderControls(context, sections, selectedIndex),
+        if (showStepToolbar) ...[
+          const SizedBox(height: 8),
+          _buildStepToolbar(context),
+          if (_quizMode &&
+              _currentStepIndex < _currentEpisodeSteps.length - 1) ...[
+            const SizedBox(height: 8),
+            _buildQuizPrompt(),
+          ],
+        ],
         const SizedBox(height: 8),
         Expanded(
           child: _buildBinderPage(
@@ -467,14 +462,11 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     required ExecutionTraceStep? step,
   }) {
     final sections = <_ReplayBinderSection>[
-      _ReplayBinderSection.overview,
-      if (hasTrace) _ReplayBinderSection.environment,
+      _ReplayBinderSection.step,
       if (hasTrace) _ReplayBinderSection.math,
-      if (hasTrace) _ReplayBinderSection.code,
-      if (hasTrace) _ReplayBinderSection.table,
-      _ReplayBinderSection.run,
+      _ReplayBinderSection.replay,
     ].where(_visibleBinderSections.contains).toList(growable: false);
-    return sections.isEmpty ? [_ReplayBinderSection.overview] : sections;
+    return sections.isEmpty ? [_ReplayBinderSection.step] : sections;
   }
 
   Widget _buildBinderControls(
@@ -499,7 +491,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: _Ink.panel,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: _Ink.borderSubtle),
       ),
       child: Row(
@@ -522,7 +514,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       message: section.label,
       child: Material(
         color: active ? _Ink.primary : _Ink.raised,
-        borderRadius: BorderRadius.circular(11),
+        borderRadius: BorderRadius.circular(4),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
@@ -530,7 +522,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
             height: 40,
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(11),
+              borderRadius: BorderRadius.circular(4),
               border: Border.all(
                 color: active ? _Ink.primary : _Ink.borderStrong,
                 width: 1.2,
@@ -594,7 +586,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: _Ink.control,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(6),
             border: Border.all(color: _Ink.borderStrong, width: 1.2),
           ),
           child: const Icon(
@@ -613,90 +605,117 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     required bool isWide,
   }) {
     final child = switch (section) {
-      _ReplayBinderSection.overview =>
-        _buildOverviewBinderPage(context, step, isWide: isWide),
-      _ReplayBinderSection.environment => _buildEnvironmentPanel(context, step),
-      _ReplayBinderSection.math => _buildMathPanel(context, step),
-      _ReplayBinderSection.code => _buildCodePanel(context, step),
-      _ReplayBinderSection.table => _buildTableInspector(context, step),
-      _ReplayBinderSection.run => _buildRunBinderPage(context),
+      _ReplayBinderSection.step =>
+        _buildStepBinderPage(context, step, isWide: isWide),
+      _ReplayBinderSection.math =>
+        _buildMathBinderPage(context, step, isWide: isWide),
+      _ReplayBinderSection.replay => _buildReplayBinderPage(context),
     };
     return ClipRect(
       child: child,
     );
   }
 
-  Widget _buildOverviewBinderPage(
+  /// Secondary context cards (run metrics, concept CTA, errors, tests, guide)
+  /// that used to live on the old "Run" tab. They now ride along under the Step
+  /// summary so the Replay tab can be the video alone.
+  List<Widget> _stepExtras(BuildContext context) {
+    return <Widget>[
+      _buildMetricsPanel(context),
+      if (widget.conceptVideo != null &&
+          widget.conceptVideo!.streamPath.isNotEmpty &&
+          widget.onWatchConcept != null)
+        _buildConceptVideoCta(),
+      if (widget.runStatusLabel == 'Failed') _buildErrorPanel(context),
+      if (widget.testResults.isNotEmpty) _buildSampleTests(context),
+      _buildReadGuide(context, true),
+    ];
+  }
+
+  Widget _stack(List<Widget> children) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) const SizedBox(height: 12),
+            children[i],
+          ],
+        ],
+      );
+
+  Widget _buildStepBinderPage(
     BuildContext context,
     ExecutionTraceStep step, {
     required bool isWide,
   }) {
+    // The environment panel uses an internal LayoutBuilder, so it must stay in
+    // a bounded slot (never inside a scroll view). Everything else — the step
+    // summary and the secondary context cards — is scroll-safe.
+    final detail = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            child: _stack([
+              _buildCurrentStepSummary(context, step),
+              ..._stepExtras(context),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(height: 150, child: _buildTraceOutline(context)),
+      ],
+    );
+
     if (isWide) {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(flex: 5, child: _buildCurrentStepSummary(context, step)),
+          Expanded(flex: 6, child: _buildEnvironmentPanel(context, step)),
           const SizedBox(width: 12),
-          Expanded(flex: 4, child: _buildTraceOutline(context)),
+          Expanded(flex: 5, child: detail),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(flex: 5, child: _buildEnvironmentPanel(context, step)),
+        const SizedBox(height: 12),
+        Expanded(flex: 6, child: detail),
+      ],
+    );
+  }
+
+  Widget _buildMathBinderPage(
+    BuildContext context,
+    ExecutionTraceStep step, {
+    required bool isWide,
+  }) {
+    final eq = _buildMathPanel(context, step);
+    final code = _buildCodePanel(context, step);
+    final table = _buildTableInspector(context, step);
+    if (isWide) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: SingleChildScrollView(child: eq)),
+          const SizedBox(width: 12),
+          Expanded(child: SingleChildScrollView(child: code)),
+          const SizedBox(width: 12),
+          Expanded(child: SingleChildScrollView(child: table)),
         ],
       );
     }
     return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildCurrentStepSummary(context, step),
-          const SizedBox(height: 12),
-          SizedBox(height: 180, child: _buildTraceOutline(context)),
-        ],
-      ),
+      child: _stack([eq, code, table]),
     );
   }
 
-  Widget _buildRunBinderPage(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final secondary = <Widget>[
-          _buildReadGuide(context, true),
-          if (widget.conceptVideo != null &&
-              widget.conceptVideo!.streamPath.isNotEmpty &&
-              widget.onWatchConcept != null)
-            _buildConceptVideoCta(),
-          if (widget.videoPath.isNotEmpty ||
-              widget.replayRenderStatus != 'idle')
-            _buildManimReplayPanel(context),
-          if (widget.runStatusLabel == 'Failed') _buildErrorPanel(context),
-          if (widget.testResults.isNotEmpty) _buildSampleTests(context),
-        ];
-
-        Widget stack(List<Widget> children) => Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (var i = 0; i < children.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 12),
-                  children[i],
-                ],
-              ],
-            );
-
-        final wide = constraints.maxWidth >= 980 && secondary.isNotEmpty;
-        final body = wide
-            ? Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: _buildMetricsPanel(context)),
-                  const SizedBox(width: 12),
-                  Expanded(child: stack(secondary)),
-                ],
-              )
-            : stack([_buildMetricsPanel(context), ...secondary]);
-
-        return SingleChildScrollView(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: body,
-        );
-      },
+  Widget _buildReplayBinderPage(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: _buildManimReplayPanel(context),
     );
   }
 
@@ -716,7 +735,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
         gradient: const LinearGradient(
           colors: [Color(0xFF1E3A8A), Color(0xFF111C30)],
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFF3B82F6)),
       ),
       child: Row(
@@ -886,7 +905,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
   }) {
     final pill = Material(
       color: active ? _Ink.primary : _Ink.control,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(6),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
@@ -894,7 +913,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
           height: 40,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(6),
             border: Border.all(
               color: active ? _Ink.primary : _Ink.borderStrong,
               width: 1.2,
@@ -942,7 +961,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
             color: _Ink.control,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(6),
             border: Border.all(color: _Ink.borderStrong, width: 1.2),
           ),
           child: Row(
@@ -978,23 +997,25 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
         _circleIconButton(
           icon: Icons.chevron_left_rounded,
           tooltip: 'Previous step',
+          size: 38,
           onTap: _currentStepIndex > 0
               ? () => _selectTraceStep(_currentStepIndex - 1)
               : null,
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         _circleIconButton(
           icon:
               _isTracePlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
           tooltip: _isTracePlaying ? 'Pause trace' : 'Play trace',
           primary: true,
-          size: 52,
+          size: 44,
           onTap: totalSteps > 1 ? _toggleTracePlayback : null,
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         _circleIconButton(
           icon: Icons.chevron_right_rounded,
           tooltip: 'Next step',
+          size: 38,
           onTap: _currentStepIndex < totalSteps - 1
               ? () => _selectTraceStep(_currentStepIndex + 1)
               : null,
@@ -1015,10 +1036,10 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
         );
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: _Ink.panel,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: _Ink.borderSubtle),
       ),
       child: Column(
@@ -1031,7 +1052,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Row(children: [transport, const Spacer()]),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     optionsWrap(WrapAlignment.start),
                   ],
                 );
@@ -1046,15 +1067,15 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
               );
             },
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           Row(
             children: [
               _counterChip(_currentStepIndex + 1, totalSteps),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(child: _buildStepSlider(totalSteps)),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
           _buildTransitionChips(step),
         ],
       ),
@@ -1066,7 +1087,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
       decoration: BoxDecoration(
         color: _Ink.raised,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(color: _Ink.borderStrong),
       ),
       child: Text.rich(
@@ -1132,7 +1153,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
         decoration: BoxDecoration(
           color: _Ink.control,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(6),
           border: Border.all(color: _Ink.borderStrong, width: 1.2),
         ),
         child: Row(
@@ -1279,75 +1300,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     return markers;
   }
 
-  Widget _buildCompactHeader(BuildContext context, bool hasTrace) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final showSubtitle = constraints.maxWidth >= 420;
-        final showRunTags = constraints.maxWidth >= 560;
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: _Ink.panel,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _Ink.borderSubtle),
-          ),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.account_tree_rounded,
-                color: _Ink.state,
-                size: 24,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Generated Step Replay',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    if (showSubtitle)
-                      Text(
-                        hasTrace
-                            ? 'Use binder sections to inspect one layer at a time.'
-                            : 'Run code to generate replay steps.',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: const Color(0xFFCBD5E1),
-                              height: 1.25,
-                            ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              _buildTag(widget.runStatusLabel, const Color(0xFF38BDF8)),
-              if (showRunTags) ...[
-                const SizedBox(width: 8),
-                _buildTag(
-                  'Ep ${widget.episodesCompleted}',
-                  const Color(0xFF34D399),
-                ),
-                const SizedBox(width: 8),
-                _buildTag(
-                  'Steps ${widget.stepsRecorded}',
-                  const Color(0xFFFBBF24),
-                ),
-              ],
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   Widget _buildTag(String label, Color accent) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1389,7 +1341,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
                   color: isSelected
                       ? const Color(0xFF172554)
                       : const Color(0xFF111827),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(6),
                   border: Border.all(
                     color: isSelected
                         ? const Color(0xFF60A5FA)
@@ -1438,7 +1390,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
                     const SizedBox(height: 10),
                     Expanded(
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(4),
                         child: _buildFrameImage(step.framePath),
                       ),
                     ),
@@ -1535,7 +1487,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: const Color(0xFF0B1220),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(6),
                 border: Border.all(color: const Color(0xFF1E3A8A)),
               ),
               child: Column(
@@ -1614,7 +1566,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
               final renderWidget = AspectRatio(
                 aspectRatio: 1.0,
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(6),
                   child: _buildFrameImage(step.framePath),
                 ),
               );
@@ -1681,16 +1633,19 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
               );
 
               if (isWide) {
+                // Explicit widths (not Expanded/flex) so this Row keeps an
+                // intrinsic height and stays layout-safe inside a scroll view.
+                final available = constraints.maxWidth - 24;
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      flex: 4,
+                    SizedBox(
+                      width: available * 4 / 9,
                       child: renderWidget,
                     ),
                     const SizedBox(width: 24),
-                    Expanded(
-                      flex: 5,
+                    SizedBox(
+                      width: available * 5 / 9,
                       child: metricsWidget,
                     ),
                   ],
@@ -1717,7 +1672,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: accent.withValues(alpha: 0.2)),
       ),
       child: Column(
@@ -1757,7 +1712,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFF111827),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: const Color(0xFF334155)),
       ),
       child: Column(
@@ -1828,7 +1783,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFF111827),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: const Color(0xFF334155)),
       ),
       child: Column(
@@ -2107,7 +2062,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: const Color(0xFF111827),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(6),
             ),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -2239,7 +2194,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: const Color(0xFF111827),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(6),
             ),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -2301,7 +2256,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFF0B1220),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: const Color(0xFF334155)),
       ),
       child: Column(
@@ -2451,7 +2406,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFF0B1220),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: const Color(0xFF334155)),
       ),
       child: Column(
@@ -2517,7 +2472,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFF0B1220),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: const Color(0xFF334155)),
       ),
       child: Column(
@@ -2938,7 +2893,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: isActive ? const Color(0xFF172554) : const Color(0xFF111827),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(
           color: terminal
               ? const Color(0xFFF87171)
@@ -3185,7 +3140,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: const Color(0xFF111827),
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: Row(
                         children: [
@@ -3251,7 +3206,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
           ),
           const SizedBox(height: 14),
           ClipRRect(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(8),
             child: Container(
               color: Colors.black,
               child: AspectRatio(
@@ -3373,7 +3328,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFF111827),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: const Color(0xFF1E293B)),
       ),
       child: Column(
@@ -3456,7 +3411,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: const Color(0xFF334155)),
       ),
       child: Column(
@@ -3606,7 +3561,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFF111827),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(6),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3659,7 +3614,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
                   color: result.passed
                       ? const Color(0xFF052E2B)
                       : const Color(0xFF3F1D20),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -3720,7 +3675,11 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final boundedHeight = constraints.hasBoundedHeight;
+        // When bounded, fill and scroll internally. When unbounded (inside a
+        // scroll view), size to content with MainAxisSize.min — never
+        // IntrinsicHeight, which cannot measure a LayoutBuilder child.
         final content = Column(
+          mainAxisSize: boundedHeight ? MainAxisSize.max : MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
@@ -3746,13 +3705,13 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
         );
 
         return Container(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: const Color(0xFF0F172A),
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(8),
             border: Border.all(color: const Color(0xFF1E293B)),
           ),
-          child: boundedHeight ? content : IntrinsicHeight(child: content),
+          child: content,
         );
       },
     );
