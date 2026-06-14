@@ -277,19 +277,16 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   installFakeVideoPlayerPlatform();
 
-  testWidgets('workspace desktop layout opens course outline dialog', (
+  testWidgets('workspace desktop layout drops the course outline bar', (
     tester,
   ) async {
     await _pumpWorkspace(tester, const Size(1440, 900));
 
-    expect(find.text('Course Outline'), findsOneWidget);
+    // The Course Outline bar was removed; lesson identity now lives in the top
+    // app bar and the Study Buddy + lesson tabs remain.
+    expect(find.text('Course Outline'), findsNothing);
     expect(find.text('Study Buddy'), findsOneWidget);
     expect(find.text('Concept'), findsOneWidget);
-
-    await tester.tap(find.text('Course Outline'));
-    await tester.pumpAndSettle();
-
-    expect(find.byTooltip('Close course outline'), findsOneWidget);
     expect(find.byKey(const ValueKey('study-buddy-chat-input')), findsWidgets);
     expect(tester.takeException(), isNull);
   });
@@ -299,7 +296,7 @@ void main() {
   ) async {
     await _pumpWorkspace(tester, const Size(900, 1200));
 
-    expect(find.text('Course Outline'), findsOneWidget);
+    expect(find.text('Course Outline'), findsNothing);
     expect(find.text('Study Buddy'), findsOneWidget);
     expect(find.byKey(const ValueKey('study-buddy-drawer-handle')),
         findsOneWidget);

@@ -158,7 +158,7 @@ void main() {
     _wide(tester);
     await tester.pumpWidget(_wrap(_panel([_dpStep()])));
     await tester.pumpAndSettle();
-    await _selectBinderSection(tester, 'Environment');
+    await _selectBinderSection(tester, 'Step');
     expect(find.text('Probability (p)'), findsWidgets);
     expect(find.text('sampled · model-free'), findsNothing);
   });
@@ -168,7 +168,7 @@ void main() {
     _wide(tester);
     await tester.pumpWidget(_wrap(_panel([_tdStep()])));
     await tester.pumpAndSettle();
-    await _selectBinderSection(tester, 'Environment');
+    await _selectBinderSection(tester, 'Step');
     expect(find.text('sampled · model-free'), findsWidgets);
     expect(find.text('Probability (p)'), findsNothing);
   });

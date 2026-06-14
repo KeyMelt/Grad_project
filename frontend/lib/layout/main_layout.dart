@@ -12,7 +12,6 @@ import '../core/workbench_state.dart';
 import '../features/admin/admin_console.dart';
 import '../features/flashcards/flashcards_section.dart';
 import '../features/home/home_dashboard.dart';
-import '../features/lessons/lesson_browser.dart';
 import '../features/onboarding/onboarding_tutorial.dart';
 import '../features/onboarding/profile_completion_dialog.dart';
 import '../features/quiz/quiz_section.dart';
@@ -491,58 +490,10 @@ class _MainLayoutState extends State<MainLayout> {
       BuildContext context, RLWorkbenchState state) {
     final isWorkspace = state.currentSection == AppSection.workspace;
 
-    // Build course outline launcher bottom bar for workspace mode.
-    PreferredSizeWidget? bottomBar;
-    if (isWorkspace) {
-      final orderedLessons = state.sections
-          .expand((section) => section.lessons)
-          .toList(growable: false);
-      final currentLessonIndex = orderedLessons.indexWhere(
-        (lesson) => lesson.id == state.selectedLesson.id,
-      );
-      final canGoPrevious = currentLessonIndex > 0;
-      final canGoNext = currentLessonIndex >= 0 &&
-          currentLessonIndex < orderedLessons.length - 1;
-
-      bottomBar = PreferredSize(
-        preferredSize: const Size.fromHeight(42),
-        child: Container(
-          decoration: const BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: AppTheme.borderLight),
-            ),
-          ),
-          padding: const EdgeInsets.fromLTRB(10, 0, 10, 5),
-          child: Center(
-            child: CourseOutlineLauncher(
-              selectedLesson: state.selectedLesson,
-              canGoPrevious: canGoPrevious,
-              canGoNext: canGoNext,
-              onPrevious: canGoPrevious
-                  ? () => _cubit
-                      .selectLesson(orderedLessons[currentLessonIndex - 1])
-                  : () {},
-              onNext: canGoNext
-                  ? () => _cubit
-                      .selectLesson(orderedLessons[currentLessonIndex + 1])
-                  : () {},
-              onOpenOutline: () => showCourseOutlineDialog(
-                context: context,
-                sections: state.sections,
-                selectedLesson: state.selectedLesson,
-                onLessonSelected: _cubit.selectLesson,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
     return AppBar(
       primary: false,
       elevation: 0,
       toolbarHeight: 56,
-      bottom: bottomBar,
       title: LayoutBuilder(
         builder: (context, constraints) {
           final showLogo = constraints.maxWidth > 300;
@@ -613,7 +564,22 @@ class _MainLayoutState extends State<MainLayout> {
                   ),
                 )
               else
-                const Spacer(),
+                // Reclaim the space freed by the removed Course Outline bar for
+                // the current lesson's identity.
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(
+                      state.selectedLesson.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           );
         },
@@ -675,6 +641,15 @@ class _MainLayoutState extends State<MainLayout> {
             tooltip: 'Sign out',
             onPressed: _cubit.signOut,
             icon: const Icon(Icons.logout_rounded),
+          ),
+        ],
+        if (_canShareSessionFeedback(state)) ...[
+          const SizedBox(width: 6),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: 'Share feedback',
+            onPressed: _showSessionFeedbackDialog,
+            icon: const Icon(Icons.rate_review_outlined),
           ),
         ],
         const SizedBox(width: 6),
