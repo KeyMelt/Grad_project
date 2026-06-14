@@ -84,7 +84,8 @@ class TraceReplayScene(Scene):
         # ---- board --------------------------------------------------------
         board = make_board(env, steps[0])
         # CliffWalking is a wide 4x12 grid -> a wide card sits below it; the
-        # other envs leave room for a tall card on the right.
+        # other envs (FrozenLake 4x4, Taxi 5x5) leave room for a tall card
+        # on the right.
         if env == "CliffWalking":
             card_pos, card_w = [0.0, -2.35, 0.0], 9.4
         else:

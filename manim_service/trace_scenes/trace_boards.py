@@ -376,11 +376,230 @@ class BlackjackBoard:
         self.panel = new
 
 
+# ============================================================ Taxi board
+class TaxiBoard:
+    """5×5 Taxi-v3 grid with cab, passenger, and destination markers.
+
+    Pickup/Dropoff are in-place acts — .step animates a passenger hop into/out
+    of the cab rather than a directional walk.
+    """
+    is_spatial = True
+    ROWS, COLS = 5, 5
+    _LOCS = {"R": (0, 0), "G": (0, 4), "Y": (4, 0), "B": (4, 3)}
+    _LOC_COLORS = {"R": "#EF4444", "G": "#22C55E", "Y": "#EAB308", "B": "#3B82F6"}
+    _WALLS = [
+        ((0, 1), (0, 2)), ((1, 1), (1, 2)),
+        ((3, 0), (3, 1)), ((4, 0), (4, 1)),
+        ((3, 2), (3, 3)), ((4, 2), (4, 3)),
+    ]
+
+    def __init__(self, first_step=None, width=5.2, at=(-3.6, 0.2)):
+        self.cw = width / self.COLS
+        self.ch = self.cw
+        self._width = width
+        self._at = at
+
+        grid = Group()
+        self.cells: list = []
+        for r in range(self.ROWS):
+            for c in range(self.COLS):
+                cell = self._compose(r, c)
+                cell.move_to(self._center0(r, c))
+                self.cells.append(cell)
+                grid.add(cell)
+
+        self._walls_group = self._draw_walls()
+        self.group = Group(grid, self._walls_group)
+        self.group.move_to([at[0], at[1], 0.0])
+
+        self._gm = (first_step or {}).get("grid_metadata") or {}
+        self.cab = None
+        self._cab_dir = "down"
+        self._passenger_dot = None
+        self._dest_marker = None
+
+    def _compose(self, r, c):
+        cell = Group()
+        bg = Rectangle(
+            width=self.cw * 0.94, height=self.ch * 0.94,
+            fill_color="#1E293B", fill_opacity=1.0,
+            stroke_color=C.STROKE, stroke_width=1.2)
+        cell.add(bg)
+        for label, (lr, lc) in self._LOCS.items():
+            if (r, c) == (lr, lc):
+                lbl = Text(label, font_size=int(self.cw * 18), color=self._LOC_COLORS[label],
+                           weight="BOLD")
+                lbl.set_z_index(2)
+                cell.add(lbl)
+                break
+        return cell
+
+    def _center0(self, r, c):
+        return np.array([(c - (self.COLS - 1) / 2) * self.cw,
+                         -(r - (self.ROWS - 1) / 2) * self.ch, 0.0])
+
+    def _draw_walls(self):
+        walls = VGroup()
+        for (r1, c1), (r2, c2) in self._WALLS:
+            if c2 == c1 + 1:
+                p1 = self._center0(r1, c1) + np.array([self.cw / 2, self.ch / 2, 0])
+                p2 = self._center0(r1, c1) + np.array([self.cw / 2, -self.ch / 2, 0])
+                from manim import Line as MLine
+                wall = MLine(p1, p2, color="#F87171", stroke_width=3.5).set_z_index(10)
+                walls.add(wall)
+        return walls
+
+    @property
+    def mob(self):
+        return self.group
+
+    def center(self, state):
+        r, c = divmod(int(state), self.COLS)
+        return self.cells[r * self.COLS + c].get_center()
+
+    def ring(self, state, *, color=C.STATE, sw=3.5):
+        r, c = divmod(int(state), self.COLS)
+        return SurroundingRectangle(self.cells[r * self.COLS + c], color=color,
+                                    buff=0.0, stroke_width=sw).set_z_index(30)
+
+    def _cab_mob(self, color=C.ACTION):
+        cab = Rectangle(width=self.cw * 0.55, height=self.ch * 0.45,
+                        fill_color=color, fill_opacity=0.9,
+                        stroke_color="#FDE68A", stroke_width=2.0)
+        cab.set_z_index(40)
+        return cab
+
+    def _passenger_mob(self, color=C.POLICY):
+        dot = Dot(radius=self.cw * 0.12, color=color).set_z_index(35)
+        return dot
+
+    def _dest_mob(self, r, c, label):
+        color = self._LOC_COLORS.get(label, C.REWARD)
+        rect = Rectangle(width=self.cw * 0.88, height=self.ch * 0.88,
+                         fill_opacity=0.0, stroke_color=color,
+                         stroke_width=3.5)
+        rect.set_z_index(5)
+        rect.move_to(self.cells[r * self.COLS + c].get_center())
+        return rect
+
+    def _read_gm(self, step):
+        return step.get("grid_metadata") or self._gm
+
+    def _taxi_pos(self, gm):
+        sc = gm.get("state_coordinates") or {}
+        return sc.get("row", 0), sc.get("column", 0)
+
+    def place(self, scene, step, *, run_time=0.35):
+        gm = self._read_gm(step)
+        tr, tc = self._taxi_pos(gm)
+        grid_pos = tr * self.COLS + tc
+
+        dest = gm.get("destination") or {}
+        dr = dest.get("row", 0)
+        dc = dest.get("column", 0)
+        dl = dest.get("label", "?")
+        self._dest_marker = self._dest_mob(dr, dc, dl)
+        scene.play(FadeIn(self._dest_marker), run_time=run_time * 0.3)
+
+        passenger = gm.get("passenger") or {}
+        if not passenger.get("in_taxi", False):
+            pr = passenger.get("row", 0)
+            pc = passenger.get("column", 0)
+            self._passenger_dot = self._passenger_mob()
+            self._passenger_dot.move_to(
+                self.cells[pr * self.COLS + pc].get_center() + np.array([self.cw * 0.25, 0.15, 0]))
+            scene.play(FadeIn(self._passenger_dot), run_time=run_time * 0.3)
+
+        self.cab = self._cab_mob()
+        self.cab.move_to(self.center(grid_pos))
+        scene.play(FadeIn(self.cab, scale=0.7), run_time=run_time)
+
+    def step(self, scene, step, *, run_time=0.4):
+        gm = self._read_gm(step)
+        action = step.get("action")
+        if self.cab is None:
+            self.place(scene, step, run_time=run_time)
+            return
+
+        nsc = gm.get("next_state_coordinates") or gm.get("state_coordinates") or {}
+        nr, nc = nsc.get("row", 0), nsc.get("column", 0)
+        next_grid_pos = nr * self.COLS + nc
+
+        if action is not None and int(action) == 4:
+            self._animate_pickup(scene, gm, run_time)
+            return
+        if action is not None and int(action) == 5:
+            self._animate_dropoff(scene, gm, step, run_time)
+            return
+
+        dot = Dot(self.cab.get_center(), radius=self.cw * 0.06,
+                  color=C.POLICY).set_opacity(0.5).set_z_index(35)
+        scene.add(dot)
+        scene.play(self.cab.animate.move_to(self.center(next_grid_pos)),
+                   run_time=run_time)
+        passenger = gm.get("passenger") or {}
+        if passenger.get("in_taxi", False) and self._passenger_dot is not None:
+            self._passenger_dot.move_to(
+                self.cab.get_center() + np.array([self.cw * 0.2, 0.12, 0]))
+
+    def _animate_pickup(self, scene, gm, run_time):
+        passenger = gm.get("passenger") or {}
+        if passenger.get("in_taxi", False) and self._passenger_dot is not None:
+            scene.play(self._passenger_dot.animate.move_to(
+                self.cab.get_center() + np.array([self.cw * 0.2, 0.12, 0])
+            ).set_color(C.REWARD), run_time=run_time)
+        elif self._passenger_dot is not None:
+            scene.play(self._passenger_dot.animate.set_color(C.PENALTY),
+                       run_time=run_time * 0.5)
+
+    def _animate_dropoff(self, scene, gm, step, run_time):
+        reward = step.get("reward", 0)
+        if reward >= 20 and self._passenger_dot is not None:
+            scene.play(self._passenger_dot.animate.move_to(
+                self.cab.get_center() + np.array([0, -self.ch * 0.35, 0])
+            ).set_color(C.REWARD), run_time=run_time * 0.4)
+            flash_txt = Text("+20", font_size=28, color=C.REWARD,
+                             weight="BOLD").set_z_index(50)
+            flash_txt.move_to(self.cab.get_center() + np.array([0, self.ch * 0.45, 0]))
+            scene.play(FadeIn(flash_txt, scale=1.3), run_time=run_time * 0.3)
+            scene.play(FadeOut(flash_txt), FadeOut(self._passenger_dot),
+                       run_time=run_time * 0.3)
+            self._passenger_dot = None
+        else:
+            flash_txt = Text("-10", font_size=24, color=C.PENALTY,
+                             weight="BOLD").set_z_index(50)
+            flash_txt.move_to(self.cab.get_center() + np.array([0, self.ch * 0.4, 0]))
+            scene.play(FadeIn(flash_txt), run_time=run_time * 0.3)
+            scene.play(FadeOut(flash_txt), run_time=run_time * 0.3)
+
+    @staticmethod
+    def _decode_taxi_pos(encoded_state: int) -> tuple[int, int]:
+        remaining = encoded_state // 4
+        remaining = remaining // 5
+        col = remaining % 5
+        row = remaining // 5
+        return row, col
+
+    def flash(self, scene, state, *, color=C.TEAL, run_time=0.4):
+        if not isinstance(state, int):
+            return
+        r, c = self._decode_taxi_pos(int(state))
+        grid_idx = r * self.COLS + c
+        if grid_idx < 0 or grid_idx >= len(self.cells):
+            return
+        rect = SurroundingRectangle(self.cells[grid_idx], color=color,
+                                    buff=0.0, stroke_width=4.0).set_z_index(39)
+        scene.play(FadeIn(rect), run_time=run_time * 0.45)
+        scene.play(FadeOut(rect), run_time=run_time * 0.55)
+
+
 def make_board(env: str, first_step: dict):
     if env == "CliffWalking":
         return CliffWalkingBoard()
     if env == "Blackjack":
         return BlackjackBoard()
+    if env == "Taxi":
+        return TaxiBoard(first_step)
     # FrozenLake reads its actual map (rows/cols/holes/goal) from the run's
     # trace metadata rather than assuming the standard 4x4 layout.
     return FrozenLakeBoard(first_step)

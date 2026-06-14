@@ -514,14 +514,15 @@ _CORE_LESSONS: list[dict[str, Any]] = [
     {
         "id": "td_q_learning",
         "title": "Q-Learning",
-        "description": "Update CliffWalking action values from one-step TD targets and epsilon-greedy samples.",
+        "description": "Navigate, pick up, and drop off a passenger on the Taxi grid using off-policy TD targets.",
         "category": "Temporal Difference",
         "required_function": "q_learning_update",
-        "environment_name": "CliffWalking",
+        "environment_name": "Taxi",
         "env_params": {},
         "template_kind": "guided_fill_in",
         "backend_enabled": True,
         "starter_code": (
+            "# Taxi-v3: 500 states (taxi pos × passenger × dest), 6 actions\n"
             "LEARNING_RATE = 0.10\n"
             "DISCOUNT_FACTOR = 0.95\n"
             "EXPLORATION_RATE = 0.20\n"
@@ -539,14 +540,14 @@ _CORE_LESSONS: list[dict[str, Any]] = [
                 "kind": "expression",
                 "prompt": "Select the greedy bootstrap value from the next-state row of the list-backed Q-table.",
                 "expected_concept": "max next-state bootstrap",
-                "approx_line_anchor": 7,
+                "approx_line_anchor": 8,
             },
             {
                 "blank_id": "q_learning_update_rule",
                 "kind": "block",
                 "prompt": "Apply the incremental Q-learning update using alpha and the TD target.",
                 "expected_concept": "one-step TD update",
-                "approx_line_anchor": 9,
+                "approx_line_anchor": 10,
             },
         ],
         "success_criteria": [
@@ -558,16 +559,16 @@ _CORE_LESSONS: list[dict[str, Any]] = [
             "stream_path": "/media/concept-videos/td_q_learning_concept.mp4",
             "caption_path": "/media/concept-videos/td_q_learning_captions.vtt",
             "duration_label": "03:25",
-            "summary": "An off-policy CliffWalking update showing how Q-learning bootstraps from the greedy next-state action value.",
+            "summary": "An off-policy Taxi update showing how Q-learning bootstraps from the greedy next-state action value to compose sub-goals.",
             "highlights": [
                 "How Q-learning uses a max over next-state action values.",
-                "How the TD target combines reward and discounted bootstrap.",
-                "How the selected Q-value moves toward the target.",
+                "How the +20 dropoff reward propagates backward through the Q-table.",
+                "How the greedy policy composes navigate-pickup-navigate-dropoff sub-goals.",
             ],
         },
         "exercise": {
             "title": "Implement the Q-learning update rule",
-            "overview": "Complete the one-step TD update that adjusts a single Q-value from a sampled transition.",
+            "overview": "Complete the one-step TD update that adjusts a single Q-value from a sampled Taxi transition.",
             "tasks": [
                 "Replace the bootstrap placeholder with the greedy next-state value from the list-backed Q row.",
                 "Fill the TODO block that performs the incremental TD update.",
@@ -578,7 +579,7 @@ _CORE_LESSONS: list[dict[str, Any]] = [
                 "The chosen Q-value is updated incrementally toward the TD target.",
                 "The function returns the updated Q-table and passes the sample lesson test.",
             ],
-            "code_tip": "Q is list-backed in the backend, so max(Q[next_state]) is the direct bootstrap expression. LEARNING_RATE, DISCOUNT_FACTOR, EXPLORATION_RATE, and EPISODE_COUNT are read from the submitted code.",
+            "code_tip": "Q is list-backed (500 rows × 6 columns for Taxi), so max(Q[next_state]) is the direct bootstrap expression. LEARNING_RATE, DISCOUNT_FACTOR, EXPLORATION_RATE, and EPISODE_COUNT are read from the submitted code.",
         },
     },
 ]

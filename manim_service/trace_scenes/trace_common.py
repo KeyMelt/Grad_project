@@ -35,6 +35,9 @@ _ACTIONS: dict[str, dict[int, tuple[str, str]]] = {
     "CliffWalking": {0: ("Up", "up"), 1: ("Right", "right"),
                      2: ("Down", "down"), 3: ("Left", "left")},
     "Blackjack": {0: ("Stand", "down"), 1: ("Hit", "up")},
+    "Taxi": {0: ("South", "down"), 1: ("North", "up"),
+             2: ("East", "right"), 3: ("West", "left"),
+             4: ("Pickup", "down"), 5: ("Dropoff", "down")},
 }
 
 _TD_KINDS = {"sarsa", "q_learning", "td_prediction"}
@@ -59,8 +62,16 @@ def detect_env(steps: list[dict]) -> str:
     return "FrozenLake"
 
 
+def is_taxi_action_spatial(action: Any) -> bool:
+    """True for movement actions (South/North/East/West), False for Pickup/Dropoff."""
+    try:
+        return int(action) < 4
+    except (TypeError, ValueError):
+        return True
+
+
 def grid_shape(env: str) -> tuple[int, int]:
-    return {"CliffWalking": (4, 12), "FrozenLake": (4, 4)}.get(env, (4, 4))
+    return {"CliffWalking": (4, 12), "FrozenLake": (4, 4), "Taxi": (5, 5)}.get(env, (4, 4))
 
 
 def action_label(env: str, action: Any) -> str:

@@ -1413,7 +1413,13 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _buildTag('state ${grid.state}', const Color(0xFF93C5FD)),
+              if (grid.isTaxi && grid.encodedState != null)
+                _buildTag(
+                  'state ${grid.encodedState}',
+                  const Color(0xFF93C5FD),
+                )
+              else
+                _buildTag('state ${grid.state}', const Color(0xFF93C5FD)),
               if (grid.nextState != null)
                 _buildTag('next ${grid.nextState}', const Color(0xFF2DD4BF)),
               if (grid.actionLabel.isNotEmpty)
@@ -1430,6 +1436,18 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
                   grid.terminated ? 'terminal' : 'truncated',
                   const Color(0xFFF87171),
                 ),
+              if (grid.isTaxi && grid.passenger != null)
+                _buildTag(
+                  grid.passenger!.inTaxi
+                      ? 'passenger aboard'
+                      : 'passenger @ ${grid.passenger!.location}',
+                  const Color(0xFFA78BFA),
+                ),
+              if (grid.isTaxi && grid.destination != null)
+                _buildTag(
+                  'dest ${grid.destination!.label}',
+                  const Color(0xFF34D399),
+                ),
             ],
           ),
         ],
@@ -1440,19 +1458,14 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
   Widget _buildGridCell(TraceGridMetadata grid, TraceGridCell cell) {
     final isCurrent = cell.state == grid.state;
     final isNext = grid.nextState != null && cell.state == grid.nextState;
-    final isCliff = cell.tileType == 'C';
-    final isHole = cell.tileType == 'H';
-    final isGoal = cell.tileType == 'G';
-    final tileColor = isCliff || isHole
-        ? const Color(0xFF7F1D1D)
-        : isGoal
-            ? const Color(0xFF065F46)
-            : cell.tileType == 'S'
-                ? const Color(0xFF1E3A8A)
-                : const Color(0xFF1E293B);
+    final tileColor = grid.isTaxi
+        ? _taxiTileColor(grid, cell, isCurrent)
+        : _defaultTileColor(cell);
+    final tooltipLabel = grid.isTaxi
+        ? _taxiTooltip(grid, cell)
+        : 'State ${cell.state} (${cell.row}, ${cell.column}) | ${_gridTileLabel(cell.tileType)}';
     return Tooltip(
-      message:
-          'State ${cell.state} (${cell.row}, ${cell.column}) | ${_gridTileLabel(cell.tileType)}',
+      message: tooltipLabel,
       child: Container(
         decoration: BoxDecoration(
           color: tileColor,
@@ -1487,7 +1500,9 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
                     ? _gridActionMarker(grid)
                     : isNext
                         ? 'N'
-                        : _gridTileMarker(cell.tileType),
+                        : grid.isTaxi
+                            ? _taxiTileMarker(grid, cell)
+                            : _gridTileMarker(cell.tileType),
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: isCurrent ? 18 : 13,
@@ -1501,12 +1516,85 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     );
   }
 
+  Color _defaultTileColor(TraceGridCell cell) {
+    final isCliff = cell.tileType == 'C';
+    final isHole = cell.tileType == 'H';
+    final isGoal = cell.tileType == 'G';
+    return isCliff || isHole
+        ? const Color(0xFF7F1D1D)
+        : isGoal
+            ? const Color(0xFF065F46)
+            : cell.tileType == 'S'
+                ? const Color(0xFF1E3A8A)
+                : const Color(0xFF1E293B);
+  }
+
+  Color _taxiTileColor(
+    TraceGridMetadata grid,
+    TraceGridCell cell,
+    bool isCurrent,
+  ) {
+    final dest = grid.destination;
+    if (dest != null && cell.row == dest.row && cell.column == dest.column) {
+      return const Color(0xFF065F46);
+    }
+    final pass = grid.passenger;
+    if (pass != null &&
+        !pass.inTaxi &&
+        cell.row == pass.row &&
+        cell.column == pass.column) {
+      return const Color(0xFF4C1D95);
+    }
+    const locColors = {
+      'R': Color(0xFF7F1D1D),
+      'G': Color(0xFF14532D),
+      'Y': Color(0xFF713F12),
+      'B': Color(0xFF1E3A5F),
+    };
+    return locColors[cell.tileType] ?? const Color(0xFF1E293B);
+  }
+
+  String _taxiTooltip(TraceGridMetadata grid, TraceGridCell cell) {
+    final parts = <String>['(${cell.row}, ${cell.column})'];
+    if (cell.tileType != 'F') parts.add('pickup ${cell.tileType}');
+    final dest = grid.destination;
+    if (dest != null && cell.row == dest.row && cell.column == dest.column) {
+      parts.add('dest ${dest.label}');
+    }
+    final pass = grid.passenger;
+    if (pass != null &&
+        !pass.inTaxi &&
+        cell.row == pass.row &&
+        cell.column == pass.column) {
+      parts.add('passenger');
+    }
+    return parts.join(' | ');
+  }
+
+  String _taxiTileMarker(TraceGridMetadata grid, TraceGridCell cell) {
+    final dest = grid.destination;
+    if (dest != null && cell.row == dest.row && cell.column == dest.column) {
+      return '⊕';
+    }
+    final pass = grid.passenger;
+    if (pass != null &&
+        !pass.inTaxi &&
+        cell.row == pass.row &&
+        cell.column == pass.column) {
+      return '●';
+    }
+    if (cell.tileType != 'F') return cell.tileType;
+    return '';
+  }
+
   String _gridActionMarker(TraceGridMetadata grid) {
     return switch (grid.actionLabel) {
-      'Up' => '↑',
-      'Right' => '→',
-      'Down' => '↓',
-      'Left' => '←',
+      'Up' || 'North' => '↑',
+      'Right' || 'East' => '→',
+      'Down' || 'South' => '↓',
+      'Left' || 'West' => '←',
+      'Pickup' => '⬆',
+      'Dropoff' => '⬇',
       _ => 'A',
     };
   }
