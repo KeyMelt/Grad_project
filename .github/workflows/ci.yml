@@ -141,6 +141,7 @@ jobs:
     needs:
       - backend
       - frontend
+    if: github.event_name != 'pull_request'
 
     steps:
       - name: Checkout
