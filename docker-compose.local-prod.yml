@@ -1,0 +1,46 @@
+services:
+  gateway:
+    environment:
+      RL_IDE_ALLOW_LEGACY_PASSWORD_SIGN_IN: ${RL_IDE_ALLOW_LEGACY_PASSWORD_SIGN_IN:-1}
+      RL_IDE_ALLOW_LOCAL_MEDIA_FALLBACK: ${RL_IDE_ALLOW_LOCAL_MEDIA_FALLBACK:-1}
+      RL_IDE_ALLOW_LOCAL_PASSWORD_AUTH: ${RL_IDE_ALLOW_LOCAL_PASSWORD_AUTH:-1}
+      RL_IDE_AGENT_EVAL_PASSWORD: ${RL_IDE_AGENT_EVAL_PASSWORD:-AgentEval123!}
+    ports:
+      - "${RL_IDE_GATEWAY_BIND:-127.0.0.1:18000}:8000"
+    volumes:
+      - "${RL_IDE_LOCAL_STATE_DIR:?Set RL_IDE_LOCAL_STATE_DIR}/data:/srv/rl-platform/data"
+      - "${RL_IDE_LOCAL_STATE_DIR:?Set RL_IDE_LOCAL_STATE_DIR}/animations:/srv/rl-platform/animations"
+      - "${RL_IDE_LOCAL_STATE_DIR:?Set RL_IDE_LOCAL_STATE_DIR}/concept-videos:/srv/rl-platform/concept-videos"
+
+  execution-worker:
+    environment:
+      RL_IDE_ALLOW_LOCAL_MEDIA_FALLBACK: ${RL_IDE_ALLOW_LOCAL_MEDIA_FALLBACK:-1}
+    volumes:
+      - "${RL_IDE_LOCAL_STATE_DIR:?Set RL_IDE_LOCAL_STATE_DIR}/data:/srv/rl-platform/data"
+      - "${RL_IDE_LOCAL_STATE_DIR:?Set RL_IDE_LOCAL_STATE_DIR}/animations:/srv/rl-platform/animations"
+      - "${RL_IDE_LOCAL_STATE_DIR:?Set RL_IDE_LOCAL_STATE_DIR}/concept-videos:/srv/rl-platform/concept-videos"
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  user-evaluation:
+    environment:
+      RL_IDE_ALLOW_LEGACY_PASSWORD_SIGN_IN: ${RL_IDE_ALLOW_LEGACY_PASSWORD_SIGN_IN:-1}
+      RL_IDE_ALLOW_LOCAL_MEDIA_FALLBACK: ${RL_IDE_ALLOW_LOCAL_MEDIA_FALLBACK:-1}
+      RL_IDE_ALLOW_LOCAL_PASSWORD_AUTH: ${RL_IDE_ALLOW_LOCAL_PASSWORD_AUTH:-1}
+      RL_IDE_AGENT_EVAL_PASSWORD: ${RL_IDE_AGENT_EVAL_PASSWORD:-AgentEval123!}
+    volumes:
+      - "${RL_IDE_LOCAL_STATE_DIR:?Set RL_IDE_LOCAL_STATE_DIR}/data:/srv/rl-platform/data"
+      - "${RL_IDE_LOCAL_STATE_DIR:?Set RL_IDE_LOCAL_STATE_DIR}/animations:/srv/rl-platform/animations"
+      - "${RL_IDE_LOCAL_STATE_DIR:?Set RL_IDE_LOCAL_STATE_DIR}/concept-videos:/srv/rl-platform/concept-videos"
+
+  manim-service:
+    environment:
+      RL_IDE_ALLOW_LOCAL_MEDIA_FALLBACK: ${RL_IDE_ALLOW_LOCAL_MEDIA_FALLBACK:-1}
+    volumes:
+      - "${RL_IDE_LOCAL_STATE_DIR:?Set RL_IDE_LOCAL_STATE_DIR}/animations:/srv/rl-platform/animations"
+
+  frontend:
+    ports:
+      - "${RL_IDE_HTTP_BIND:-127.0.0.1:18080}:80"
+      - "${RL_IDE_HTTPS_BIND:-127.0.0.1:18443}:443"
+    volumes:
+      - "${RL_IDE_LOCAL_CERTS_DIR:?Set RL_IDE_LOCAL_CERTS_DIR}:/etc/letsencrypt:ro"

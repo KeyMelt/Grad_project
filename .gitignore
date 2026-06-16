@@ -56,10 +56,17 @@ frontend/ios/Podfile.lock
 *.db-shm
 *.db-wal
 backend/media/concept_videos/*.mp4
+backend/media/concept_videos/*.prefix_bak
+backend/media/concept_videos/*.wav
+backend/media/traces/
 backend/concept_videos/_manim_media/
 backend/concept_videos/scenes/media/
 manim_service/_manim_media/
 manim_service/_audio_cache/
+manim_service/media/
+manim_service/workspaces/*
+!manim_service/workspaces/.gitignore
+!manim_service/workspaces/README.md
 backend/media/concept_videos/*.audio_report.json
 backend/visualization/animations/
 backend/data/
@@ -80,11 +87,14 @@ output/
 !.agents/skills/rl-course-architect/
 !.agents/skills/rl-course-architect/**
 .claude/reports/
+.claude/launch.json
 .claude/settings.json
 .claude/worktrees/
 .flutter_mcp/
 frontend/.flutter_mcp/
 .playwright-cli/
+frontend/media/
+frontend/test/failures/
 skills-lock.json
 RL_manim/
 _tmp_grad1/
@@ -92,6 +102,10 @@ _tmp_grad1/
 /tmp/
 /docs/
 /grad_project_archive_*/
+all_figma_figures/
+figma_all_boards/
+thesis_diagrams_fixed/
+manim_service/concept_videos/docs/_archive_pipeline/
 
 !backend/media/
 !backend/media/concept_videos/

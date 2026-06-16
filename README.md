@@ -25,6 +25,30 @@ Useful variants:
 ./start_app.sh --no-build
 ```
 
+Start the production-shaped local stack on non-conflicting localhost ports:
+
+```bash
+cd grad_project
+./deploy/local-prod.sh seed-media
+./deploy/local-prod.sh up
+```
+
+This path keeps the VPS service topology (`gateway`, `execution-worker`, `user-evaluation`, `manim-service`, `frontend`) but defaults to safe local settings:
+
+- Frontend: `http://127.0.0.1:18080`
+- Gateway: `http://127.0.0.1:18000`
+- Mutable state lives under `~/Desktop/grad_support_files/grad_project/local_prod`
+- Auth and media default to local-safe behavior until you tighten the generated env file for stricter parity
+
+Useful prep/diagnostic commands:
+
+```bash
+./deploy/local-prod.sh doctor
+./deploy/local-prod.sh seed-media
+./deploy/local-prod.sh build
+./deploy/local-prod.sh ps
+```
+
 ## Manual Startup
 
 Start the three backend services through Docker Compose:
