@@ -420,6 +420,108 @@ void main() {
     expect(find.text('Right'), findsWidgets);
   });
 
+  testWidgets('renders Taxi grid metadata with encoded states and transition tags',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TraceReplayPanel(
+            runStatusLabel: 'Passed',
+            statusMessage: 'ok',
+            totalReward: -1,
+            averageReward: -1,
+            bestEpisodeReward: -1,
+            episodesCompleted: 1,
+            stepsRecorded: 1,
+            videoPath: '',
+            testResults: const [],
+            stepTrace: [
+              ExecutionTraceStep.fromJson({
+                'state': 263,
+                'action': 0,
+                'next_state': 363,
+                'reward': -1,
+                'transition_probability': 1,
+                'agent_caption': 'Taxi moves south toward the destination.',
+                'grid_metadata': {
+                  'environment': 'Taxi',
+                  'rows': 5,
+                  'columns': 5,
+                  'state': 13,
+                  'next_state': 18,
+                  'encoded_state': 263,
+                  'encoded_next_state': 363,
+                  'state_coordinates': {'row': 2, 'column': 3},
+                  'next_state_coordinates': {'row': 3, 'column': 3},
+                  'action': 0,
+                  'action_label': 'South',
+                  'reward': -1,
+                  'terminated': false,
+                  'truncated': false,
+                  'passenger': {
+                    'location': 'R',
+                    'row': 0,
+                    'column': 0,
+                    'in_taxi': false,
+                  },
+                  'next_passenger': {
+                    'location': 'R',
+                    'row': 0,
+                    'column': 0,
+                    'in_taxi': false,
+                  },
+                  'destination': {
+                    'label': 'B',
+                    'row': 4,
+                    'column': 3,
+                  },
+                  'walls': [
+                    {
+                      'start': {'row': 0, 'column': 1},
+                      'end': {'row': 0, 'column': 2},
+                    },
+                  ],
+                  'cells': [
+                    for (final row in [0, 1, 2, 3, 4])
+                      for (final column in [0, 1, 2, 3, 4])
+                        {
+                          'state': row * 5 + column,
+                          'row': row,
+                          'column': column,
+                          'tile_type': row == 0 && column == 0
+                              ? 'R'
+                              : row == 0 && column == 4
+                                  ? 'G'
+                                  : row == 4 && column == 0
+                                      ? 'Y'
+                                      : row == 4 && column == 3
+                                          ? 'B'
+                                          : 'F',
+                          'terminal': false,
+                        },
+                  ],
+                },
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await _selectBinderSection(tester, 'Step');
+    expect(find.text('Taxi grid'), findsOneWidget);
+    expect(find.text('state 263'), findsOneWidget);
+    expect(find.text('next 363'), findsOneWidget);
+    expect(find.text('passenger @ R'), findsOneWidget);
+    expect(find.text('dest B'), findsOneWidget);
+    expect(find.text('South'), findsWidgets);
+  });
+
   testWidgets('selects complete trace episodes and resets the step cursor',
       (tester) async {
     tester.view.physicalSize = const Size(1400, 1000);
@@ -904,110 +1006,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Step 1 / 3'), findsOneWidget);
     expect(find.text('Opening step.'), findsWidgets);
-  });
-
-  testWidgets('renders Taxi grid with passenger and destination overlays',
-      (tester) async {
-    tester.view.physicalSize = const Size(1400, 1000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: TraceReplayPanel(
-            runStatusLabel: 'Passed',
-            statusMessage: 'ok',
-            totalReward: -1,
-            averageReward: -1,
-            bestEpisodeReward: -1,
-            episodesCompleted: 1,
-            stepsRecorded: 1,
-            videoPath: '',
-            testResults: const [],
-            stepTrace: [
-              ExecutionTraceStep.fromJson({
-                'state': 328,
-                'action': 0,
-                'next_state': 428,
-                'reward': -1,
-                'transition_probability': 1,
-                'agent_caption': 'Agent selected South.',
-                'grid_metadata': {
-                  'environment': 'Taxi',
-                  'rows': 5,
-                  'columns': 5,
-                  'state': 13,
-                  'next_state': 18,
-                  'encoded_state': 328,
-                  'encoded_next_state': 428,
-                  'state_coordinates': {'row': 2, 'column': 3},
-                  'next_state_coordinates': {'row': 3, 'column': 3},
-                  'passenger': {
-                    'location': 'R',
-                    'row': 0,
-                    'column': 0,
-                    'in_taxi': false,
-                  },
-                  'destination': {
-                    'label': 'B',
-                    'row': 4,
-                    'column': 3,
-                  },
-                  'action': 0,
-                  'action_label': 'South',
-                  'reward': -1,
-                  'terminated': false,
-                  'truncated': false,
-                  'cells': [
-                    for (var r = 0; r < 5; r++)
-                      for (var c = 0; c < 5; c++)
-                        {
-                          'state': r * 5 + c,
-                          'row': r,
-                          'column': c,
-                          'tile_type': (r == 0 && c == 0)
-                              ? 'R'
-                              : (r == 0 && c == 4)
-                                  ? 'G'
-                                  : (r == 4 && c == 0)
-                                      ? 'Y'
-                                      : (r == 4 && c == 3)
-                                          ? 'B'
-                                          : 'F',
-                          'terminal': false,
-                        },
-                  ],
-                },
-                'equation_update': {
-                  'kind': 'q_learning',
-                  'lhs': 'Q(328,0)',
-                  'old_value': 0,
-                  'reward': -1,
-                  'gamma': 0.95,
-                  'bootstrap_label': 'max_a Q(428,a)',
-                  'bootstrap_value': 0,
-                  'td_target': -1,
-                  'td_error': -1,
-                  'alpha': 0.1,
-                  'new_value': -0.1,
-                  'code_focus':
-                      'Q[state][action] += alpha * (td_target - Q[state][action])',
-                },
-              }),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    await _selectBinderSection(tester, 'Step');
-    expect(find.text('Taxi grid'), findsOneWidget);
-    expect(find.text('state 328'), findsOneWidget);
-    expect(find.text('South'), findsWidgets);
-    expect(find.text('passenger @ R'), findsOneWidget);
-    expect(find.text('dest B'), findsOneWidget);
   });
 }
 

@@ -5,6 +5,7 @@ import gymnasium as gym
 from PIL import Image
 
 from backend.lesson_registry import get_lesson_definition
+from backend.rl_engine.taxi import TAXI_ACTION_LABELS, taxi_grid_metadata
 from backend.user_code import load_user_function
 
 
@@ -109,14 +110,7 @@ class EnvironmentAdapter:
                 0: "Stand",
                 1: "Hit",
             },
-            "Taxi": {
-                0: "South",
-                1: "North",
-                2: "East",
-                3: "West",
-                4: "Pickup",
-                5: "Dropoff",
-            },
+            "Taxi": TAXI_ACTION_LABELS,
         }
         return mappings.get(self.env_name, {}).get(action, f"Action {action}")
 
@@ -207,8 +201,9 @@ class EnvironmentAdapter:
                 "terminated": bool(terminated),
                 "truncated": bool(truncated),
             }
+
         if self.env_name == "Taxi":
-            return self._taxi_grid_metadata(
+            return taxi_grid_metadata(
                 state=state,
                 next_state=next_state,
                 action=action,
@@ -217,111 +212,6 @@ class EnvironmentAdapter:
                 truncated=truncated,
             )
         return None
-
-    _TAXI_LOCS = [(0, 0), (0, 4), (4, 0), (4, 3)]
-    _TAXI_LOC_NAMES = ["R", "G", "Y", "B"]
-    _TAXI_WALLS = [
-        {"between": [(0, 1), (0, 2)]},
-        {"between": [(1, 1), (1, 2)]},
-        {"between": [(3, 0), (3, 1)]},
-        {"between": [(4, 0), (4, 1)]},
-        {"between": [(3, 2), (3, 3)]},
-        {"between": [(4, 2), (4, 3)]},
-    ]
-
-    @staticmethod
-    def _decode_taxi(state: int) -> tuple[int, int, int, int]:
-        dest_idx = state % 4
-        remaining = state // 4
-        pass_idx = remaining % 5
-        remaining = remaining // 5
-        taxi_col = remaining % 5
-        taxi_row = remaining // 5
-        return taxi_row, taxi_col, pass_idx, dest_idx
-
-    def _taxi_grid_metadata(
-        self,
-        state: int,
-        next_state: int | None = None,
-        action: int | None = None,
-        reward: float | None = None,
-        terminated: bool = False,
-        truncated: bool = False,
-    ) -> dict[str, Any]:
-        taxi_row, taxi_col, pass_idx, dest_idx = self._decode_taxi(int(state))
-
-        cells = []
-        for row in range(5):
-            for col in range(5):
-                tile = "F"
-                for li, (lr, lc) in enumerate(self._TAXI_LOCS):
-                    if (row, col) == (lr, lc):
-                        tile = self._TAXI_LOC_NAMES[li]
-                        break
-                cells.append(
-                    {
-                        "state": row * 5 + col,
-                        "row": row,
-                        "column": col,
-                        "tile_type": tile,
-                        "terminal": False,
-                    }
-                )
-
-        if pass_idx < 4:
-            pr, pc = self._TAXI_LOCS[pass_idx]
-            passenger = {
-                "location": self._TAXI_LOC_NAMES[pass_idx],
-                "row": pr,
-                "column": pc,
-                "in_taxi": False,
-            }
-        else:
-            passenger = {
-                "location": "in_taxi",
-                "row": taxi_row,
-                "column": taxi_col,
-                "in_taxi": True,
-            }
-
-        dr, dc = self._TAXI_LOCS[dest_idx]
-        destination = {
-            "label": self._TAXI_LOC_NAMES[dest_idx],
-            "row": dr,
-            "column": dc,
-        }
-
-        taxi_grid_pos = taxi_row * 5 + taxi_col
-        if next_state is not None:
-            ns_row, ns_col, _, _ = self._decode_taxi(int(next_state))
-            next_grid_pos = ns_row * 5 + ns_col
-            next_coords: dict[str, int] | None = {"row": ns_row, "column": ns_col}
-        else:
-            next_grid_pos = None
-            next_coords = None
-
-        return {
-            "environment": "Taxi",
-            "rows": 5,
-            "columns": 5,
-            "cells": cells,
-            "state": taxi_grid_pos,
-            "next_state": next_grid_pos,
-            "encoded_state": int(state),
-            "encoded_next_state": None if next_state is None else int(next_state),
-            "state_coordinates": {"row": taxi_row, "column": taxi_col},
-            "next_state_coordinates": next_coords,
-            "passenger": passenger,
-            "destination": destination,
-            "walls": self._TAXI_WALLS,
-            "action": action,
-            "action_label": (
-                None if action is None or action < 0 else self.action_label(action)
-            ),
-            "reward": None if reward is None else round(float(reward), 4),
-            "terminated": bool(terminated),
-            "truncated": bool(truncated),
-        }
 
     def _grid_coordinates(self, state: int, columns: int) -> dict[str, int]:
         row, column = divmod(int(state), columns)

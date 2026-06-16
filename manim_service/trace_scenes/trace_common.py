@@ -63,7 +63,6 @@ def detect_env(steps: list[dict]) -> str:
 
 
 def is_taxi_action_spatial(action: Any) -> bool:
-    """True for movement actions (South/North/East/West), False for Pickup/Dropoff."""
     try:
         return int(action) < 4
     except (TypeError, ValueError):

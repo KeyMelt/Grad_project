@@ -695,7 +695,9 @@ class TraceGridMetadata {
   final int? encodedState;
   final int? encodedNextState;
   final TaxiPassenger? passenger;
+  final TaxiPassenger? nextPassenger;
   final TaxiDestination? destination;
+  final List<TraceGridWall> walls;
 
   const TraceGridMetadata({
     required this.environment,
@@ -714,13 +716,16 @@ class TraceGridMetadata {
     this.encodedState,
     this.encodedNextState,
     this.passenger,
+    this.nextPassenger,
     this.destination,
+    this.walls = const [],
   });
 
   bool get isTaxi => environment == 'Taxi';
 
   factory TraceGridMetadata.fromJson(Map<String, dynamic> json) {
     final rawCells = json['cells'] as List<dynamic>? ?? const [];
+    final rawWalls = json['walls'] as List<dynamic>? ?? const [];
     return TraceGridMetadata(
       environment: json['environment'] as String? ?? '',
       rows: (json['rows'] as num?)?.toInt() ?? 0,
@@ -743,7 +748,12 @@ class TraceGridMetadata {
       encodedState: (json['encoded_state'] as num?)?.toInt(),
       encodedNextState: (json['encoded_next_state'] as num?)?.toInt(),
       passenger: TaxiPassenger.fromNullableJson(json['passenger']),
+      nextPassenger: TaxiPassenger.fromNullableJson(json['next_passenger']),
       destination: TaxiDestination.fromNullableJson(json['destination']),
+      walls: rawWalls
+          .whereType<Map<String, dynamic>>()
+          .map(TraceGridWall.fromJson)
+          .toList(growable: false),
     );
   }
 
@@ -797,7 +807,9 @@ class TaxiPassenger {
   });
 
   static TaxiPassenger? fromNullableJson(Object? json) {
-    if (json is! Map<String, dynamic>) return null;
+    if (json is! Map<String, dynamic>) {
+      return null;
+    }
     return TaxiPassenger(
       location: json['location'] as String? ?? '',
       row: (json['row'] as num?)?.toInt() ?? 0,
@@ -819,11 +831,32 @@ class TaxiDestination {
   });
 
   static TaxiDestination? fromNullableJson(Object? json) {
-    if (json is! Map<String, dynamic>) return null;
+    if (json is! Map<String, dynamic>) {
+      return null;
+    }
     return TaxiDestination(
       label: json['label'] as String? ?? '',
       row: (json['row'] as num?)?.toInt() ?? 0,
       column: (json['column'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class TraceGridWall {
+  final TraceGridCoordinate start;
+  final TraceGridCoordinate end;
+
+  const TraceGridWall({
+    required this.start,
+    required this.end,
+  });
+
+  factory TraceGridWall.fromJson(Map<String, dynamic> json) {
+    return TraceGridWall(
+      start: TraceGridCoordinate.fromNullableJson(json['start']) ??
+          const TraceGridCoordinate(row: 0, column: 0),
+      end: TraceGridCoordinate.fromNullableJson(json['end']) ??
+          const TraceGridCoordinate(row: 0, column: 0),
     );
   }
 }

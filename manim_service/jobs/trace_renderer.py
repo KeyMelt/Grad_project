@@ -40,6 +40,7 @@ TRACE_VISUAL_HELPERS = (
     # them in the source signature so edits correctly invalidate the render cache.
     ROOT / "manim_service" / "trace_scenes" / "trace_common.py",
     ROOT / "manim_service" / "trace_scenes" / "trace_boards.py",
+    ROOT / "manim_service" / "trace_scenes" / "taxi_board.py",
     ROOT / "manim_service" / "trace_scenes" / "trace_step_director.py",
     ROOT / "manim_service" / "trace_scenes" / "trace_update_card.py",
 )

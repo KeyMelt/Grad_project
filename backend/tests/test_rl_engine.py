@@ -21,6 +21,21 @@ def test_cliff_walking_adapter_uses_current_gymnasium_version(monkeypatch):
     assert created_env_ids == ["CliffWalking-v1"]
 
 
+def test_taxi_adapter_uses_current_gymnasium_version(monkeypatch):
+    created_env_ids: list[str] = []
+
+    def fake_make(env_id, **kwargs):
+        del kwargs
+        created_env_ids.append(env_id)
+        return SimpleNamespace()
+
+    monkeypatch.setattr(engine_module.gym, "make", fake_make)
+
+    EnvironmentAdapter("Taxi")
+
+    assert created_env_ids == ["Taxi-v3"]
+
+
 def test_frozen_lake_grid_metadata_is_derived_from_desc():
     adapter = EnvironmentAdapter.__new__(EnvironmentAdapter)
     adapter.env_name = "FrozenLake"
@@ -84,6 +99,181 @@ def test_cliff_walking_grid_metadata_marks_cliff_and_goal_cells():
             "terminal": True,
         }
     ]
+
+
+def test_taxi_grid_metadata_includes_encoded_state_passenger_destination_and_walls():
+    adapter = EnvironmentAdapter.__new__(EnvironmentAdapter)
+    adapter.env_name = "Taxi"
+    adapter.env = SimpleNamespace(unwrapped=SimpleNamespace())
+
+    metadata = adapter.grid_metadata(
+        state=263,
+        next_state=363,
+        action=0,
+        reward=-1.0,
+        terminated=False,
+        truncated=False,
+    )
+
+    assert metadata["environment"] == "Taxi"
+    assert metadata["rows"] == 5
+    assert metadata["columns"] == 5
+    assert metadata["state"] == 13
+    assert metadata["next_state"] == 18
+    assert metadata["encoded_state"] == 263
+    assert metadata["encoded_next_state"] == 363
+    assert metadata["state_coordinates"] == {"row": 2, "column": 3}
+    assert metadata["next_state_coordinates"] == {"row": 3, "column": 3}
+    assert metadata["action_label"] == "South"
+    assert metadata["passenger"] == {
+        "location": "R",
+        "row": 0,
+        "column": 0,
+        "in_taxi": False,
+    }
+    assert metadata["next_passenger"] == {
+        "location": "R",
+        "row": 0,
+        "column": 0,
+        "in_taxi": False,
+    }
+    assert metadata["destination"] == {
+        "label": "B",
+        "row": 4,
+        "column": 3,
+    }
+    assert len(metadata["walls"]) == 6
+
+
+def test_taxi_grid_metadata_tracks_legal_pickup_and_dropoff_transitions():
+    adapter = EnvironmentAdapter.__new__(EnvironmentAdapter)
+    adapter.env_name = "Taxi"
+    adapter.env = SimpleNamespace(unwrapped=SimpleNamespace())
+
+    pickup = adapter.grid_metadata(
+        state=3,
+        next_state=19,
+        action=4,
+        reward=-1.0,
+        terminated=False,
+        truncated=False,
+    )
+    assert pickup["action_label"] == "Pickup"
+    assert pickup["passenger"]["in_taxi"] is False
+    assert pickup["next_passenger"]["in_taxi"] is True
+
+    dropoff = adapter.grid_metadata(
+        state=479,
+        next_state=475,
+        action=5,
+        reward=20.0,
+        terminated=True,
+        truncated=False,
+    )
+    assert dropoff["action_label"] == "Dropoff"
+    assert dropoff["passenger"]["in_taxi"] is True
+    assert dropoff["next_passenger"] == {
+        "location": "B",
+        "row": 4,
+        "column": 3,
+        "in_taxi": False,
+    }
+    assert dropoff["terminated"] is True
+
+
+def test_taxi_q_learning_initializes_a_500_by_6_table(monkeypatch):
+    observed_shapes: list[tuple[int, int]] = []
+
+    class FakeActionSpace:
+        n = 6
+
+        def sample(self):
+            return 0
+
+    class FakeEnv:
+        observation_space = SimpleNamespace(n=500)
+        action_space = FakeActionSpace()
+
+        @property
+        def unwrapped(self):
+            return self
+
+    class FakeAdapter:
+        env = FakeEnv()
+
+        def reset(self, seed=None):
+            del seed
+            return 263, {}
+
+        def step(self, action):
+            return 363, -1.0, True, False, {"p": 1.0, "action": action}
+
+        def capture_frame_png(self, prefix="step", state=None):
+            del prefix, state
+            return ""
+
+        def action_label(self, action):
+            return ["South", "North", "East", "West", "Pickup", "Dropoff"][action]
+
+        def grid_metadata(
+            self,
+            state,
+            next_state=None,
+            action=None,
+            reward=None,
+            terminated=False,
+            truncated=False,
+        ):
+            return {
+                "environment": "Taxi",
+                "rows": 5,
+                "columns": 5,
+                "cells": [],
+                "state": 13,
+                "next_state": 18,
+                "encoded_state": state,
+                "encoded_next_state": next_state,
+                "state_coordinates": {"row": 2, "column": 3},
+                "next_state_coordinates": {"row": 3, "column": 3},
+                "passenger": {"location": "R", "row": 0, "column": 0, "in_taxi": False},
+                "next_passenger": {"location": "R", "row": 0, "column": 0, "in_taxi": False},
+                "destination": {"label": "B", "row": 4, "column": 3},
+                "walls": [],
+                "action": action,
+                "action_label": self.action_label(action or 0),
+                "reward": reward,
+                "terminated": terminated,
+                "truncated": truncated,
+            }
+
+    class FakeLogger:
+        def log_step(self, payload):
+            self.payload = payload
+
+        def end_episode(self):
+            self.ended = True
+
+    def fake_choose(self, q_row, epsilon):
+        del self, epsilon
+        observed_shapes.append((len(q_row), q_row.count(0.0)))
+        return 0
+
+    def lesson_function(Q, state, action, reward, next_state, alpha, gamma):
+        del state, action, reward, next_state, alpha, gamma
+        observed_shapes.append((len(Q), len(Q[0])))
+        return Q
+
+    monkeypatch.setattr(RLEngine, "_choose_epsilon_greedy_action", fake_choose)
+
+    rl_engine = RLEngine(FakeAdapter(), FakeLogger())
+    rl_engine._run_q_learning(
+        lesson_function,
+        num_episodes=1,
+        hyperparameters={"alpha": 0.1, "gamma": 0.95, "epsilon": 0.2},
+    )
+
+    assert observed_shapes[0] == (6, 6)
+    assert observed_shapes[1] == (500, 6)
 
 
 def test_q_learning_behavior_uses_epsilon_greedy_q_row(monkeypatch):
@@ -657,163 +847,3 @@ def test_monte_carlo_runtime_accepts_returned_value_table_style():
     )
     assert return_payload["updated_values"]["V((15, 10, False))"] == 0.9
     assert return_payload["equation_update"]["mc_details"]["returns_history"] == [0.9]
-
-
-def test_taxi_adapter_creates_taxi_v3(monkeypatch):
-    created_env_ids: list[str] = []
-
-    def fake_make(env_id, **kwargs):
-        del kwargs
-        created_env_ids.append(env_id)
-        return SimpleNamespace()
-
-    monkeypatch.setattr(engine_module.gym, "make", fake_make)
-
-    EnvironmentAdapter("Taxi")
-
-    assert created_env_ids == ["Taxi-v3"]
-
-
-def test_taxi_action_labels():
-    adapter = EnvironmentAdapter.__new__(EnvironmentAdapter)
-    adapter.env_name = "Taxi"
-
-    assert adapter.action_label(0) == "South"
-    assert adapter.action_label(1) == "North"
-    assert adapter.action_label(2) == "East"
-    assert adapter.action_label(3) == "West"
-    assert adapter.action_label(4) == "Pickup"
-    assert adapter.action_label(5) == "Dropoff"
-
-
-def test_taxi_grid_metadata_decodes_state():
-    adapter = EnvironmentAdapter.__new__(EnvironmentAdapter)
-    adapter.env_name = "Taxi"
-    adapter.env = SimpleNamespace(unwrapped=SimpleNamespace())
-
-    state = 16
-    row, col, pass_idx, dest_idx = adapter._decode_taxi(state)
-    assert (row, col) == (0, 0)
-    assert pass_idx == 4
-    assert dest_idx == 0
-
-    metadata = adapter.grid_metadata(
-        state=state,
-        next_state=None,
-        action=5,
-        reward=20.0,
-        terminated=True,
-        truncated=False,
-    )
-
-    assert metadata["environment"] == "Taxi"
-    assert metadata["rows"] == 5
-    assert metadata["columns"] == 5
-    assert len(metadata["cells"]) == 25
-    assert metadata["state_coordinates"] == {"row": 0, "column": 0}
-    assert metadata["encoded_state"] == 16
-    assert metadata["action_label"] == "Dropoff"
-    assert metadata["reward"] == 20.0
-    assert metadata["terminated"] is True
-
-    assert metadata["passenger"]["in_taxi"] is True
-    assert metadata["destination"]["label"] == "R"
-    assert metadata["destination"]["row"] == 0
-    assert metadata["destination"]["column"] == 0
-
-    loc_cells = [c for c in metadata["cells"] if c["tile_type"] != "F"]
-    loc_labels = {c["tile_type"] for c in loc_cells}
-    assert loc_labels == {"R", "G", "Y", "B"}
-
-
-def test_taxi_grid_metadata_shows_passenger_at_pickup_location():
-    adapter = EnvironmentAdapter.__new__(EnvironmentAdapter)
-    adapter.env_name = "Taxi"
-    adapter.env = SimpleNamespace(unwrapped=SimpleNamespace())
-
-    state = 0 * 100 + 0 * 20 + 0 * 4 + 0
-    metadata = adapter.grid_metadata(state=state, next_state=None, action=None)
-
-    assert metadata["passenger"]["in_taxi"] is False
-    assert metadata["passenger"]["location"] == "R"
-    assert metadata["passenger"]["row"] == 0
-    assert metadata["passenger"]["column"] == 0
-
-
-def test_taxi_q_learning_produces_correct_trace_schema(monkeypatch):
-    class FakeActionSpace:
-        n = 6
-
-        def sample(self):
-            return 0
-
-    class FakeEnv:
-        observation_space = SimpleNamespace(n=500)
-        action_space = FakeActionSpace()
-
-        @property
-        def unwrapped(self):
-            return self
-
-    class FakeAdapter:
-        env = FakeEnv()
-        env_name = "Taxi"
-
-        def reset(self, seed=None):
-            del seed
-            return 328, {}
-
-        def step(self, action):
-            return 428, -1.0, False, False, {"p": 1.0}
-
-        def capture_frame_png(self, prefix="step", state=None):
-            del prefix, state
-            return ""
-
-        def action_label(self, action):
-            labels = {0: "South", 1: "North", 2: "East", 3: "West",
-                      4: "Pickup", 5: "Dropoff"}
-            return labels.get(action, f"Action {action}")
-
-        def grid_metadata(self, **kwargs):
-            return {"environment": "Taxi", "rows": 5, "columns": 5,
-                    "cells": [], "state": 0, "next_state": 0}
-
-    class FakeLogger:
-        def log_step(self, payload):
-            self.payload = payload
-
-        def end_episode(self):
-            self.ended = True
-
-    def fake_choose(self, q_row, epsilon):
-        del self, q_row, epsilon
-        return 0
-
-    def lesson_function(Q, state, action, reward, next_state, alpha, gamma):
-        Q[state][action] = Q[state][action] + alpha * (
-            reward + gamma * max(Q[next_state]) - Q[state][action]
-        )
-        return Q
-
-    monkeypatch.setattr(RLEngine, "_choose_epsilon_greedy_action", fake_choose)
-
-    rl_engine = RLEngine(FakeAdapter(), FakeLogger())
-    rl_engine._run_q_learning(
-        lesson_function,
-        num_episodes=1,
-        hyperparameters={
-            "alpha": 0.1,
-            "gamma": 0.95,
-            "epsilon": 0.2,
-            "max_steps_per_episode": 1,
-        },
-    )
-
-    payload = rl_engine.logger.payload
-    assert payload["trace_schema_version"] == 2
-    assert payload["equation_update"]["kind"] == "q_learning"
-    assert payload["tables"]["kind"] == "q_table"
-    assert len(payload["tables"]["action_labels"]) == 6
-    assert payload["tables"]["action_labels"][4] == "Pickup"
-    assert payload["tables"]["action_labels"][5] == "Dropoff"
