@@ -192,19 +192,19 @@ Only one action sample is needed per step. There is no sampled `next_action` car
 
 ## Common pitfalls and misconceptions
 
-**Pitfall 1: "Q-learning always outperforms SARSA."**  
+**Pitfall 1: "Q-learning always outperforms SARSA."**
 Not necessarily during training. SARSA can collect better online return because its values reflect the cost of exploratory behavior. Q-learning instead targets optimal greedy behavior.
 
-**Pitfall 2: "Off-policy means the behavior policy does not matter."**  
+**Pitfall 2: "Off-policy means the behavior policy does not matter."**
 It still matters for coverage. The behavior policy must visit enough of the state-action space for learning to occur.
 
-**Pitfall 3: "The max is taken over the sampled policy distribution."**  
+**Pitfall 3: "The max is taken over the sampled policy distribution."**
 No. The max is over the full action set in the next state.
 
-**Pitfall 4: "Q-learning uses the sampled next action in the target."**  
+**Pitfall 4: "Q-learning uses the sampled next action in the target."**
 That is SARSA, not Q-learning.
 
-**Pitfall 5: "Illegal pickup/dropoff is just another move penalty."**  
+**Pitfall 5: "Illegal pickup/dropoff is just another move penalty."**
 No. Taxi uses a stronger $-10$ penalty to make invalid actions visibly worse than ordinary movement.
 
 ## Connection to the bigger picture
