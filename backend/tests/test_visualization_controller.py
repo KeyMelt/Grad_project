@@ -147,3 +147,83 @@ class TestNormalizeStepRichFields:
         result = VisualizationController._normalize_step(step)
         # list must survive; non-numpy elements pass through unchanged
         assert result["math_lines"][1] == "world"
+
+
+class TestTupleStateNormalisation:
+    """Blackjack states are tuples; _to_json_safe must convert them to lists."""
+
+    def test_tuple_state_becomes_list(self):
+        step = {
+            "state": (16, 10, False),
+            "action": 1,
+            "reward": 0.0,
+            "next_state": (18, 10, False),
+        }
+        result = VisualizationController._normalize_step(step)
+        assert result["state"] == [16, 10, False]
+        assert result["next_state"] == [18, 10, False]
+
+    def test_nested_tuple_inside_mc_details(self):
+        step = {
+            "state": (16, 10, False),
+            "action": 0,
+            "reward": -1.0,
+            "next_state": (16, 10, False),
+            "equation_update": {
+                "kind": "mc_sampling",
+                "mc_details": {"observation": {"player_sum": 16, "dealer_card": 10}},
+            },
+        }
+        result = VisualizationController._normalize_step(step)
+        assert isinstance(result["state"], list)
+        assert result["equation_update"]["kind"] == "mc_sampling"
+
+    def test_enqueue_replay_render_with_tuple_states_posts_list_state(self, monkeypatch):
+        """End-to-end: tuple states in log_data must not cause a 422 when POSTed."""
+        import json as _json
+
+        captured_bodies: list[dict] = []
+
+        class _CapturingHttp:
+            def post(self, url, *, json, timeout):
+                captured_bodies.append(json)
+                return _StubResponse(payload={"job_id": "xyz789", "status": "queued"})
+
+        monkeypatch.setenv("RL_IDE_MANIM_TIMEOUT_SECONDS", "10")
+        controller = VisualizationController(
+            base_url="http://manim:8200",
+            http_client=_CapturingHttp(),
+        )
+
+        mc_log_data = [
+            [
+                {
+                    "state": (16, 10, False),
+                    "action": 1,
+                    "reward": 0.0,
+                    "next_state": (18, 10, False),
+                    "equation_update": {
+                        "kind": "mc_sampling",
+                        "mc_details": {
+                            "observation": {"player_sum": 16, "dealer_card": 10,
+                                            "usable_ace": False},
+                            "action_label": "Hit",
+                            "reward": 0.0,
+                            "terminated": False,
+                        },
+                    },
+                }
+            ]
+        ]
+
+        result = controller.enqueue_replay_render(mc_log_data, "mc_first_visit")
+
+        assert result["replay_render_job_id"] == "xyz789"
+        assert result["replay_render_status"] == "queued"
+        body = captured_bodies[0]
+        # state must be serialisable list, not a tuple (which json.dumps can't re-load as tuple)
+        posted_state = body["episodes"][0]["steps"][0]["state"]
+        assert isinstance(posted_state, list)
+        assert posted_state == [16, 10, False]
+        # Verify the body is fully JSON-serialisable (no remaining tuples)
+        _json.dumps(body)

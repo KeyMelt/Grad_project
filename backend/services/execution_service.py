@@ -8,6 +8,7 @@ from backend.execution_runtime import ExecutionPipelineError, run_submission_wit
 from backend.job_store import ExecutionJobStore
 from backend.artifact_store_sqlite import SqliteArtifactStore
 from backend.services.firebase_progress_service import FirebaseProgressService
+from backend.services.replay_status_service import enrich_snapshot_with_replay
 from backend.services.telemetry_service import TelemetryService
 
 
@@ -45,6 +46,7 @@ class ExecutionService:
         snapshot = self.job_store.snapshot(task_id)
         if snapshot is None:
             return None
+        snapshot = enrich_snapshot_with_replay(snapshot)
         if self.artifact_store is not None:
             artifacts = self.artifact_store.list_for_task(task_id)
             if artifacts:

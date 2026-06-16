@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -13,7 +12,11 @@ from backend.auth.dependencies import (
     build_optional_principal_dependency,
 )
 from backend.auth.roles import PlatformRole, Principal
-from backend.replay_contract import normalize_replay_state
+from backend.services.replay_status_service import (
+    manim_service_base_url,
+    manim_service_netloc,
+    replay_status_payload,
+)
 from backend.settings import GatewaySettings
 
 try:
@@ -24,19 +27,8 @@ except ImportError:
     import requests as _requests
 
 
-def _manim_service_netloc() -> str:
-    """Return the expected netloc (host:port) for the manim service."""
-    raw = os.environ.get("RL_IDE_MANIM_SERVICE_URL", "http://localhost:8200").rstrip("/")
-    parsed = urlparse(raw)
-    return parsed.netloc or parsed.path  # fallback for edge cases
-
-
-def _manim_service_base_url() -> str:
-    return os.environ.get("RL_IDE_MANIM_SERVICE_URL", "http://localhost:8200").rstrip("/")
-
-
 def _get_manim_job(job_id: str) -> dict[str, Any]:
-    url = f"{_manim_service_base_url()}/jobs/{job_id}"
+    url = f"{manim_service_base_url()}/jobs/{job_id}"
     if _HTTPX_AVAILABLE:
         resp = _httpx.get(url, timeout=10, follow_redirects=True)
         resp.raise_for_status()
@@ -115,6 +107,20 @@ def _artifact_path_from_snapshot(
     raise HTTPException(status_code=404, detail=f"No {label.lower()} artifact available.")
 
 
+def _video_response_from_path(path: str):
+    if path.startswith("http://") or path.startswith("https://"):
+        parsed = urlparse(path)
+        allowed_netloc = manim_service_netloc()
+        if parsed.netloc != allowed_netloc:
+            raise HTTPException(
+                status_code=403,
+                detail="Video URL host is not the configured manim service.",
+            )
+        return _proxy_manim_video(path)
+    video_path = _resolve_visualization_path(path, suffix=".mp4", label="Video")
+    return FileResponse(video_path, media_type="video/mp4")
+
+
 def build_visualization_router(services: Any) -> APIRouter:
     router = APIRouter()
     optional_principal = build_optional_principal_dependency(auth_service=services.auth)
@@ -143,12 +149,21 @@ def build_visualization_router(services: Any) -> APIRouter:
             principal=principal,
         )
         snapshot = _ensure_task_owner(services, task_id, resolved_principal)
-        artifact_path = _artifact_path_from_snapshot(
-            snapshot,
-            kind="replay_video",
-            suffix=".mp4",
-            label="Video",
-        )
+        try:
+            artifact_path = _artifact_path_from_snapshot(
+                snapshot,
+                kind="replay_video",
+                suffix=".mp4",
+                label="Video",
+            )
+        except HTTPException as error:
+            if error.status_code != 404:
+                raise
+            result = snapshot.get("result")
+            video_path = str(result.get("video_path") or "") if isinstance(result, dict) else ""
+            if not video_path:
+                raise
+            return _video_response_from_path(video_path)
         return FileResponse(artifact_path, media_type="video/mp4")
 
     @router.get("/visualization/frame")
@@ -170,7 +185,7 @@ def build_visualization_router(services: Any) -> APIRouter:
         # Case 2: path is a URL — proxy to the manim service.
         if path.startswith("http://") or path.startswith("https://"):
             parsed = urlparse(path)
-            allowed_netloc = _manim_service_netloc()
+            allowed_netloc = manim_service_netloc()
             if parsed.netloc != allowed_netloc:
                 raise HTTPException(
                     status_code=403,
@@ -196,26 +211,6 @@ def build_visualization_router(services: Any) -> APIRouter:
                 detail=f"Could not fetch replay render status: {error}",
             ) from error
 
-        video_url = data.get("video_url") or ""
-        video_path = ""
-        if isinstance(video_url, str) and video_url:
-            video_path = (
-                f"{_manim_service_base_url()}{video_url}"
-                if video_url.startswith("/")
-                else video_url
-            )
-        raw_status = data.get("status") or "unknown"
-        return {
-            "job_id": data.get("job_id") or job_id,
-            "status": raw_status,
-            "replay_state": normalize_replay_state(
-                str(raw_status),
-                video_path=video_path,
-                error=data.get("error"),
-            ),
-            "video_path": video_path,
-            "video_url": video_path,
-            "error": data.get("error"),
-        }
+        return replay_status_payload(data, job_id=job_id)
 
     return router

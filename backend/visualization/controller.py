@@ -253,6 +253,8 @@ class VisualizationController:
                 return int(value)
             if isinstance(value, np.floating):
                 return float(value)
+        if isinstance(value, tuple):
+            return [VisualizationController._to_json_safe(item) for item in value]
         if isinstance(value, dict):
             return {k: VisualizationController._to_json_safe(v) for k, v in value.items()}
         if isinstance(value, list):

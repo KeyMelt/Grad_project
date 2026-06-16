@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import os
 from typing import Any
 
+from fastapi import Response
 from fastapi.testclient import TestClient
 
 from backend.api_gateway.base import ServiceContainer, create_app
@@ -799,6 +800,61 @@ def test_visualization_video_rejects_paths_outside_output_root(tmp_path, monkeyp
 
     assert response.status_code == 403
     os.remove(outside_path)
+
+
+def test_task_video_artifact_falls_back_to_live_result_video_path(monkeypatch):
+    class _FallbackExecutionService:
+        def submit(self, submission_payload: dict[str, Any]) -> dict[str, str]:
+            del submission_payload
+            return {"task_id": "task-1", "status": "queued"}
+
+        def snapshot(self, task_id: str) -> dict[str, Any] | None:
+            if task_id != "task-1":
+                return None
+            return {
+                "task_id": task_id,
+                "status": "succeeded",
+                "owner_user_id": "student-1",
+                "owner_role": "student",
+                "created_at_utc": "2026-01-01T00:00:00+00:00",
+                "result": {
+                    "replay_render_job_id": "job-1",
+                    "replay_render_status": "complete",
+                    "replay_state": "ready",
+                    "video_path": "http://localhost:8200/videos/job-1.mp4",
+                    "visualization_ready": True,
+                },
+            }
+
+        def execute_sync(self, submission_payload: dict[str, Any]) -> dict[str, Any]:
+            del submission_payload
+            return {}
+
+    monkeypatch.setattr(
+        visualization_routes,
+        "_proxy_manim_video",
+        lambda url: Response(content=f"proxied:{url}".encode(), media_type="video/mp4"),
+    )
+
+    user_evaluation = _FakeUserEvaluationService()
+    services = ServiceContainer(
+        lesson_catalog=_FakeLessonCatalogService(),
+        user_evaluation=user_evaluation,
+        auth=_FakeAuthService(user_evaluation),
+        execution=_FallbackExecutionService(),
+        workspace=_FakeWorkspaceService(),
+        metrics_export=_FakeMetricsExportService(),
+        shell_tokens=_FakeShellTokenService(),
+    )
+    client = TestClient(create_app(services=services))
+
+    response = client.get(
+        "/artifacts/tasks/task-1/video",
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.content == b"proxied:http://localhost:8200/videos/job-1.mp4"
 
 
 def test_replay_render_status_exposes_normalized_ready_state(monkeypatch):

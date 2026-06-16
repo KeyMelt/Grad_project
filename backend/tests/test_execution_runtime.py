@@ -330,6 +330,113 @@ def test_mc_first_visit_runtime_handles_tuple_observation_states():
     assert steps[-1]["state"] == (16, 10, False)
 
 
+class _FakeMcVisualizationService:
+    """Records the enqueue_replay_render call and returns a fake job id."""
+
+    def __init__(self, output_dir: str) -> None:
+        self.output_dir = output_dir
+        self.last_lesson_id: str = ""
+        self.last_log_data: list = []
+
+    def enqueue_replay_render(self, log_data: list, lesson_id: str) -> dict:
+        self.last_lesson_id = lesson_id
+        self.last_log_data = log_data
+        return {
+            "replay_render_job_id": "mc-job-abc",
+            "replay_render_status": "queued",
+            "replay_episode_indices": [0],
+        }
+
+
+class _FakeMcEngine:
+    """Simulates a one-episode MC run with tuple Blackjack states."""
+
+    def __init__(self, adapter, logger) -> None:
+        self.adapter = adapter
+        self.logger = logger
+
+    def run_episodes(self, lesson_id, code_module_str, num_episodes, hyperparameters):
+        del lesson_id, code_module_str, num_episodes, hyperparameters
+        self.logger.log_step(
+            {
+                "state": (16, 10, False),
+                "action": 1,
+                "reward": 0.0,
+                "next_state": (18, 10, False),
+                "equation_update": {
+                    "kind": "mc_sampling",
+                    "mc_details": {
+                        "observation": {"player_sum": 16, "dealer_card": 10,
+                                        "usable_ace": False},
+                        "action_label": "Hit",
+                        "reward": 0.0,
+                        "terminated": False,
+                    },
+                },
+            }
+        )
+        self.logger.log_step(
+            {
+                "state": (16, 10, False),
+                "action": 1,
+                "reward": -1.0,
+                "next_state": (16, 10, False),
+                "updated_values": {"V((16, 10, False))": 0.0},
+                "equation_update": {
+                    "kind": "mc_first_visit",
+                    "mc_details": {
+                        "observation": {"player_sum": 16, "dealer_card": 10,
+                                        "usable_ace": False},
+                        "action_label": "Hit",
+                        "return_value": -1.0,
+                        "returns_history": [-1.0],
+                        "terminated": True,
+                    },
+                },
+            }
+        )
+        self.logger.end_episode()
+
+
+def test_mc_first_visit_enqueue_replay_render_returns_non_empty_job_id(
+    monkeypatch, tmp_path
+):
+    """MC execution must produce a non-empty replay_render_job_id.
+
+    This test caught the root cause bug: tuple Blackjack states cause a 422
+    when POSTed to manim_service because TraceStep.state was typed as int.
+    """
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "backend.execution_runtime.get_lesson_definition",
+        lambda lesson_id: _Lesson(
+            id=lesson_id,
+            environment_name="Blackjack",
+        ),
+    )
+    monkeypatch.setattr("backend.execution_runtime.CodeValidator", lambda: _FakeValidator())
+    monkeypatch.setattr("backend.execution_runtime.EnvironmentAdapter", _FakeAdapter)
+    monkeypatch.setattr("backend.execution_runtime.RLEngine", _FakeMcEngine)
+    monkeypatch.setattr(
+        "backend.execution_runtime.VisualizationService",
+        _FakeMcVisualizationService,
+    )
+    monkeypatch.setattr("backend.execution_runtime.load_user_context", lambda code: {})
+
+    result = _run_execution_pipeline(
+        {
+            "lesson_id": "mc_first_visit",
+            "code": "def mc_first_visit_prediction(e, V, R, gamma): pass",
+            "episode_count": 1,
+        }
+    )
+
+    assert result["replay_render_job_id"] == "mc-job-abc", (
+        "replay_render_job_id must not be empty for MC executions"
+    )
+    assert result["replay_render_status"] == "queued"
+
+
 def test_execution_runtime_initializes_registry_for_spawned_process(monkeypatch, tmp_path):
     database_path = tmp_path / "spawn_registry.db"
     monkeypatch.setenv("RL_IDE_DB_URL", f"sqlite:///{database_path}")

@@ -21,10 +21,14 @@ router = APIRouter()
 
 
 class TraceStep(BaseModel):
-    state: int
+    # `state` is `int` for grid environments but a JSON array `[player_sum,
+    # dealer_card, usable_ace]` for Blackjack (tuple states serialised by the
+    # backend controller). Accept all three forms so Blackjack MC traces are
+    # not rejected with a 422 that silences the replay_render_job_id.
+    state: int | list | str
     action: int
     reward: float
-    next_state: int
+    next_state: int | list | str
     done: bool = False
     frame_path: str | None = None
     transition_probability: float | None = None

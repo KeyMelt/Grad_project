@@ -5,6 +5,7 @@ from typing import Any, Optional
 import requests
 
 from backend.execution_runtime import ExecutionPipelineError
+from backend.services.replay_status_service import enrich_snapshot_with_replay
 
 
 class RemoteExecutionService:
@@ -40,7 +41,10 @@ class RemoteExecutionService:
             return None
         if response.status_code >= 400:
             self._raise_pipeline_error(response)
-        return response.json()
+        return enrich_snapshot_with_replay(
+            response.json(),
+            timeout_seconds=self._timeout_seconds,
+        )
 
     def execute_sync(self, submission_payload: dict[str, Any]) -> dict[str, Any]:
         response = self._request(

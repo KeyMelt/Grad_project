@@ -96,6 +96,44 @@ def test_successful_jobs_record_replay_artifact_reference(tmp_path, monkeypatch)
     assert snapshot["artifacts"][0]["artifact_path"] == "/tmp/replay.mp4"
 
 
+def test_snapshot_refreshes_live_replay_status(monkeypatch):
+    service = ExecutionService()
+    service.job_store.create(owner_user_id="student-1", owner_role="student")
+    task_id = next(iter(service.job_store._jobs))
+    service.job_store.mark_succeeded(
+        task_id,
+        {
+            "status": "success",
+            "replay_render_job_id": "job-1",
+            "replay_render_status": "queued",
+            "replay_state": "queued",
+            "video_path": "",
+            "visualization_ready": False,
+        },
+    )
+
+    monkeypatch.setattr(
+        "backend.services.execution_service.enrich_snapshot_with_replay",
+        lambda snapshot: {
+            **snapshot,
+            "result": {
+                **snapshot["result"],
+                "replay_render_status": "complete",
+                "replay_state": "ready",
+                "video_path": "http://manim-service:8300/videos/job-1.mp4",
+                "visualization_ready": True,
+            },
+        },
+    )
+
+    snapshot = service.snapshot(task_id)
+
+    assert snapshot is not None
+    assert snapshot["result"]["replay_render_status"] == "complete"
+    assert snapshot["result"]["replay_state"] == "ready"
+    assert snapshot["result"]["visualization_ready"] is True
+
+
 def test_execute_sync_records_submission_outcomes(monkeypatch):
     class _FakeProgressService:
         def __init__(self) -> None:
