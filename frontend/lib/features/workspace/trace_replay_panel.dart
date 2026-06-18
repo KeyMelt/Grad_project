@@ -42,6 +42,10 @@ class TraceReplayPanel extends StatefulWidget {
   final List<ExecutionTraceStep> stepTrace;
   final List<ExecutionTraceEpisode> traceEpisodes;
   final List<ExecutionEpisodeSummary> episodeSummaries;
+  final String traceMode;
+  final String traceFamily;
+  final Map<String, dynamic>? traceSummary;
+  final Map<String, dynamic>? evaluationSummary;
   final LessonConceptVideo? conceptVideo;
   final VoidCallback? onWatchConcept;
   final VoidCallback? onReplayCompleted;
@@ -62,6 +66,10 @@ class TraceReplayPanel extends StatefulWidget {
     required this.stepTrace,
     this.traceEpisodes = const [],
     this.episodeSummaries = const [],
+    this.traceMode = '',
+    this.traceFamily = '',
+    this.traceSummary,
+    this.evaluationSummary,
     this.conceptVideo,
     this.onWatchConcept,
     this.onReplayCompleted,
@@ -494,6 +502,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
   /// summary so the Replay tab can be the video alone.
   List<Widget> _stepExtras(BuildContext context) {
     return <Widget>[
+      _buildTracePolicyPanel(context),
       _buildMetricsPanel(context),
       if (widget.conceptVideo != null &&
           widget.conceptVideo!.streamPath.isNotEmpty &&
@@ -503,6 +512,68 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
       if (widget.testResults.isNotEmpty) _buildSampleTests(context),
       _buildReadGuide(context, true),
     ];
+  }
+
+  Widget _buildTracePolicyPanel(BuildContext context) {
+    final traceMode = widget.traceMode.trim();
+    final traceSummary = widget.traceSummary ?? const {};
+    final evaluationSummary = widget.evaluationSummary ?? const {};
+    if (traceMode.isEmpty &&
+        traceSummary.isEmpty &&
+        evaluationSummary.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final visibleStepCount = traceSummary['visible_step_count'];
+    final selectionStrategy = traceSummary['selection_strategy'];
+    final evaluationAttempts = evaluationSummary['evaluation_attempts_run'];
+    final trainingEpisodes = evaluationSummary['training_episodes_run'];
+    final selectedStepCount = evaluationSummary['selected_step_count'];
+
+    return _panelShell(
+      title: 'Trace Policy',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            traceMode.isEmpty
+                ? 'Trace mode unavailable'
+                : 'Trace mode: $traceMode',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          if (widget.traceFamily.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Family: ${widget.traceFamily}',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFFCBD5E1),
+                  ),
+            ),
+          ],
+          if (visibleStepCount != null || selectionStrategy != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Visible steps: ${visibleStepCount ?? 0} · Strategy: ${selectionStrategy ?? 'n/a'}',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF94A3B8),
+                  ),
+            ),
+          ],
+          if (evaluationSummary.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Training episodes: ${trainingEpisodes ?? 0} · Evaluation attempts: ${evaluationAttempts ?? 0} · Selected steps: ${selectedStepCount ?? 0}',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF94A3B8),
+                  ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _stack(List<Widget> children) => Column(

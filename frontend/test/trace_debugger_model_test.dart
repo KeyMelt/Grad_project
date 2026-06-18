@@ -263,6 +263,24 @@ void main() {
       final result = ExecutionResult.fromJson({
         'message': 'Execution completed.',
         'lesson': {'title': 'SARSA'},
+        'trace_mode':
+            'greedy evaluation replay from the policy learned by your code',
+        'trace_family': 'TemporalDifferenceControl',
+        'trace_summary': {
+          'selection_strategy': 'td_greedy_evaluation_trace',
+          'visible_step_count': 1,
+          'source_episode_indices': [1],
+          'contains_terminal_goal': true,
+        },
+        'evaluation_summary': {
+          'mode': 'greedy_evaluation',
+          'training_episodes_run': 120,
+          'evaluation_attempts_run': 2,
+          'selected_seed': 7,
+          'selected_step_count': 1,
+          'selected_total_reward': 2,
+          'selected_terminated': true,
+        },
         'metrics': {
           'total_reward': 1,
           'average_reward': 0.5,
@@ -327,6 +345,11 @@ void main() {
       expect(result.traceEpisodes.last.steps.single.nextState, 3);
       expect(result.episodeSummaries.last.totalReward, 2);
       expect(result.episodeSummaries.last.terminated, isTrue);
+      expect(result.traceMode,
+          'greedy evaluation replay from the policy learned by your code');
+      expect(result.traceFamily, 'TemporalDifferenceControl');
+      expect(result.traceSummary?['visible_step_count'], 1);
+      expect(result.evaluationSummary?['training_episodes_run'], 120);
     });
   });
 }

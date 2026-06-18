@@ -1392,6 +1392,10 @@ class ExecutionResult {
   final List<ExecutionTraceStep> stepTrace;
   final List<ExecutionTraceEpisode> traceEpisodes;
   final List<ExecutionEpisodeSummary> episodeSummaries;
+  final String traceMode;
+  final String traceFamily;
+  final Map<String, dynamic>? traceSummary;
+  final Map<String, dynamic>? evaluationSummary;
   final String replayRenderJobId;
   final String replayRenderStatus;
   final List<int> replayEpisodeIndices;
@@ -1406,6 +1410,10 @@ class ExecutionResult {
     required this.stepTrace,
     this.traceEpisodes = const [],
     this.episodeSummaries = const [],
+    this.traceMode = '',
+    this.traceFamily = '',
+    this.traceSummary,
+    this.evaluationSummary,
     this.replayRenderJobId = '',
     this.replayRenderStatus = 'unavailable',
     this.replayEpisodeIndices = const [],
@@ -1443,6 +1451,11 @@ class ExecutionResult {
       stepTrace: stepTrace,
       traceEpisodes: traceEpisodes,
       episodeSummaries: episodeSummaries,
+      traceMode: json['trace_mode'] as String? ?? '',
+      traceFamily: json['trace_family'] as String? ?? '',
+      traceSummary:
+          (json['trace_summary'] as Map<String, dynamic>?) ?? const {},
+      evaluationSummary: (json['evaluation_summary'] as Map<String, dynamic>?),
       replayRenderJobId: json['replay_render_job_id'] as String? ?? '',
       replayRenderStatus: ReplayStateSnapshot.resolve(
         rawStatus: (json['replay_state'] as String?) ??

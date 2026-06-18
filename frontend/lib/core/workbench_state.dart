@@ -103,6 +103,10 @@ class RLWorkbenchState {
   final List<ExecutionTraceStep> stepTrace;
   final List<ExecutionTraceEpisode> traceEpisodes;
   final List<ExecutionEpisodeSummary> episodeSummaries;
+  final String traceMode;
+  final String traceFamily;
+  final Map<String, dynamic>? traceSummary;
+  final Map<String, dynamic>? evaluationSummary;
   final String? failureKind;
   final List<String> unresolvedBlanks;
   final ExecutionStudentFeedback? studentFeedback;
@@ -172,6 +176,10 @@ class RLWorkbenchState {
     required this.stepTrace,
     required this.traceEpisodes,
     required this.episodeSummaries,
+    required this.traceMode,
+    required this.traceFamily,
+    required this.traceSummary,
+    required this.evaluationSummary,
     required this.failureKind,
     required this.unresolvedBlanks,
     required this.studentFeedback,
@@ -245,6 +253,10 @@ class RLWorkbenchState {
       stepTrace: const [],
       traceEpisodes: const [],
       episodeSummaries: const [],
+      traceMode: '',
+      traceFamily: '',
+      traceSummary: null,
+      evaluationSummary: null,
       failureKind: null,
       unresolvedBlanks: const [],
       studentFeedback: null,
@@ -331,6 +343,10 @@ class RLWorkbenchState {
     List<ExecutionTraceStep>? stepTrace,
     List<ExecutionTraceEpisode>? traceEpisodes,
     List<ExecutionEpisodeSummary>? episodeSummaries,
+    String? traceMode,
+    String? traceFamily,
+    Object? traceSummary = _sentinel,
+    Object? evaluationSummary = _sentinel,
     Object? failureKind = _sentinel,
     List<String>? unresolvedBlanks,
     Object? studentFeedback = _sentinel,
@@ -416,6 +432,14 @@ class RLWorkbenchState {
       stepTrace: stepTrace ?? this.stepTrace,
       traceEpisodes: traceEpisodes ?? this.traceEpisodes,
       episodeSummaries: episodeSummaries ?? this.episodeSummaries,
+      traceMode: traceMode ?? this.traceMode,
+      traceFamily: traceFamily ?? this.traceFamily,
+      traceSummary: identical(traceSummary, _sentinel)
+          ? this.traceSummary
+          : traceSummary as Map<String, dynamic>?,
+      evaluationSummary: identical(evaluationSummary, _sentinel)
+          ? this.evaluationSummary
+          : evaluationSummary as Map<String, dynamic>?,
       failureKind: identical(failureKind, _sentinel)
           ? this.failureKind
           : failureKind as String?,
@@ -1231,6 +1255,10 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         stepTrace: const [],
         traceEpisodes: const [],
         episodeSummaries: const [],
+        traceMode: '',
+        traceFamily: '',
+        traceSummary: null,
+        evaluationSummary: null,
         failureKind: null,
         unresolvedBlanks: const [],
         studentFeedback: null,
@@ -1923,6 +1951,10 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         stepTrace: const [],
         traceEpisodes: const [],
         episodeSummaries: const [],
+        traceMode: '',
+        traceFamily: '',
+        traceSummary: null,
+        evaluationSummary: null,
         failureKind: null,
         unresolvedBlanks: const [],
         studentFeedback: null,
@@ -1976,6 +2008,10 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
           stepTrace: const [],
           traceEpisodes: const [],
           episodeSummaries: const [],
+          traceMode: '',
+          traceFamily: '',
+          traceSummary: null,
+          evaluationSummary: null,
           failureKind: error.failureKind,
           unresolvedBlanks: error.unresolvedBlanks,
           studentFeedback: error.studentFeedback,
@@ -2012,6 +2048,10 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
           stepTrace: const [],
           traceEpisodes: const [],
           episodeSummaries: const [],
+          traceMode: '',
+          traceFamily: '',
+          traceSummary: null,
+          evaluationSummary: null,
           failureKind: null,
           unresolvedBlanks: const [],
           studentFeedback: null,
@@ -2064,6 +2104,10 @@ class RLWorkbenchCubit extends Cubit<RLWorkbenchState> {
         stepTrace: const [],
         traceEpisodes: const [],
         episodeSummaries: const [],
+        traceMode: '',
+        traceFamily: '',
+        traceSummary: null,
+        evaluationSummary: null,
         failureKind: null,
         unresolvedBlanks: const [],
         studentFeedback: null,
@@ -2695,6 +2739,10 @@ def lesson_function(*args, **kwargs):
       stepTrace: const [],
       traceEpisodes: const [],
       episodeSummaries: const [],
+      traceMode: '',
+      traceFamily: '',
+      traceSummary: null,
+      evaluationSummary: null,
       failureKind: null,
       unresolvedBlanks: const [],
       studentFeedback: null,
@@ -2828,6 +2876,10 @@ def lesson_function(*args, **kwargs):
               stepTrace: result.stepTrace,
               traceEpisodes: result.traceEpisodes,
               episodeSummaries: result.episodeSummaries,
+              traceMode: result.traceMode,
+              traceFamily: result.traceFamily,
+              traceSummary: result.traceSummary,
+              evaluationSummary: result.evaluationSummary,
               failureKind: null,
               unresolvedBlanks: const [],
               studentFeedback: null,
@@ -2874,6 +2926,10 @@ def lesson_function(*args, **kwargs):
               stepTrace: const [],
               traceEpisodes: const [],
               episodeSummaries: const [],
+              traceMode: '',
+              traceFamily: '',
+              traceSummary: null,
+              evaluationSummary: null,
               failureKind: snapshot.failureKind,
               unresolvedBlanks: snapshot.unresolvedBlanks,
               studentFeedback: snapshot.studentFeedback,

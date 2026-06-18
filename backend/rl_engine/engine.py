@@ -277,16 +277,28 @@ class RLEngine:
 
         if lesson_id == "dp_policy_eval":
             self._run_policy_evaluation(lesson_function, hyperparameters)
+            return None
         elif lesson_id == "dp_value_iteration":
             self._run_value_iteration(lesson_function, hyperparameters)
+            return None
         elif lesson_id == "dp_policy_improvement":
             self._run_policy_improvement(lesson_function, hyperparameters)
+            return None
         elif lesson_id == "mc_first_visit":
             self._run_mc_first_visit(lesson_function, num_episodes, hyperparameters)
+            return None
         elif lesson_id == "td_sarsa":
-            self._run_sarsa(lesson_function, num_episodes, hyperparameters)
+            return self._run_td_control_with_greedy_evaluation(
+                lesson_id,
+                lesson_function,
+                hyperparameters,
+            )
         elif lesson_id == "td_q_learning":
-            self._run_q_learning(lesson_function, num_episodes, hyperparameters)
+            return self._run_td_control_with_greedy_evaluation(
+                lesson_id,
+                lesson_function,
+                hyperparameters,
+            )
         else:
             raise ValueError(f"Lesson '{lesson_id}' is not implemented.")
 
@@ -323,7 +335,12 @@ class RLEngine:
         rng = getattr(self.adapter.env.unwrapped, "np_random", None)
         sample_threshold = float(rng.random()) if rng is not None else 1.0
         if sample_threshold < epsilon:
-            return int(self.adapter.env.action_space.sample())
+            action_count = len(q_row)
+            if action_count == getattr(self.adapter.env.action_space, "n", action_count):
+                return int(self.adapter.env.action_space.sample())
+            if rng is not None:
+                return int(rng.integers(action_count))
+            return 0
 
         best_value = max(q_row)
         best_actions = [action for action, value in enumerate(q_row) if value == best_value]
@@ -332,6 +349,48 @@ class RLEngine:
         if rng is not None:
             return best_actions[int(rng.integers(len(best_actions)))]
         return best_actions[0]
+
+    def _legal_actions(self, action_mask: Any, action_count: int) -> list[int]:
+        if action_mask is None:
+            return list(range(action_count))
+        try:
+            values = [int(value) for value in action_mask]
+        except TypeError:
+            return list(range(action_count))
+        legal_actions = [
+            action
+            for action, enabled in enumerate(values[:action_count])
+            if enabled
+        ]
+        return legal_actions or list(range(action_count))
+
+    def _choose_masked_epsilon_greedy_action(
+        self,
+        q_row: list[float],
+        epsilon: float,
+        action_mask: Any,
+    ) -> int:
+        legal_actions = self._legal_actions(action_mask, len(q_row))
+        if len(legal_actions) == len(q_row):
+            return self._choose_epsilon_greedy_action(q_row, epsilon)
+        masked_row = [q_row[action] for action in legal_actions]
+        chosen_offset = self._choose_epsilon_greedy_action(masked_row, epsilon)
+        return legal_actions[chosen_offset]
+
+    def _best_masked_action_value(
+        self,
+        q_row: list[float],
+        action_mask: Any,
+    ) -> tuple[int, float]:
+        legal_actions = self._legal_actions(action_mask, len(q_row))
+        best_value = max(q_row[action] for action in legal_actions)
+        best_actions = [action for action in legal_actions if q_row[action] == best_value]
+        if len(best_actions) == 1:
+            return best_actions[0], float(best_value)
+        rng = getattr(self.adapter.env.unwrapped, "np_random", None)
+        if rng is not None:
+            return best_actions[int(rng.integers(len(best_actions)))], float(best_value)
+        return best_actions[0], float(best_value)
 
     def _max_steps_per_episode(self, hyperparameters: Dict[str, float]) -> int:
         raw_limit = hyperparameters.get("max_steps_per_episode")
@@ -349,6 +408,45 @@ class RLEngine:
             ActionValueRow([0.0 for _ in range(action_count)])
             for _ in range(state_count)
         ]
+
+    def _td_control_config(self, lesson_id: str) -> dict[str, int | float | bool]:
+        if lesson_id == "td_sarsa":
+            return {
+                "base_training_episodes": 120,
+                "adaptive_extension": 40,
+                "max_training_episodes": 200,
+                "evaluation_attempts": 5,
+                "training_max_steps": 60,
+                "visible_step_cap": 25,
+                "epsilon_start": 0.20,
+                "epsilon_end": 0.02,
+                "use_action_mask": False,
+            }
+        if lesson_id == "td_q_learning":
+            return {
+                "base_training_episodes": 500,
+                "adaptive_extension": 250,
+                "max_training_episodes": 1500,
+                "evaluation_attempts": 20,
+                "training_max_steps": 200,
+                "visible_step_cap": 30,
+                "epsilon_start": 0.20,
+                "epsilon_end": 0.02,
+                "use_action_mask": True,
+            }
+        raise ValueError(f"Unsupported TD control lesson '{lesson_id}'.")
+
+    def _scheduled_epsilon(
+        self,
+        episode_index: int,
+        total_episodes: int,
+        start: float,
+        end: float,
+    ) -> float:
+        if total_episodes <= 1:
+            return round(float(end), 4)
+        progress = min(max(episode_index / float(total_episodes - 1), 0.0), 1.0)
+        return round(float(start + (end - start) * progress), 4)
 
     def _rounded_vector_table(self, values: list[float]) -> list[list[float]]:
         return [[round(float(value), 4)] for value in values]
@@ -1029,6 +1127,394 @@ class RLEngine:
                 values.update(result[0])
             if len(result) >= 2 and isinstance(result[1], dict):
                 returns.update(result[1])
+
+    def _run_td_control_with_greedy_evaluation(
+        self,
+        lesson_id: str,
+        lesson_function,
+        hyperparameters: Dict[str, float],
+    ) -> dict[str, Any]:
+        config = self._td_control_config(lesson_id)
+        q_table = self._empty_q_table()
+        training_episodes_run = 0
+        evaluation_attempts_run = 0
+        selected_trace = None
+        selected_seed = None
+        target_training_episodes = int(config["base_training_episodes"])
+
+        while True:
+            while training_episodes_run < target_training_episodes:
+                epsilon = self._scheduled_epsilon(
+                    training_episodes_run,
+                    int(config["max_training_episodes"]),
+                    float(config["epsilon_start"]),
+                    float(config["epsilon_end"]),
+                )
+                if lesson_id == "td_q_learning":
+                    self._run_q_learning_td_episode(
+                        lesson_function,
+                        q_table,
+                        alpha=float(hyperparameters["alpha"]),
+                        gamma=float(hyperparameters["gamma"]),
+                        epsilon=epsilon,
+                        max_steps=int(config["training_max_steps"]),
+                        seed=training_episodes_run,
+                        use_action_mask=bool(config["use_action_mask"]),
+                        apply_updates=True,
+                        record_trace=False,
+                    )
+                else:
+                    self._run_sarsa_td_episode(
+                        lesson_function,
+                        q_table,
+                        alpha=float(hyperparameters["alpha"]),
+                        gamma=float(hyperparameters["gamma"]),
+                        epsilon=epsilon,
+                        max_steps=int(config["training_max_steps"]),
+                        seed=training_episodes_run,
+                        apply_updates=True,
+                        record_trace=False,
+                    )
+                training_episodes_run += 1
+
+            remaining_attempts = int(config["evaluation_attempts"]) - evaluation_attempts_run
+            if remaining_attempts <= 0:
+                break
+            attempt_budget = (
+                remaining_attempts
+                if training_episodes_run >= int(config["max_training_episodes"])
+                else 1
+            )
+            selected_trace, selected_seed, attempts_used = self._evaluate_td_policy(
+                lesson_id=lesson_id,
+                lesson_function=lesson_function,
+                q_table=q_table,
+                alpha=float(hyperparameters["alpha"]),
+                gamma=float(hyperparameters["gamma"]),
+                max_steps=int(config["visible_step_cap"]),
+                attempt_count=attempt_budget,
+                seed_offset=training_episodes_run + evaluation_attempts_run,
+                use_action_mask=bool(config["use_action_mask"]),
+            )
+            evaluation_attempts_run += attempts_used
+            if selected_trace is not None or training_episodes_run >= int(config["max_training_episodes"]):
+                break
+            target_training_episodes = min(
+                training_episodes_run + int(config["adaptive_extension"]),
+                int(config["max_training_episodes"]),
+            )
+
+        if selected_trace:
+            for step in selected_trace["steps"]:
+                self._log_trace_step(step)
+            self.logger.end_episode()
+
+        selected_steps = [] if selected_trace is None else selected_trace["steps"]
+        selected_total_reward = 0.0 if selected_trace is None else float(selected_trace["total_reward"])
+        selected_terminated = bool(selected_trace and selected_trace["terminated"])
+        return {
+            "evaluation_summary": {
+                "mode": "greedy_evaluation",
+                "training_episodes_run": training_episodes_run,
+                "evaluation_attempts_run": evaluation_attempts_run,
+                "selected_seed": selected_seed,
+                "selected_step_count": len(selected_steps),
+                "selected_total_reward": round(selected_total_reward, 4),
+                "selected_terminated": selected_terminated,
+            }
+        }
+
+    def _evaluate_td_policy(
+        self,
+        *,
+        lesson_id: str,
+        lesson_function,
+        q_table: list[ActionValueRow],
+        alpha: float,
+        gamma: float,
+        max_steps: int,
+        attempt_count: int,
+        seed_offset: int,
+        use_action_mask: bool,
+    ) -> tuple[dict[str, Any] | None, int | None, int]:
+        best_trace = None
+        best_seed = None
+        attempts_used = 0
+
+        for attempt in range(attempt_count):
+            seed = seed_offset + attempt
+            if lesson_id == "td_q_learning":
+                trace = self._run_q_learning_td_episode(
+                    lesson_function,
+                    q_table,
+                    alpha=alpha,
+                    gamma=gamma,
+                    epsilon=0.0,
+                    max_steps=max_steps,
+                    seed=seed,
+                    use_action_mask=use_action_mask,
+                    apply_updates=False,
+                    record_trace=True,
+                )
+            else:
+                trace = self._run_sarsa_td_episode(
+                    lesson_function,
+                    q_table,
+                    alpha=alpha,
+                    gamma=gamma,
+                    epsilon=0.0,
+                    max_steps=max_steps,
+                    seed=seed,
+                    apply_updates=False,
+                    record_trace=True,
+                )
+            attempts_used += 1
+            if not trace["terminated"]:
+                continue
+            if best_trace is None:
+                best_trace = trace
+                best_seed = seed
+                continue
+            if trace["step_count"] < best_trace["step_count"]:
+                best_trace = trace
+                best_seed = seed
+                continue
+            if (
+                trace["step_count"] == best_trace["step_count"]
+                and trace["total_reward"] > best_trace["total_reward"]
+            ):
+                best_trace = trace
+                best_seed = seed
+
+        return best_trace, best_seed, attempts_used
+
+    def _run_q_learning_td_episode(
+        self,
+        lesson_function,
+        q_table: list[ActionValueRow],
+        *,
+        alpha: float,
+        gamma: float,
+        epsilon: float,
+        max_steps: int,
+        seed: int,
+        use_action_mask: bool,
+        apply_updates: bool,
+        record_trace: bool,
+    ) -> dict[str, Any]:
+        state, reset_info = self.adapter.reset(seed=seed)
+        info = reset_info if isinstance(reset_info, dict) else {}
+        action_mask = info.get("action_mask")
+        done = False
+        step_count = 0
+        total_reward = 0.0
+        steps: list[dict[str, Any]] = []
+        action_count = self.adapter.env.action_space.n
+
+        while not done and step_count < max_steps:
+            action = (
+                self._choose_masked_epsilon_greedy_action(q_table[state], epsilon, action_mask)
+                if use_action_mask
+                else self._choose_epsilon_greedy_action(q_table[state], epsilon)
+            )
+            next_state, reward, terminated, truncated, info = self.adapter.step(action)
+            step_count += 1
+            total_reward += float(reward)
+            episode_limit_reached = step_count >= max_steps
+            effective_truncated = bool(truncated or episode_limit_reached)
+            terminal_transition = bool(terminated or effective_truncated)
+            next_action_mask = info.get("action_mask")
+
+            if terminal_transition:
+                best_next_action = None
+                best_next_value = 0.0
+            elif use_action_mask:
+                best_next_action, best_next_value = self._best_masked_action_value(
+                    q_table[next_state],
+                    next_action_mask,
+                )
+            else:
+                best_next_value = float(max(q_table[next_state]))
+                best_next_action = q_table[next_state].index(best_next_value)
+
+            if apply_updates:
+                lesson_function(
+                    q_table,
+                    state,
+                    action,
+                    reward,
+                    next_state,
+                    alpha,
+                    gamma,
+                )
+
+            if record_trace:
+                steps.append(
+                    self._td_evaluation_step_payload(
+                        state=state,
+                        action=action,
+                        reward=float(reward),
+                        next_state=next_state,
+                        terminated=bool(terminated),
+                        truncated=effective_truncated,
+                        transition_probability=float(info.get("p", 1.0)),
+                        q_table=q_table,
+                        active_column=action,
+                        bootstrap_column=best_next_action,
+                        action_count=action_count,
+                        prefix="q_learning_eval",
+                    )
+                )
+
+            state = next_state
+            action_mask = next_action_mask
+            done = terminal_transition
+
+        return {
+            "steps": steps,
+            "step_count": step_count,
+            "total_reward": total_reward,
+            "terminated": done and not (steps[-1]["grid_metadata"]["truncated"] if steps else False),
+        }
+
+    def _run_sarsa_td_episode(
+        self,
+        lesson_function,
+        q_table: list[ActionValueRow],
+        *,
+        alpha: float,
+        gamma: float,
+        epsilon: float,
+        max_steps: int,
+        seed: int,
+        apply_updates: bool,
+        record_trace: bool,
+    ) -> dict[str, Any]:
+        state, _ = self.adapter.reset(seed=seed)
+        action = self._choose_epsilon_greedy_action(q_table[state], epsilon)
+        done = False
+        step_count = 0
+        total_reward = 0.0
+        steps: list[dict[str, Any]] = []
+        action_count = self.adapter.env.action_space.n
+
+        while not done and step_count < max_steps:
+            next_state, reward, terminated, truncated, info = self.adapter.step(action)
+            step_count += 1
+            total_reward += float(reward)
+            episode_limit_reached = step_count >= max_steps
+            effective_truncated = bool(truncated or episode_limit_reached)
+            next_action = None
+            if not (terminated or effective_truncated):
+                next_action = self._choose_epsilon_greedy_action(q_table[next_state], epsilon)
+
+            if apply_updates:
+                lesson_function(
+                    q_table,
+                    state,
+                    action,
+                    reward,
+                    next_state,
+                    next_action,
+                    alpha,
+                    gamma,
+                )
+
+            if record_trace:
+                steps.append(
+                    self._td_evaluation_step_payload(
+                        state=state,
+                        action=action,
+                        reward=float(reward),
+                        next_state=next_state,
+                        terminated=bool(terminated),
+                        truncated=effective_truncated,
+                        transition_probability=float(info.get("p", 1.0)),
+                        q_table=q_table,
+                        active_column=action,
+                        bootstrap_column=next_action,
+                        action_count=action_count,
+                        prefix="sarsa_eval",
+                    )
+                )
+
+            state = next_state
+            action = 0 if next_action is None else next_action
+            done = bool(terminated or effective_truncated)
+
+        return {
+            "steps": steps,
+            "step_count": step_count,
+            "total_reward": total_reward,
+            "terminated": done and not (steps[-1]["grid_metadata"]["truncated"] if steps else False),
+        }
+
+    def _td_evaluation_step_payload(
+        self,
+        *,
+        state: int,
+        action: int,
+        reward: float,
+        next_state: int,
+        terminated: bool,
+        truncated: bool,
+        transition_probability: float,
+        q_table: list[ActionValueRow],
+        active_column: int,
+        bootstrap_column: int | None,
+        action_count: int,
+        prefix: str,
+    ) -> dict[str, Any]:
+        frame_path = self.adapter.capture_frame_png(prefix=prefix)
+        return {
+            "state": state,
+            "action": action,
+            "reward": reward,
+            "next_state": next_state,
+            "transition_probability": round(float(transition_probability), 4),
+            "frame_path": frame_path,
+            "grid_metadata": self._grid_metadata_for_step(
+                state=state,
+                next_state=next_state,
+                action=action,
+                reward=reward,
+                terminated=terminated,
+                truncated=truncated,
+            ),
+            "agent_caption": (
+                f"Greedy evaluation followed {self.adapter.action_label(action)} "
+                f"from state {state} to {next_state} using the policy learned by your code."
+            ),
+            "code_title": "Greedy Policy Evaluation",
+            "code_lines": [
+                "action = argmax_a Q[state][a]",
+                "follow the learned policy without exploration",
+                "record the real environment transition for replay",
+            ],
+            "math_title": "Greedy Evaluation",
+            "math_equation": r"a=\arg\max_a Q(s,a)",
+            "math_lines": [
+                f"Exploration is disabled, so epsilon = 0.0 and the learned greedy action is selected.",
+                f"The evaluation transition carries reward {round(reward, 4)} and probability {round(float(transition_probability), 4)}.",
+            ],
+            "updated_values": {f"Q({state}, {action})": round(float(q_table[state][action]), 4)},
+            "trace_schema_version": 2,
+            "tables": {
+                "kind": "q_table",
+                "after": self._rounded_table(q_table),
+                "active_cell": {"row": state, "column": active_column},
+                "bootstrap_cell": (
+                    None
+                    if bootstrap_column is None
+                    else {"row": next_state, "column": bootstrap_column}
+                ),
+                "changed_cells": [],
+                "action_labels": [
+                    self.adapter.action_label(action_index)
+                    for action_index in range(action_count)
+                ],
+            },
+        }
 
     def _run_q_learning(
         self, lesson_function, num_episodes: int, hyperparameters: Dict[str, float]

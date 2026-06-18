@@ -184,7 +184,7 @@ def _run_execution_pipeline(submission_payload: dict[str, Any]) -> dict[str, Any
             lesson=lesson,
             submission_payload=submission_payload,
         )
-        _run_lesson_engine(
+        execution_metadata = _run_lesson_engine(
             adapter=adapter,
             logger=logger,
             feedback_service=feedback_service,
@@ -199,6 +199,7 @@ def _run_execution_pipeline(submission_payload: dict[str, Any]) -> dict[str, Any
         visualizer=visualizer,
         validation_result=validation_result,
         submission_payload=submission_payload,
+        execution_metadata=execution_metadata,
     )
 
 
@@ -282,11 +283,23 @@ def _package_results(
     visualizer: VisualizationService,
     validation_result: Any,
     submission_payload: dict[str, Any],
+    execution_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     log_data = logger.get_logs()
+    episode_rewards = [sum(step.get("reward", 0) for step in episode) for episode in log_data]
+    trace_payload = _build_trace_payload(
+        submission_payload["lesson_id"],
+        log_data,
+        episode_rewards,
+        execution_metadata=execution_metadata,
+    )
     replay_render = _enqueue_replay_render(
         visualizer,
-        log_data,
+        [
+            episode.get("steps", [])
+            for episode in trace_payload.get("trace_episodes", [])
+            if isinstance(episode, dict)
+        ],
         submission_payload["lesson_id"],
     )
     return _build_success_response(
@@ -294,6 +307,7 @@ def _package_results(
         log_data=log_data,
         validation_result=validation_result,
         replay_render=replay_render,
+        execution_metadata=execution_metadata,
     )
 
 
@@ -374,12 +388,12 @@ def _run_lesson_engine(
     feedback_service: StudentFeedbackService,
     lesson: Any,
     submission_payload: dict[str, Any],
-) -> None:
+) -> dict[str, Any] | None:
     try:
         user_context = load_user_context(submission_payload["code"])
         hyperparameters = _extract_hyperparameters(submission_payload, user_context)
         engine = RLEngine(adapter=adapter, logger=logger)
-        engine.run_episodes(
+        return engine.run_episodes(
             submission_payload["lesson_id"],
             submission_payload["code"],
             num_episodes=hyperparameters["episodes"],
@@ -401,18 +415,86 @@ def _run_lesson_engine(
         ) from error
 
 
-def _build_success_response(
-    *,
-    lesson: Any,
+def _trace_family_for_lesson(lesson_id: str) -> str:
+    if lesson_id in {"dp_policy_eval", "dp_value_iteration", "dp_policy_improvement"}:
+        return "DynamicProgramming"
+    if lesson_id == "mc_first_visit":
+        return "MonteCarlo"
+    if lesson_id in {"td_sarsa", "td_q_learning"}:
+        return "TemporalDifferenceControl"
+    return "Legacy"
+
+
+def _build_trace_payload(
+    lesson_id: str,
     log_data: list[list[dict[str, Any]]],
-    validation_result: Any,
-    replay_render: dict[str, Any] | None = None,
+    episode_rewards: list[float],
+    execution_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    episode_rewards = [sum(step.get("reward", 0) for step in episode) for episode in log_data]
-    featured_episode_index, featured_episode = _select_featured_episode(
-        log_data,
-        episode_rewards,
-    )
+    trace_family = _trace_family_for_lesson(lesson_id)
+    featured_episode_index, featured_episode = _select_featured_episode(log_data, episode_rewards)
+    execution_metadata = execution_metadata or {}
+
+    if trace_family == "DynamicProgramming":
+        curated_steps = _curate_dynamic_programming_episode(featured_episode)
+        return _build_curated_trace_payload(
+            trace_family=trace_family,
+            trace_mode="curated backup trace",
+            selection_strategy="dp_curated_backup_trace",
+            source_episode_index=featured_episode_index,
+            steps=curated_steps,
+        )
+
+    if trace_family == "MonteCarlo":
+        curated_steps = _curate_monte_carlo_episode(featured_episode)
+        return _build_curated_trace_payload(
+            trace_family=trace_family,
+            trace_mode="curated episode return trace",
+            selection_strategy="mc_curated_episode_return_trace",
+            source_episode_index=featured_episode_index,
+            steps=curated_steps,
+        )
+
+    if trace_family == "TemporalDifferenceControl":
+        step_trace = json.loads(json.dumps(featured_episode, cls=NpEncoder))
+        episode_summaries = []
+        if featured_episode_index >= 0:
+            episode_summaries = [
+                _episode_summary(
+                    featured_episode_index,
+                    step_trace,
+                    sum(step.get("reward", 0) for step in step_trace),
+                )
+            ]
+        return {
+            "trace_family": trace_family,
+            "trace_mode": (
+                "greedy evaluation replay from the policy learned by your code"
+                if execution_metadata.get("evaluation_summary")
+                else "latest episode trace"
+            ),
+            "trace_summary": {
+                "selection_strategy": (
+                    "td_greedy_evaluation_trace"
+                    if execution_metadata.get("evaluation_summary")
+                    else "latest_episode"
+                ),
+                "visible_step_count": len(step_trace),
+                "source_episode_indices": (
+                    [featured_episode_index] if featured_episode_index >= 0 else []
+                ),
+                "contains_terminal_goal": _episode_contains_terminal_goal(step_trace),
+            },
+            "step_trace": step_trace,
+            "trace_episodes": (
+                [{"episode_index": featured_episode_index, "steps": step_trace}]
+                if featured_episode_index >= 0
+                else []
+            ),
+            "episode_summaries": episode_summaries,
+            "evaluation_summary": execution_metadata.get("evaluation_summary"),
+        }
+
     trace_episodes = json.loads(
         json.dumps(
             [
@@ -432,6 +514,132 @@ def _build_success_response(
     if trace_episodes and featured_episode_index != len(trace_episodes) - 1:
         trace_episodes = _move_index_to_end(trace_episodes, featured_episode_index)
         episode_summaries = _move_index_to_end(episode_summaries, featured_episode_index)
+
+    step_trace = json.loads(json.dumps(featured_episode, cls=NpEncoder))
+    return {
+        "trace_family": trace_family,
+        "trace_mode": "latest episode trace",
+        "trace_summary": {
+            "selection_strategy": "latest_episode",
+            "visible_step_count": len(step_trace),
+            "source_episode_indices": (
+                [featured_episode_index] if featured_episode_index >= 0 else []
+            ),
+            "contains_terminal_goal": _episode_contains_terminal_goal(step_trace),
+        },
+        "step_trace": step_trace,
+        "trace_episodes": trace_episodes,
+        "episode_summaries": episode_summaries,
+    }
+
+
+def _build_curated_trace_payload(
+    *,
+    trace_family: str,
+    trace_mode: str,
+    selection_strategy: str,
+    source_episode_index: int,
+    steps: list[dict[str, Any]],
+) -> dict[str, Any]:
+    safe_steps = json.loads(json.dumps(steps, cls=NpEncoder))
+    total_reward = sum(step.get("reward", 0) for step in steps)
+    trace_episode = {
+        "episode_index": source_episode_index,
+        "steps": safe_steps,
+    }
+    return {
+        "trace_family": trace_family,
+        "trace_mode": trace_mode,
+        "trace_summary": {
+            "selection_strategy": selection_strategy,
+            "visible_step_count": len(safe_steps),
+            "source_episode_indices": [source_episode_index] if source_episode_index >= 0 else [],
+            "contains_terminal_goal": _episode_contains_terminal_goal(safe_steps),
+        },
+        "step_trace": safe_steps,
+        "trace_episodes": [trace_episode] if source_episode_index >= 0 else [],
+        "episode_summaries": (
+            [_episode_summary(source_episode_index, safe_steps, total_reward)]
+            if source_episode_index >= 0
+            else []
+        ),
+    }
+
+
+def _curate_dynamic_programming_episode(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if len(steps) <= 4:
+        return list(steps)
+
+    chosen = {0, len(steps) - 1, len(steps) // 2}
+    strongest_index = max(range(len(steps)), key=lambda index: _step_signal(steps[index]))
+    chosen.add(strongest_index)
+    return [steps[index] for index in sorted(chosen)[:4]]
+
+
+def _curate_monte_carlo_episode(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if len(steps) <= 5:
+        return list(steps)
+
+    sampling_indexes = [
+        index
+        for index, step in enumerate(steps)
+        if (step.get("equation_update") or {}).get("kind") == "mc_sampling"
+    ]
+    update_indexes = [
+        index
+        for index, step in enumerate(steps)
+        if (step.get("equation_update") or {}).get("kind") == "mc_first_visit"
+    ]
+
+    chosen = {0, len(steps) - 1}
+    if sampling_indexes:
+        chosen.add(sampling_indexes[0])
+        chosen.add(sampling_indexes[-1])
+    if update_indexes:
+        chosen.add(update_indexes[0])
+        chosen.add(update_indexes[-1])
+
+    return [steps[index] for index in sorted(chosen)[:5]]
+
+
+def _step_signal(step: dict[str, Any]) -> float:
+    signal = abs(float(step.get("reward") or 0.0))
+    equation_update = step.get("equation_update") or {}
+    dp_details = equation_update.get("dp_details") or {}
+    mc_details = equation_update.get("mc_details") or {}
+    signal += abs(float(dp_details.get("delta") or 0.0))
+    signal += abs(float(equation_update.get("td_target") or 0.0))
+    signal += abs(float(mc_details.get("return_value") or 0.0))
+    if _step_is_terminal(step):
+        signal += 5.0
+    return signal
+
+
+def _episode_contains_terminal_goal(steps: list[dict[str, Any]]) -> bool:
+    return any(_step_is_terminal(step) for step in steps)
+
+
+def _step_is_terminal(step: dict[str, Any]) -> bool:
+    grid_metadata = step.get("grid_metadata") or {}
+    mc_details = (step.get("equation_update") or {}).get("mc_details") or {}
+    return bool(grid_metadata.get("terminated") or mc_details.get("terminated"))
+
+
+def _build_success_response(
+    *,
+    lesson: Any,
+    log_data: list[list[dict[str, Any]]],
+    validation_result: Any,
+    replay_render: dict[str, Any] | None = None,
+    execution_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    episode_rewards = [sum(step.get("reward", 0) for step in episode) for episode in log_data]
+    trace_payload = _build_trace_payload(
+        lesson.id,
+        log_data,
+        episode_rewards,
+        execution_metadata=execution_metadata,
+    )
     replay_render = replay_render or {}
     video_path = str(replay_render.get("video_path") or "")
     render_status = str(replay_render.get("replay_render_status") or "unavailable")
@@ -440,7 +648,7 @@ def _build_success_response(
         video_path=video_path,
         error=replay_render.get("error"),
     )
-    return {
+    response = {
         "status": "success",
         "message": "Execution pipeline completed.",
         "lesson": {"id": lesson.id, "title": lesson.title},
@@ -451,9 +659,12 @@ def _build_success_response(
         "replay_state": replay_state,
         "replay_episode_indices": replay_render.get("replay_episode_indices") or [],
         "test_results": validation_result.test_results,
-        "step_trace": json.loads(json.dumps(featured_episode, cls=NpEncoder)),
-        "trace_episodes": trace_episodes,
-        "episode_summaries": episode_summaries,
+        "step_trace": trace_payload["step_trace"],
+        "trace_episodes": trace_payload["trace_episodes"],
+        "episode_summaries": trace_payload["episode_summaries"],
+        "trace_mode": trace_payload["trace_mode"],
+        "trace_family": trace_payload["trace_family"],
+        "trace_summary": trace_payload["trace_summary"],
         "metrics": {
             "episodes_completed": len(log_data),
             "steps_recorded": sum(len(episode) for episode in log_data),
@@ -464,6 +675,10 @@ def _build_success_response(
             "best_episode_reward": max(episode_rewards, default=0),
         },
     }
+    evaluation_summary = trace_payload.get("evaluation_summary")
+    if evaluation_summary is not None:
+        response["evaluation_summary"] = evaluation_summary
+    return response
 
 
 def _select_featured_episode(
