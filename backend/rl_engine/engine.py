@@ -1049,8 +1049,10 @@ class RLEngine:
                 )
                 next_state, reward, terminated, truncated, info = self.adapter.step(action)
                 step_count += 1
+                episode_limit_reached = step_count >= max_steps
                 old_value = q_table[state][action]
-                terminal_transition = bool(terminated or truncated)
+                effective_truncated = bool(truncated or episode_limit_reached)
+                terminal_transition = bool(terminated or effective_truncated)
                 if terminal_transition:
                     best_next_value = 0.0
                     best_next_action = None
@@ -1084,7 +1086,7 @@ class RLEngine:
                             action=action,
                             reward=reward,
                             terminated=terminated,
-                            truncated=truncated,
+                            truncated=effective_truncated,
                         ),
                         "agent_caption": (
                             "Agent selected "
@@ -1149,7 +1151,7 @@ class RLEngine:
                     }
                 )
                 state = next_state
-                done = terminated or truncated or step_count >= max_steps
+                done = terminated or effective_truncated
 
             self.logger.end_episode()
 
@@ -1171,8 +1173,9 @@ class RLEngine:
                 next_state, reward, terminated, truncated, info = self.adapter.step(action)
                 step_count += 1
                 episode_limit_reached = step_count >= max_steps
+                effective_truncated = bool(truncated or episode_limit_reached)
                 next_action = None
-                if not (terminated or truncated or episode_limit_reached):
+                if not (terminated or effective_truncated):
                     next_action = self._choose_epsilon_greedy_action(
                         q_table[next_state],
                         hyperparameters["epsilon"],
@@ -1210,7 +1213,7 @@ class RLEngine:
                             action=action,
                             reward=reward,
                             terminated=terminated,
-                            truncated=truncated,
+                            truncated=effective_truncated,
                         ),
                         "agent_caption": (
                             f"SARSA uses the sampled next action {sampled_next_action} "
@@ -1275,6 +1278,6 @@ class RLEngine:
                 )
                 state = next_state
                 action = next_action if next_action is not None else 0
-                done = terminated or truncated or episode_limit_reached
+                done = terminated or effective_truncated
 
             self.logger.end_episode()

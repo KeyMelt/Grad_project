@@ -445,8 +445,9 @@ _CORE_LESSONS: list[dict[str, Any]] = [
         "starter_code": (
             "LEARNING_RATE = 0.10\n"
             "DISCOUNT_FACTOR = 0.95\n"
-            "EXPLORATION_RATE = 0.20\n"
-            "EPISODE_COUNT = 6\n\n"
+            "EXPLORATION_RATE = 0.10\n"
+            "EPISODE_COUNT = 40\n"
+            "MAX_STEPS_PER_EPISODE = 80\n\n"
             "def sarsa_update(\n"
             "    Q,\n"
             "    state,\n"
@@ -508,7 +509,7 @@ _CORE_LESSONS: list[dict[str, Any]] = [
                 "Terminal transitions use a zero bootstrap.",
                 "The updated Q-table passes the sample SARSA lesson test.",
             ],
-            "code_tip": "LEARNING_RATE, DISCOUNT_FACTOR, EXPLORATION_RATE, and EPISODE_COUNT are read from the submitted code.",
+            "code_tip": "LEARNING_RATE, DISCOUNT_FACTOR, EXPLORATION_RATE, EPISODE_COUNT, and MAX_STEPS_PER_EPISODE are read from the submitted code. The starter defaults are tuned to produce a shorter, more informative CliffWalking trace.",
         },
     },
     {
@@ -525,8 +526,9 @@ _CORE_LESSONS: list[dict[str, Any]] = [
             "# Taxi-v3: 500 states (taxi pos × passenger × dest), 6 actions\n"
             "LEARNING_RATE = 0.10\n"
             "DISCOUNT_FACTOR = 0.95\n"
-            "EXPLORATION_RATE = 0.20\n"
-            "EPISODE_COUNT = 6\n\n"
+            "EXPLORATION_RATE = 0.10\n"
+            "EPISODE_COUNT = 40\n"
+            "MAX_STEPS_PER_EPISODE = 100\n\n"
             "def q_learning_update(Q, state, action, reward, next_state, alpha=LEARNING_RATE, gamma=DISCOUNT_FACTOR):\n"
             "    best_next_value = __BLANK_q_learning_best_next__\n"
             "    td_target = reward + gamma * best_next_value\n"
@@ -579,7 +581,7 @@ _CORE_LESSONS: list[dict[str, Any]] = [
                 "The chosen Q-value is updated incrementally toward the TD target.",
                 "The function returns the updated Q-table and passes the sample lesson test.",
             ],
-            "code_tip": "Q is list-backed (500 rows × 6 columns for Taxi), so max(Q[next_state]) is the direct bootstrap expression. LEARNING_RATE, DISCOUNT_FACTOR, EXPLORATION_RATE, and EPISODE_COUNT are read from the submitted code.",
+            "code_tip": "Q is list-backed (500 rows × 6 columns for Taxi), so max(Q[next_state]) is the direct bootstrap expression. LEARNING_RATE, DISCOUNT_FACTOR, EXPLORATION_RATE, EPISODE_COUNT, and MAX_STEPS_PER_EPISODE are read from the submitted code. The starter defaults are tuned to surface a more informative Taxi trace without dragging the run out unnecessarily.",
         },
     },
 ]

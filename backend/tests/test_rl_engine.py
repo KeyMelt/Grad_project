@@ -312,6 +312,24 @@ def test_q_learning_behavior_uses_epsilon_greedy_q_row(monkeypatch):
         def action_label(self, action):
             return f"Action {action}"
 
+        def grid_metadata(
+            self,
+            state,
+            next_state=None,
+            action=None,
+            reward=None,
+            terminated=False,
+            truncated=False,
+        ):
+            return {
+                "state": state,
+                "next_state": next_state,
+                "action": action,
+                "reward": reward,
+                "terminated": terminated,
+                "truncated": truncated,
+            }
+
     class FakeLogger:
         def log_step(self, payload):
             self.payload = payload
@@ -395,6 +413,24 @@ def test_q_learning_respects_episode_step_limit(monkeypatch):
         def action_label(self, action):
             return f"Action {action}"
 
+        def grid_metadata(
+            self,
+            state,
+            next_state=None,
+            action=None,
+            reward=None,
+            terminated=False,
+            truncated=False,
+        ):
+            return {
+                "state": state,
+                "next_state": next_state,
+                "action": action,
+                "reward": reward,
+                "terminated": terminated,
+                "truncated": truncated,
+            }
+
     class FakeLogger:
         def __init__(self):
             self.steps = []
@@ -430,6 +466,8 @@ def test_q_learning_respects_episode_step_limit(monkeypatch):
 
     assert lesson_actions == [0, 0, 0]
     assert len(logger.steps) == 3
+    assert logger.steps[-1]["grid_metadata"]["terminated"] is False
+    assert logger.steps[-1]["grid_metadata"]["truncated"] is True
 
 
 def test_sarsa_emits_sampled_bootstrap_q_table_schema(monkeypatch):

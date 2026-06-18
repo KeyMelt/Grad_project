@@ -96,6 +96,48 @@ class _FakeMultiEpisodeEngine:
         self.logger.end_episode()
 
 
+class _FakeThreeEpisodeEngine:
+    def __init__(self, adapter: _FakeAdapter, logger) -> None:
+        self.adapter = adapter
+        self.logger = logger
+
+    def run_episodes(self, lesson_id, code_module_str, num_episodes, hyperparameters):
+        del lesson_id, code_module_str, num_episodes, hyperparameters
+        self.logger.log_step(
+            {
+                "state": 0,
+                "action": 1,
+                "next_state": 1,
+                "reward": -5.0,
+                "updated_values": {"V(0)": 0.0},
+                "grid_metadata": {"terminated": False, "truncated": True},
+            }
+        )
+        self.logger.end_episode()
+        self.logger.log_step(
+            {
+                "state": 2,
+                "action": 0,
+                "next_state": 3,
+                "reward": 2.0,
+                "updated_values": {"V(2)": 1.0},
+                "grid_metadata": {"terminated": True, "truncated": False},
+            }
+        )
+        self.logger.end_episode()
+        self.logger.log_step(
+            {
+                "state": 4,
+                "action": 0,
+                "next_state": 5,
+                "reward": -1.0,
+                "updated_values": {"V(4)": 0.5},
+                "grid_metadata": {"terminated": False, "truncated": False},
+            }
+        )
+        self.logger.end_episode()
+
+
 class _FakeBlackjackActionSpace:
     def sample(self) -> int:
         return 0
@@ -271,6 +313,105 @@ def test_execution_response_includes_episode_summaries_and_traces(monkeypatch, t
             "truncated": False,
         },
     ]
+
+
+def test_execution_response_prefers_terminated_episode_for_featured_trace(
+    monkeypatch, tmp_path
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "backend.execution_runtime.get_lesson_definition",
+        lambda lesson_id: _Lesson(id=lesson_id),
+    )
+    monkeypatch.setattr("backend.execution_runtime.CodeValidator", lambda: _FakeValidator())
+    monkeypatch.setattr("backend.execution_runtime.EnvironmentAdapter", _FakeAdapter)
+    monkeypatch.setattr("backend.execution_runtime.RLEngine", _FakeMultiEpisodeEngine)
+    monkeypatch.setattr(
+        "backend.execution_runtime.VisualizationService",
+        _FakeVisualizationService,
+    )
+    monkeypatch.setattr("backend.execution_runtime.load_user_context", lambda code: {})
+
+    result = _run_execution_pipeline(
+        {
+            "lesson_id": "demo_lesson",
+            "code": "def demo(): pass",
+            "episode_count": 2,
+        }
+    )
+
+    assert result["step_trace"] == result["trace_episodes"][1]["steps"]
+
+
+def test_featured_episode_prefers_non_truncated_best_reward_when_none_terminate():
+    log_data = [
+        [
+            {
+                "state": 0,
+                "reward": -10.0,
+                "grid_metadata": {"terminated": False, "truncated": True},
+            }
+        ],
+        [
+            {
+                "state": 1,
+                "reward": -3.0,
+                "grid_metadata": {"terminated": False, "truncated": False},
+            }
+        ],
+        [
+            {
+                "state": 2,
+                "reward": -5.0,
+                "grid_metadata": {"terminated": False, "truncated": False},
+            }
+        ],
+    ]
+    rewards = [-10.0, -3.0, -5.0]
+
+    featured_index, featured = execution_runtime._select_featured_episode(log_data, rewards)
+
+    assert featured_index == 1
+    assert featured == log_data[1]
+
+
+def test_execution_response_moves_featured_episode_to_end_for_initial_replay(
+    monkeypatch, tmp_path
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "backend.execution_runtime.get_lesson_definition",
+        lambda lesson_id: _Lesson(id=lesson_id),
+    )
+    monkeypatch.setattr("backend.execution_runtime.CodeValidator", lambda: _FakeValidator())
+    monkeypatch.setattr("backend.execution_runtime.EnvironmentAdapter", _FakeAdapter)
+    monkeypatch.setattr("backend.execution_runtime.RLEngine", _FakeThreeEpisodeEngine)
+    monkeypatch.setattr(
+        "backend.execution_runtime.VisualizationService",
+        _FakeVisualizationService,
+    )
+    monkeypatch.setattr("backend.execution_runtime.load_user_context", lambda code: {})
+
+    result = _run_execution_pipeline(
+        {
+            "lesson_id": "demo_lesson",
+            "code": "def demo(): pass",
+            "episode_count": 3,
+        }
+    )
+
+    assert [episode["episode_index"] for episode in result["trace_episodes"]] == [0, 2, 1]
+    assert result["trace_episodes"][-1]["episode_index"] == 1
+    assert result["episode_summaries"][-1]["episode_index"] == 1
+    assert result["step_trace"] == result["trace_episodes"][-1]["steps"]
+
+
+def test_move_index_to_end_keeps_last_position_unchanged():
+    items = [{"episode_index": 0}, {"episode_index": 1}]
+
+    reordered = execution_runtime._move_index_to_end(items, 1)
+
+    assert reordered == items
 
 
 def test_build_success_response_exposes_normalized_replay_state():

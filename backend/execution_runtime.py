@@ -409,7 +409,10 @@ def _build_success_response(
     replay_render: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     episode_rewards = [sum(step.get("reward", 0) for step in episode) for episode in log_data]
-    latest_episode = json.loads(json.dumps(log_data[-1], cls=NpEncoder)) if log_data else []
+    featured_episode_index, featured_episode = _select_featured_episode(
+        log_data,
+        episode_rewards,
+    )
     trace_episodes = json.loads(
         json.dumps(
             [
@@ -426,6 +429,9 @@ def _build_success_response(
         _episode_summary(index, episode, episode_rewards[index])
         for index, episode in enumerate(log_data)
     ]
+    if trace_episodes and featured_episode_index != len(trace_episodes) - 1:
+        trace_episodes = _move_index_to_end(trace_episodes, featured_episode_index)
+        episode_summaries = _move_index_to_end(episode_summaries, featured_episode_index)
     replay_render = replay_render or {}
     video_path = str(replay_render.get("video_path") or "")
     render_status = str(replay_render.get("replay_render_status") or "unavailable")
@@ -445,7 +451,7 @@ def _build_success_response(
         "replay_state": replay_state,
         "replay_episode_indices": replay_render.get("replay_episode_indices") or [],
         "test_results": validation_result.test_results,
-        "step_trace": latest_episode,
+        "step_trace": json.loads(json.dumps(featured_episode, cls=NpEncoder)),
         "trace_episodes": trace_episodes,
         "episode_summaries": episode_summaries,
         "metrics": {
@@ -458,6 +464,39 @@ def _build_success_response(
             "best_episode_reward": max(episode_rewards, default=0),
         },
     }
+
+
+def _select_featured_episode(
+    log_data: list[list[dict[str, Any]]],
+    episode_rewards: list[float],
+) -> tuple[int, list[dict[str, Any]]]:
+    if not log_data:
+        return -1, []
+
+    def score(index: int) -> tuple[int, float, int, int]:
+        episode = log_data[index]
+        last_step = episode[-1] if episode else {}
+        grid_metadata = last_step.get("grid_metadata") or {}
+        mc_details = (last_step.get("equation_update") or {}).get("mc_details") or {}
+        terminated = bool(grid_metadata.get("terminated") or mc_details.get("terminated"))
+        truncated = bool(grid_metadata.get("truncated") or mc_details.get("truncated"))
+        # Prefer a goal-reaching episode first, then the best reward, then
+        # a non-truncated ending, then the latest episode as a final tie-break.
+        return (
+            1 if terminated else 0,
+            float(episode_rewards[index]),
+            0 if truncated else 1,
+            index,
+        )
+
+    best_index = max(range(len(log_data)), key=score)
+    return best_index, log_data[best_index]
+
+
+def _move_index_to_end(items: list[Any], index: int) -> list[Any]:
+    if index < 0 or index >= len(items) or index == len(items) - 1:
+        return items
+    return [*items[:index], *items[index + 1 :], items[index]]
 
 
 def _episode_summary(
