@@ -12,6 +12,7 @@ import 'trace_replay/replay_media_auth.dart';
 import 'trace_replay/replay_video_pane.dart';
 import 'trace_replay/trace_predict_prompt.dart';
 import 'trace_replay/trace_replay_controls.dart';
+import 'trace_replay/trace_grid_companion.dart';
 import 'trace_replay/trace_step_markers.dart';
 import 'trace_replay/trace_td_error_bar.dart';
 import 'trace_replay/trace_value_sparkline.dart';
@@ -79,6 +80,43 @@ enum _ReplayBinderSection {
 
   final IconData icon;
   final String label;
+}
+
+enum _TraceLessonFamily {
+  dynamicProgramming,
+  monteCarlo,
+  temporalDifference,
+  unknown,
+}
+
+class _TraceDisplayPolicy {
+  const _TraceDisplayPolicy(this.family);
+
+  final _TraceLessonFamily family;
+
+  bool get showRunRewardMetrics =>
+      family != _TraceLessonFamily.dynamicProgramming;
+
+  bool get showToolbarRewardChip =>
+      family == _TraceLessonFamily.temporalDifference ||
+      family == _TraceLessonFamily.monteCarlo;
+
+  bool get showToolbarProbabilityChip =>
+      family == _TraceLessonFamily.dynamicProgramming;
+
+  bool get showStateTransitionCard => family != _TraceLessonFamily.monteCarlo;
+
+  bool get showRewardCard =>
+      family == _TraceLessonFamily.temporalDifference ||
+      family == _TraceLessonFamily.monteCarlo;
+
+  bool get showSampledTransitionCard =>
+      family == _TraceLessonFamily.temporalDifference;
+
+  bool get showProbabilityCard =>
+      family == _TraceLessonFamily.dynamicProgramming;
+
+  bool get showMonteCarloReturnCard => family == _TraceLessonFamily.monteCarlo;
 }
 
 class _TraceReplayPanelState extends State<TraceReplayPanel> {
@@ -310,6 +348,32 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     ).hasStatusOrError;
   }
 
+  _TraceLessonFamily _lessonFamilyForStep(ExecutionTraceStep? step) {
+    final equationUpdate = step?.equationUpdate;
+    if (equationUpdate != null) {
+      if (equationUpdate.isDynamicProgramming) {
+        return _TraceLessonFamily.dynamicProgramming;
+      }
+      if (equationUpdate.isMonteCarlo) {
+        return _TraceLessonFamily.monteCarlo;
+      }
+      if (equationUpdate.isTemporalDifference) {
+        return _TraceLessonFamily.temporalDifference;
+      }
+    }
+    if (step?.equationUpdate?.mcDetails?.observation != null) {
+      return _TraceLessonFamily.monteCarlo;
+    }
+    if (step?.gridMetadata != null) {
+      return _TraceLessonFamily.temporalDifference;
+    }
+    return _TraceLessonFamily.unknown;
+  }
+
+  _TraceDisplayPolicy _displayPolicyForStep(ExecutionTraceStep? step) {
+    return _TraceDisplayPolicy(_lessonFamilyForStep(step));
+  }
+
   Widget _buildDebuggerBody(
     BuildContext context, {
     required bool hasTrace,
@@ -471,8 +535,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
             ]),
           ),
         ),
-        const SizedBox(height: 12),
-        SizedBox(height: 150, child: _buildTraceOutline(context)),
       ],
     );
 
@@ -691,6 +753,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
   }
 
   List<TraceReplayTagData> _transitionTagData(ExecutionTraceStep step) {
+    final policy = _displayPolicyForStep(step);
     final actionLabel = (step.gridMetadata?.actionLabel.isNotEmpty ?? false)
         ? step.gridMetadata!.actionLabel
         : (step.equationUpdate?.mcDetails?.actionLabel.isNotEmpty ?? false)
@@ -709,10 +772,16 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
           label: actionLabel,
           accent: const Color(0xFF22D3EE),
         ),
-      TraceReplayTagData(
-        label: 'reward ${step.reward.toStringAsFixed(2)}',
-        accent: rewardColor,
-      ),
+      if (policy.showToolbarRewardChip)
+        TraceReplayTagData(
+          label: 'reward ${step.reward.toStringAsFixed(2)}',
+          accent: rewardColor,
+        ),
+      if (policy.showToolbarProbabilityChip)
+        TraceReplayTagData(
+          label: 'p ${step.transitionProbability.toStringAsFixed(3)}',
+          accent: const Color(0xFFA7F3D0),
+        ),
     ];
   }
 
@@ -896,102 +965,6 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     );
   }
 
-  Widget _buildTraceOutline(BuildContext context) {
-    final steps = _currentEpisodeSteps;
-    return _panelShell(
-      title: 'Trace Outline',
-      child: SizedBox(
-        height: 132,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: steps.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 10),
-          itemBuilder: (context, index) {
-            final step = steps[index];
-            final isSelected = index == _currentStepIndex;
-            return GestureDetector(
-              onTap: () => _selectTraceStep(index),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                width: 170,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? const Color(0xFF172554)
-                      : const Color(0xFF111827),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: isSelected
-                        ? const Color(0xFF60A5FA)
-                        : const Color(0xFF1E293B),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? const Color(0xFF2563EB)
-                                : const Color(0xFF1F2937),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            '${index + 1}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            's${step.state} -> ${step.nextState}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: _buildFrameImage(step.framePath),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      step.agentCaption,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: const Color(0xFFCBD5E1),
-                            height: 1.35,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
   Widget _buildCurrentStepSummary(
     BuildContext context,
     ExecutionTraceStep step,
@@ -1133,6 +1106,7 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
   }
 
   Widget _buildEnvironmentPanel(BuildContext context, ExecutionTraceStep step) {
+    final policy = _displayPolicyForStep(step);
     return _panelShell(
       title: '1. Agent and Environment',
       child: Column(
@@ -1142,10 +1116,17 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
             builder: (context, constraints) {
               final isWide = constraints.maxWidth > 500;
               final renderWidget = AspectRatio(
-                aspectRatio: 1.0,
+                key: const ValueKey('trace-environment-frame-aspect'),
+                aspectRatio: _frameAspectRatio(step),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(6),
-                  child: _buildFrameImage(step.framePath),
+                  child: ColoredBox(
+                    color: const Color(0xFF0F172A),
+                    child: _buildFrameImage(
+                      step.framePath,
+                      key: const ValueKey('trace-environment-frame'),
+                    ),
+                  ),
                 ),
               );
 
@@ -1174,30 +1155,41 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
                   Builder(
                     builder: (context) {
                       final eq = step.equationUpdate;
-                      final isDp = eq?.isDynamicProgramming ?? false;
                       final isBlackjack = eq?.mcDetails?.observation != null;
                       return Wrap(
                         spacing: 12,
                         runSpacing: 12,
                         children: [
-                          if (!isBlackjack)
+                          if (!isBlackjack && policy.showStateTransitionCard)
                             _buildMetricCard(
                               'State Transition',
                               '${step.state} ➔ ${step.nextState}',
                               const Color(0xFF7DD3FC),
                             ),
-                          _buildMetricCard(
-                            'Return / Reward',
-                            step.reward.toStringAsFixed(2),
-                            const Color(0xFFFDE68A),
-                          ),
-                          if (isDp)
+                          if (policy.showRewardCard)
+                            _buildMetricCard(
+                              policy.family == _TraceLessonFamily.monteCarlo
+                                  ? 'Reward'
+                                  : 'Return / Reward',
+                              step.reward.toStringAsFixed(2),
+                              const Color(0xFFFDE68A),
+                            ),
+                          if (policy.showMonteCarloReturnCard &&
+                              step.equationUpdate?.mcDetails != null)
+                            _buildMetricCard(
+                              'Episode return',
+                              _formatNullableDouble(
+                                step.equationUpdate!.mcDetails!.returnValue,
+                              ),
+                              const Color(0xFF86EFAC),
+                            ),
+                          if (policy.showProbabilityCard)
                             _buildMetricCard(
                               'Probability (p)',
                               step.transitionProbability.toStringAsFixed(3),
                               const Color(0xFFA7F3D0),
                             )
-                          else
+                          else if (policy.showSampledTransitionCard)
                             _buildMetricCard(
                               'Transition',
                               'sampled · model-free',
@@ -1355,192 +1347,33 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
     BuildContext context,
     TraceGridMetadata grid,
   ) {
-    final aspectRatio = grid.rows > 0 ? grid.columns / grid.rows : 1.0;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF111827),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFF334155)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${grid.environment} grid',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: const Color(0xFF93C5FD),
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-          const SizedBox(height: 10),
-          Builder(
-            builder: (context) {
-              final gridView = GridView.builder(
-                physics: const NeverScrollableScrollPhysics(),
-                padding: EdgeInsets.zero,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: grid.columns <= 0 ? 1 : grid.columns,
-                  childAspectRatio: 1,
-                  mainAxisSpacing: 4,
-                  crossAxisSpacing: 4,
-                ),
-                itemCount: grid.cells.length,
-                itemBuilder: (context, index) {
-                  return _buildGridCell(grid, grid.cells[index]);
-                },
-              );
-              if (grid.columns > 8) {
-                const cell = 38.0;
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    width: grid.columns * cell,
-                    height: grid.rows * cell,
-                    child: gridView,
-                  ),
-                );
-              }
-              return AspectRatio(
-                aspectRatio: aspectRatio,
-                child: gridView,
-              );
-            },
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildTag('state ${grid.state}', const Color(0xFF93C5FD)),
-              if (grid.nextState != null)
-                _buildTag('next ${grid.nextState}', const Color(0xFF2DD4BF)),
-              if (grid.actionLabel.isNotEmpty)
-                _buildTag(grid.actionLabel, const Color(0xFF06B6D4)),
-              if (grid.reward != null)
-                _buildTag(
-                  'reward ${grid.reward!.toStringAsFixed(2)}',
-                  grid.reward! < 0
-                      ? const Color(0xFFF87171)
-                      : const Color(0xFFFBBF24),
-                ),
-              if (grid.terminated || grid.truncated)
-                _buildTag(
-                  grid.terminated ? 'terminal' : 'truncated',
-                  const Color(0xFFF87171),
-                ),
-            ],
-          ),
-        ],
-      ),
+    return TraceGridCompanion(
+      grid: grid,
+      tagBuilder: _buildTag,
     );
   }
 
-  Widget _buildGridCell(TraceGridMetadata grid, TraceGridCell cell) {
-    final isCurrent = cell.state == grid.state;
-    final isNext = grid.nextState != null && cell.state == grid.nextState;
-    final isCliff = cell.tileType == 'C';
-    final isHole = cell.tileType == 'H';
-    final isGoal = cell.tileType == 'G';
-    final tileColor = isCliff || isHole
-        ? const Color(0xFF7F1D1D)
-        : isGoal
-            ? const Color(0xFF065F46)
-            : cell.tileType == 'S'
-                ? const Color(0xFF1E3A8A)
-                : const Color(0xFF1E293B);
-    return Tooltip(
-      message:
-          'State ${cell.state} (${cell.row}, ${cell.column}) | ${_gridTileLabel(cell.tileType)}',
-      child: Container(
-        decoration: BoxDecoration(
-          color: tileColor,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: isCurrent
-                ? const Color(0xFF60A5FA)
-                : isNext
-                    ? const Color(0xFF2DD4BF)
-                    : const Color(0xFF334155),
-            width: isCurrent || isNext ? 2 : 1,
-          ),
-        ),
-        child: Stack(
-          children: [
-            Positioned(
-              top: 4,
-              left: 4,
-              child: Text(
-                '${cell.state}',
-                style: const TextStyle(
-                  color: Color(0xFFE2E8F0),
-                  fontSize: 9,
-                  fontFamily: 'Courier',
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            Center(
-              child: Text(
-                isCurrent
-                    ? _gridActionMarker(grid)
-                    : isNext
-                        ? 'N'
-                        : _gridTileMarker(cell.tileType),
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: isCurrent ? 18 : 13,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  double _frameAspectRatio(ExecutionTraceStep step) {
+    final grid = step.gridMetadata;
+    if (grid != null && grid.rows > 0 && grid.columns > 0) {
+      return (grid.columns / grid.rows).clamp(1.0, 3.4);
+    }
+    if (step.equationUpdate?.mcDetails?.observation != null) {
+      return 1.35;
+    }
+    return 1.2;
   }
 
-  String _gridActionMarker(TraceGridMetadata grid) {
-    return switch (grid.actionLabel) {
-      'Up' => '↑',
-      'Right' => '→',
-      'Down' => '↓',
-      'Left' => '←',
-      _ => 'A',
-    };
-  }
-
-  String _gridTileMarker(String tileType) {
-    return switch (tileType) {
-      'S' => 'S',
-      'G' => 'G',
-      'H' => 'H',
-      'C' => '!',
-      _ => '',
-    };
-  }
-
-  String _gridTileLabel(String tileType) {
-    return switch (tileType) {
-      'S' => 'start',
-      'G' => 'goal',
-      'H' => 'hole',
-      'C' => 'cliff',
-      'F' => 'frozen/safe',
-      _ => tileType.isEmpty ? 'empty' : tileType,
-    };
-  }
-
-  Widget _buildFrameImage(String framePath) {
+  Widget _buildFrameImage(String framePath, {Key? key}) {
     if (framePath.isNotEmpty) {
       final frameUri = Uri.parse(
         '${BackendConnectionManager().baseUrl}/visualization/frame',
       ).replace(queryParameters: {'path': framePath});
       return Image.network(
+        key: key,
         frameUri.toString(),
         headers: replayMediaAuthHeaders(),
-        fit: BoxFit.cover,
+        fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) =>
             _buildMissingFramePlaceholder(framePath),
       );
@@ -1550,44 +1383,52 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
   }
 
   Widget _buildMissingFramePlaceholder(String framePath) {
-    return Container(
-      color: const Color(0xFF1E293B),
-      padding: const EdgeInsets.all(18),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.image_not_supported_outlined,
-              color: Color(0xFF94A3B8),
-              size: 42,
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Environment frame unavailable',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Color(0xFFE2E8F0),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            if (framePath.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                framePath,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Color(0xFF94A3B8),
-                  fontSize: 11,
-                  height: 1.3,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxHeight < 110;
+        return Container(
+          color: const Color(0xFF1E293B),
+          padding: EdgeInsets.all(compact ? 10 : 18),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.image_not_supported_outlined,
+                  color: const Color(0xFF94A3B8),
+                  size: compact ? 24 : 42,
                 ),
-              ),
-            ],
-          ],
-        ),
-      ),
+                SizedBox(height: compact ? 6 : 12),
+                Text(
+                  compact
+                      ? 'Frame unavailable'
+                      : 'Environment frame unavailable',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: const Color(0xFFE2E8F0),
+                    fontWeight: FontWeight.w700,
+                    fontSize: compact ? 11 : 14,
+                  ),
+                ),
+                if (!compact && framePath.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    framePath,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFF94A3B8),
+                      fontSize: 11,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -2923,6 +2764,13 @@ class _TraceReplayPanelState extends State<TraceReplayPanel> {
   }
 
   Widget _buildMetricsPanel(BuildContext context) {
+    final currentStep = _currentEpisodeSteps.isNotEmpty
+        ? _currentEpisodeSteps[_currentStepIndex]
+        : null;
+    final policy = _displayPolicyForStep(currentStep);
+    if (!policy.showRunRewardMetrics) {
+      return const SizedBox.shrink();
+    }
     return _panelShell(
       title: 'Run Metrics',
       child: Wrap(
