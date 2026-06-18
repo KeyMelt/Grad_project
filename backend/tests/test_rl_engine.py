@@ -33,7 +33,7 @@ def test_taxi_adapter_uses_current_gymnasium_version(monkeypatch):
 
     EnvironmentAdapter("Taxi")
 
-    assert created_env_ids == ["Taxi-v3"]
+    assert created_env_ids == ["Taxi-v4"]
 
 
 def test_frozen_lake_grid_metadata_is_derived_from_desc():

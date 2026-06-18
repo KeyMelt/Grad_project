@@ -65,7 +65,7 @@ class EnvironmentAdapter:
             )
         if self.env_name == "Taxi":
             return gym.make(
-                "Taxi-v3",
+                "Taxi-v4",
                 render_mode=self.render_mode,
             )
         raise ValueError(f"Environment {self.env_name} is not currently supported.")

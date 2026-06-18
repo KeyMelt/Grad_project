@@ -523,7 +523,7 @@ _CORE_LESSONS: list[dict[str, Any]] = [
         "template_kind": "guided_fill_in",
         "backend_enabled": True,
         "starter_code": (
-            "# Taxi-v3: 500 states (taxi pos × passenger × dest), 6 actions\n"
+            "# Taxi-v4: 500 states (taxi pos × passenger × dest), 6 actions\n"
             "LEARNING_RATE = 0.10\n"
             "DISCOUNT_FACTOR = 0.95\n"
             "EXPLORATION_RATE = 0.10\n"
