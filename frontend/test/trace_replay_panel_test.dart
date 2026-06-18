@@ -97,6 +97,12 @@ void main() {
       ),
     );
 
+    await _selectBinderSection(tester, 'Step');
+    expect(find.text('Run Metrics'), findsOneWidget);
+    expect(find.text('Total reward'), findsOneWidget);
+    expect(find.text('Return / Reward'), findsOneWidget);
+    expect(find.text('Transition'), findsOneWidget);
+
     await _selectBinderSection(tester, 'Math');
     expect(find.text('SARSA numeric update'), findsOneWidget);
     await _selectBinderSection(tester, 'Math');
@@ -202,6 +208,14 @@ void main() {
         ),
       ),
     );
+
+    await _selectBinderSection(tester, 'Step');
+    expect(find.text('Run Metrics'), findsNothing);
+    expect(find.text('Total reward'), findsNothing);
+    expect(find.text('Average reward'), findsNothing);
+    expect(find.text('Best episode'), findsNothing);
+    expect(find.text('Return / Reward'), findsNothing);
+    expect(find.text('Probability (p)'), findsOneWidget);
 
     await _selectBinderSection(tester, 'Math');
     expect(find.text('Value iteration action comparison'), findsOneWidget);
@@ -322,6 +336,10 @@ void main() {
 
     await _selectBinderSection(tester, 'Step');
     expect(find.text('Blackjack observation'), findsOneWidget);
+    expect(find.text('Run Metrics'), findsOneWidget);
+    expect(find.text('Reward'), findsWidgets);
+    expect(find.text('Episode return'), findsOneWidget);
+    expect(find.text('Transition'), findsNothing);
     await _selectBinderSection(tester, 'Math');
     expect(find.text('First-visit return update'), findsOneWidget);
     await _selectBinderSection(tester, 'Math');
@@ -420,7 +438,51 @@ void main() {
     expect(find.text('Right'), findsWidgets);
   });
 
-  testWidgets('renders Taxi grid metadata with encoded states and transition tags',
+  testWidgets(
+      'uses non-cropping wide render layout for non-square environments',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TraceReplayPanel(
+            runStatusLabel: 'Passed',
+            statusMessage: 'ok',
+            totalReward: -1,
+            averageReward: -1,
+            bestEpisodeReward: -1,
+            episodesCompleted: 1,
+            stepsRecorded: 1,
+            videoPath: '',
+            testResults: const [],
+            stepTrace: [
+              _qLearningTraceStep(framePath: '/tmp/cliffwalking.png'),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+
+    final frame = tester.widget<Image>(
+      find.byKey(const ValueKey('trace-environment-frame')),
+    );
+    final aspect = tester.widget<AspectRatio>(
+      find.byKey(const ValueKey('trace-environment-frame-aspect')),
+    );
+
+    expect(frame.fit, BoxFit.contain);
+    expect(aspect.aspectRatio, greaterThan(2.5));
+  });
+
+  testWidgets(
+      'renders Taxi grid metadata with encoded states and transition tags',
       (tester) async {
     tester.view.physicalSize = const Size(1400, 1000);
     tester.view.devicePixelRatio = 1;
@@ -611,14 +673,12 @@ void main() {
     expect(find.text('Early'), findsOneWidget);
     expect(find.text('Late'), findsOneWidget);
     expect(find.text('Episode two first step.'), findsWidgets);
-    expect(find.text('s5 -> 6'), findsWidgets);
 
     // Switch to the early episode via the curated Early/Mid/Late control.
     await tester.tap(find.text('Early'));
     await tester.pumpAndSettle();
 
     expect(find.text('Episode one first step.'), findsWidgets);
-    expect(find.text('s0 -> 1'), findsWidgets);
     expect(find.text('Episode two first step.'), findsNothing);
   });
 
@@ -892,7 +952,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('What This Step Means'), findsOneWidget);
-    expect(find.text('Trace Outline'), findsOneWidget);
+    expect(find.text('Step 1 / 1'), findsOneWidget);
   });
 
   testWidgets('toolbar jump pills move to reward and terminal steps',
@@ -1104,13 +1164,14 @@ Widget _replayOnlyHarness({
   );
 }
 
-ExecutionTraceStep _qLearningTraceStep() {
+ExecutionTraceStep _qLearningTraceStep({String framePath = ''}) {
   return ExecutionTraceStep.fromJson({
     'state': 36,
     'action': 0,
     'next_state': 24,
     'reward': -1,
     'transition_probability': 1,
+    'frame_path': framePath,
     'agent_caption':
         'Q-learning selects Up, observes reward -1, and applies the max-next-state bootstrap.',
     'code_title': 'Code Trace',

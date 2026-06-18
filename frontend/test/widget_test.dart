@@ -796,7 +796,8 @@ void main() {
     await tester.tap(find.text('Replay'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Trace Outline'), findsOneWidget);
+    expect(find.text('What This Step Means'), findsOneWidget);
+    expect(find.text('Step 1 / 1'), findsOneWidget);
     expect(find.text('Sample Test Results'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('home-logo-button')));
@@ -876,4 +877,3 @@ void main() {
     await cubit.close();
   });
 }
-
