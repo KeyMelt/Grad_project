@@ -379,6 +379,52 @@ def test_q_learning_behavior_uses_epsilon_greedy_q_row(monkeypatch):
     assert payload["explanation"]["table_focus"] == "row 0, column 1"
 
 
+def test_choose_masked_epsilon_greedy_action_ignores_illegal_taxi_actions():
+    class FakeActionSpace:
+        n = 6
+
+    class FakeRng:
+        def random(self):
+            return 1.0
+
+        def integers(self, high):
+            return high - 1
+
+    adapter = SimpleNamespace(
+        env=SimpleNamespace(
+            action_space=FakeActionSpace(),
+            unwrapped=SimpleNamespace(np_random=FakeRng()),
+        )
+    )
+    rl_engine = RLEngine(adapter, logger=SimpleNamespace())
+
+    action = rl_engine._choose_masked_epsilon_greedy_action(
+        [0.0, 9.0, 1.5, -3.0, 4.0, 2.0],
+        epsilon=0.0,
+        action_mask=[1, 0, 1, 0, 0, 1],
+    )
+
+    assert action == 5
+
+
+def test_masked_bootstrap_value_ignores_illegal_taxi_actions():
+    adapter = SimpleNamespace(
+        env=SimpleNamespace(
+            action_space=SimpleNamespace(n=6),
+            unwrapped=SimpleNamespace(np_random=None),
+        )
+    )
+    rl_engine = RLEngine(adapter, logger=SimpleNamespace())
+
+    best_action, best_value = rl_engine._best_masked_action_value(
+        [0.0, 9.0, 1.5, -3.0, 4.0, 2.0],
+        action_mask=[1, 0, 1, 0, 0, 1],
+    )
+
+    assert best_action == 5
+    assert best_value == 2.0
+
+
 def test_q_learning_respects_episode_step_limit(monkeypatch):
     lesson_actions: list[int] = []
 

@@ -138,6 +138,59 @@ class _FakeThreeEpisodeEngine:
         self.logger.end_episode()
 
 
+class _FakeTdEvaluationEngine:
+    def __init__(self, adapter: _FakeAdapter, logger) -> None:
+        self.adapter = adapter
+        self.logger = logger
+
+    def run_episodes(self, lesson_id, code_module_str, num_episodes, hyperparameters):
+        del lesson_id, code_module_str, num_episodes, hyperparameters
+        self.logger.log_step(
+            {
+                "state": 12,
+                "action": 2,
+                "next_state": 13,
+                "reward": -1.0,
+                "updated_values": {"Q(12, 2)": 0.5},
+                "grid_metadata": {"terminated": False, "truncated": False},
+                "equation_update": {
+                    "kind": "q_learning",
+                    "lhs": "Q(12,2)",
+                    "td_target": 0.5,
+                    "new_value": 0.5,
+                },
+            }
+        )
+        self.logger.log_step(
+            {
+                "state": 13,
+                "action": 4,
+                "next_state": 14,
+                "reward": 20.0,
+                "updated_values": {"Q(13, 4)": 1.0},
+                "grid_metadata": {"terminated": True, "truncated": False},
+                "equation_update": {
+                    "kind": "q_learning",
+                    "lhs": "Q(13,4)",
+                    "td_target": 1.0,
+                    "new_value": 1.0,
+                },
+            }
+        )
+        self.logger.end_episode()
+        return {
+            "evaluation_summary": {
+                "mode": "greedy_evaluation",
+                "training_episodes_run": 500,
+                "evaluation_attempts_run": 3,
+                "selected_seed": 2,
+                "selected_step_count": 2,
+                "selected_total_reward": 19.0,
+                "selected_terminated": True,
+            }
+        }
+
+
 class _FakeBlackjackActionSpace:
     def sample(self) -> int:
         return 0
@@ -448,6 +501,189 @@ def test_build_success_response_exposes_normalized_replay_state():
     assert ready_response["replay_state"] == "ready"
 
 
+def test_build_success_response_curates_dynamic_programming_trace_family():
+    validation_result = ValidationResult(
+        is_valid=True,
+        errors=[],
+        test_results=[],
+        unresolved_blanks=[],
+    )
+    log_data = [
+        [
+            {
+                "state": 0,
+                "action": 1,
+                "next_state": 1,
+                "reward": 0.0,
+                "updated_values": {"V(0)": 0.2},
+                "equation_update": {
+                    "kind": "value_iteration",
+                    "lhs": "V(0)",
+                    "td_target": 0.2,
+                    "new_value": 0.2,
+                    "dp_details": {"delta": 0.2},
+                },
+            },
+            {
+                "state": 1,
+                "action": 1,
+                "next_state": 2,
+                "reward": 0.0,
+                "updated_values": {"V(1)": 0.3},
+                "equation_update": {
+                    "kind": "value_iteration",
+                    "lhs": "V(1)",
+                    "td_target": 0.3,
+                    "new_value": 0.3,
+                    "dp_details": {"delta": 0.3},
+                },
+            },
+            {
+                "state": 2,
+                "action": 1,
+                "next_state": 3,
+                "reward": 0.0,
+                "updated_values": {"V(2)": 1.6},
+                "equation_update": {
+                    "kind": "value_iteration",
+                    "lhs": "V(2)",
+                    "td_target": 1.6,
+                    "new_value": 1.6,
+                    "dp_details": {"delta": 1.6},
+                },
+            },
+            {
+                "state": 3,
+                "action": 1,
+                "next_state": 4,
+                "reward": 1.0,
+                "updated_values": {"V(3)": 2.0},
+                "equation_update": {
+                    "kind": "value_iteration",
+                    "lhs": "V(3)",
+                    "td_target": 2.0,
+                    "new_value": 2.0,
+                    "dp_details": {"delta": 0.0},
+                },
+                "grid_metadata": {"terminated": True, "truncated": False},
+            },
+        ]
+    ]
+
+    result = execution_runtime._build_success_response(
+        lesson=_Lesson(id="dp_value_iteration", title="Value Iteration"),
+        log_data=log_data,
+        validation_result=validation_result,
+    )
+
+    assert result["trace_family"] == "DynamicProgramming"
+    assert result["trace_mode"] == "curated backup trace"
+    assert result["trace_summary"] == {
+        "selection_strategy": "dp_curated_backup_trace",
+        "visible_step_count": 4,
+        "source_episode_indices": [0],
+        "contains_terminal_goal": True,
+    }
+    assert len(result["step_trace"]) == 4
+    assert [step["state"] for step in result["step_trace"]] == [0, 1, 2, 3]
+    assert result["trace_episodes"][0]["steps"] == result["step_trace"]
+    assert result["episode_summaries"] == [
+        {
+            "episode_index": 0,
+            "step_count": 4,
+            "total_reward": 1.0,
+            "terminated": True,
+            "truncated": False,
+        }
+    ]
+    assert "evaluation_summary" not in result
+
+
+def test_build_success_response_curates_monte_carlo_trace_family():
+    validation_result = ValidationResult(
+        is_valid=True,
+        errors=[],
+        test_results=[],
+        unresolved_blanks=[],
+    )
+    log_data = [
+        [
+            {
+                "state": "(15, 10, False)",
+                "action": 1,
+                "next_state": "(20, 10, False)",
+                "reward": 0.0,
+                "equation_update": {
+                    "kind": "mc_sampling",
+                    "mc_details": {
+                        "phase": "sampling",
+                        "episode_step": 0,
+                        "terminated": False,
+                        "truncated": False,
+                    },
+                },
+            },
+            {
+                "state": "(20, 10, False)",
+                "action": 0,
+                "next_state": "(20, 10, False)",
+                "reward": 1.0,
+                "equation_update": {
+                    "kind": "mc_sampling",
+                    "mc_details": {
+                        "phase": "sampling",
+                        "episode_step": 1,
+                        "terminated": True,
+                        "truncated": False,
+                    },
+                },
+            },
+            {
+                "state": "(15, 10, False)",
+                "action": 1,
+                "next_state": "(15, 10, False)",
+                "reward": 0.0,
+                "updated_values": {"V((15,10,False))": 0.9},
+                "equation_update": {
+                    "kind": "mc_first_visit",
+                    "lhs": "V((15,10,False))",
+                    "td_target": 0.9,
+                    "new_value": 0.9,
+                    "mc_details": {
+                        "phase": "first_visit_update",
+                        "episode_step": 0,
+                        "return_value": 0.9,
+                        "terminated": True,
+                        "truncated": False,
+                    },
+                },
+            },
+        ]
+    ]
+
+    result = execution_runtime._build_success_response(
+        lesson=_Lesson(id="mc_first_visit", title="First-Visit Monte Carlo"),
+        log_data=log_data,
+        validation_result=validation_result,
+    )
+
+    assert result["trace_family"] == "MonteCarlo"
+    assert result["trace_mode"] == "curated episode return trace"
+    assert result["trace_summary"] == {
+        "selection_strategy": "mc_curated_episode_return_trace",
+        "visible_step_count": 3,
+        "source_episode_indices": [0],
+        "contains_terminal_goal": True,
+    }
+    assert [step["equation_update"]["kind"] for step in result["step_trace"]] == [
+        "mc_sampling",
+        "mc_sampling",
+        "mc_first_visit",
+    ]
+    assert result["trace_episodes"][0]["steps"] == result["step_trace"]
+    assert "evaluation_summary" not in result
+
+
 def test_mc_first_visit_runtime_handles_tuple_observation_states():
     logger = _FakeTraceLogger()
     engine = RLEngine(adapter=_FakeBlackjackAdapter(), logger=logger)
@@ -576,6 +812,52 @@ def test_mc_first_visit_enqueue_replay_render_returns_non_empty_job_id(
         "replay_render_job_id must not be empty for MC executions"
     )
     assert result["replay_render_status"] == "queued"
+
+
+def test_td_execution_response_exposes_evaluation_summary(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "backend.execution_runtime.get_lesson_definition",
+        lambda lesson_id: _Lesson(
+            id=lesson_id,
+            title="Taxi TD Control",
+            environment_name="Taxi",
+        ),
+    )
+    monkeypatch.setattr("backend.execution_runtime.CodeValidator", lambda: _FakeValidator())
+    monkeypatch.setattr("backend.execution_runtime.EnvironmentAdapter", _FakeAdapter)
+    monkeypatch.setattr("backend.execution_runtime.RLEngine", _FakeTdEvaluationEngine)
+    monkeypatch.setattr(
+        "backend.execution_runtime.VisualizationService",
+        _FakeVisualizationService,
+    )
+    monkeypatch.setattr("backend.execution_runtime.load_user_context", lambda code: {})
+
+    result = _run_execution_pipeline(
+        {
+            "lesson_id": "td_q_learning",
+            "code": "def q_learning_update(Q, state, action, reward, next_state, alpha, gamma): pass",
+            "episode_count": 1,
+        }
+    )
+
+    assert result["trace_family"] == "TemporalDifferenceControl"
+    assert result["trace_mode"] == "greedy evaluation replay from the policy learned by your code"
+    assert result["trace_summary"] == {
+        "selection_strategy": "td_greedy_evaluation_trace",
+        "visible_step_count": 2,
+        "source_episode_indices": [0],
+        "contains_terminal_goal": True,
+    }
+    assert result["evaluation_summary"] == {
+        "mode": "greedy_evaluation",
+        "training_episodes_run": 500,
+        "evaluation_attempts_run": 3,
+        "selected_seed": 2,
+        "selected_step_count": 2,
+        "selected_total_reward": 19.0,
+        "selected_terminated": True,
+    }
 
 
 def test_execution_runtime_initializes_registry_for_spawned_process(monkeypatch, tmp_path):

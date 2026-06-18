@@ -42,6 +42,10 @@ class WorkspaceTabs extends StatefulWidget {
   final List<ExecutionTraceStep> stepTrace;
   final List<ExecutionTraceEpisode> traceEpisodes;
   final List<ExecutionEpisodeSummary> episodeSummaries;
+  final String traceMode;
+  final String traceFamily;
+  final Map<String, dynamic>? traceSummary;
+  final Map<String, dynamic>? evaluationSummary;
   final ValueChanged<Map<String, dynamic>>? onConceptVideoSession;
   final VoidCallback? onVideoMicroSurveyRequest;
   final VoidCallback? onReplayMicroSurveyRequest;
@@ -86,6 +90,10 @@ class WorkspaceTabs extends StatefulWidget {
     required this.stepTrace,
     required this.traceEpisodes,
     required this.episodeSummaries,
+    this.traceMode = '',
+    this.traceFamily = '',
+    this.traceSummary,
+    this.evaluationSummary,
     this.onConceptVideoSession,
     this.onVideoMicroSurveyRequest,
     this.onReplayMicroSurveyRequest,
@@ -314,6 +322,10 @@ class _WorkspaceTabsState extends State<WorkspaceTabs>
                         stepTrace: stepTrace,
                         traceEpisodes: traceEpisodes,
                         episodeSummaries: episodeSummaries,
+                        traceMode: widget.traceMode,
+                        traceFamily: widget.traceFamily,
+                        traceSummary: widget.traceSummary,
+                        evaluationSummary: widget.evaluationSummary,
                         conceptVideo: lesson.conceptVideo,
                         onWatchConcept: () => _tabController.animateTo(0),
                         onReplayCompleted: widget.onReplayMicroSurveyRequest,

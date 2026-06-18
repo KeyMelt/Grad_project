@@ -1067,6 +1067,26 @@ void main() {
     expect(find.text('Step 1 / 3'), findsOneWidget);
     expect(find.text('Opening step.'), findsWidgets);
   });
+
+  testWidgets('shows trace policy metadata for curated learner-facing traces',
+      (tester) async {
+    await tester.pumpWidget(_traceReplayHarness());
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Trace mode: greedy evaluation replay from the policy learned by your code',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Family: TemporalDifferenceControl'), findsOneWidget);
+    expect(
+      find.text(
+        'Training episodes: 120 · Evaluation attempts: 2 · Selected steps: 1',
+      ),
+      findsOneWidget,
+    );
+  });
 }
 
 Future<void> _selectBinderSection(WidgetTester tester, String label) async {
@@ -1132,6 +1152,24 @@ Widget _traceReplayHarness() {
             truncated: false,
           ),
         ],
+        traceMode:
+            'greedy evaluation replay from the policy learned by your code',
+        traceFamily: 'TemporalDifferenceControl',
+        traceSummary: const {
+          'selection_strategy': 'td_greedy_evaluation_trace',
+          'visible_step_count': 1,
+          'source_episode_indices': [1],
+          'contains_terminal_goal': true,
+        },
+        evaluationSummary: const {
+          'mode': 'greedy_evaluation',
+          'training_episodes_run': 120,
+          'evaluation_attempts_run': 2,
+          'selected_seed': 7,
+          'selected_step_count': 1,
+          'selected_total_reward': -1,
+          'selected_terminated': true,
+        },
       ),
     ),
   );
