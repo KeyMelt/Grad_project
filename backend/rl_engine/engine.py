@@ -1237,8 +1237,10 @@ class RLEngine:
         seed_offset: int,
         use_action_mask: bool,
     ) -> tuple[dict[str, Any] | None, int | None, int]:
-        best_trace = None
-        best_seed = None
+        best_terminal_trace = None
+        best_terminal_seed = None
+        best_fallback_trace = None
+        best_fallback_seed = None
         attempts_used = 0
 
         for attempt in range(attempt_count):
@@ -1269,24 +1271,57 @@ class RLEngine:
                     record_trace=True,
                 )
             attempts_used += 1
-            if not trace["terminated"]:
+            if trace["terminated"]:
+                if best_terminal_trace is None:
+                    best_terminal_trace = trace
+                    best_terminal_seed = seed
+                    continue
+                if trace["step_count"] < best_terminal_trace["step_count"]:
+                    best_terminal_trace = trace
+                    best_terminal_seed = seed
+                    continue
+                if (
+                    trace["step_count"] == best_terminal_trace["step_count"]
+                    and trace["total_reward"] > best_terminal_trace["total_reward"]
+                ):
+                    best_terminal_trace = trace
+                    best_terminal_seed = seed
                 continue
-            if best_trace is None:
-                best_trace = trace
-                best_seed = seed
+
+            if best_fallback_trace is None:
+                best_fallback_trace = trace
+                best_fallback_seed = seed
                 continue
-            if trace["step_count"] < best_trace["step_count"]:
-                best_trace = trace
-                best_seed = seed
+            if trace["total_reward"] > best_fallback_trace["total_reward"]:
+                best_fallback_trace = trace
+                best_fallback_seed = seed
                 continue
             if (
-                trace["step_count"] == best_trace["step_count"]
-                and trace["total_reward"] > best_trace["total_reward"]
+                trace["total_reward"] == best_fallback_trace["total_reward"]
+                and self._trace_is_not_truncated(trace)
+                and not self._trace_is_not_truncated(best_fallback_trace)
             ):
-                best_trace = trace
-                best_seed = seed
+                best_fallback_trace = trace
+                best_fallback_seed = seed
+                continue
+            if (
+                trace["total_reward"] == best_fallback_trace["total_reward"]
+                and self._trace_is_not_truncated(trace)
+                == self._trace_is_not_truncated(best_fallback_trace)
+                and trace["step_count"] < best_fallback_trace["step_count"]
+            ):
+                best_fallback_trace = trace
+                best_fallback_seed = seed
 
-        return best_trace, best_seed, attempts_used
+        if best_terminal_trace is not None:
+            return best_terminal_trace, best_terminal_seed, attempts_used
+        return best_fallback_trace, best_fallback_seed, attempts_used
+
+    def _trace_is_not_truncated(self, trace: dict[str, Any]) -> bool:
+        steps = trace.get("steps") or []
+        last_step = steps[-1] if steps else {}
+        grid_metadata = last_step.get("grid_metadata") or {}
+        return not bool(grid_metadata.get("truncated"))
 
     def _run_q_learning_td_episode(
         self,

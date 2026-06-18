@@ -684,6 +684,74 @@ def test_build_success_response_curates_monte_carlo_trace_family():
     assert "evaluation_summary" not in result
 
 
+def test_build_success_response_curates_td_fallback_trace_family():
+    validation_result = ValidationResult(
+        is_valid=True,
+        errors=[],
+        test_results=[],
+        unresolved_blanks=[],
+    )
+    episode = [
+        {
+            "state": index,
+            "action": index % 6,
+            "next_state": index + 1,
+            "reward": 0.0,
+            "updated_values": {f"Q({index}, {index % 6})": round(index / 10, 4)},
+            "grid_metadata": {"terminated": False, "truncated": False},
+            "equation_update": {
+                "kind": "q_learning",
+                "lhs": f"Q({index},{index % 6})",
+                "td_target": round(index / 10, 4),
+                "new_value": round(index / 10, 4),
+            },
+        }
+        for index in range(60)
+    ]
+    log_data = [episode]
+
+    result = execution_runtime._build_success_response(
+        lesson=_Lesson(id="td_q_learning", title="Q-Learning"),
+        log_data=log_data,
+        validation_result=validation_result,
+        execution_metadata={
+            "evaluation_summary": {
+                "mode": "greedy_evaluation",
+                "training_episodes_run": 500,
+                "evaluation_attempts_run": 3,
+                "selected_seed": 2,
+                "selected_step_count": 60,
+                "selected_total_reward": 0.0,
+                "selected_terminated": False,
+            }
+        },
+    )
+
+    assert result["trace_family"] == "TemporalDifferenceControl"
+    assert result["trace_mode"] == "greedy evaluation replay from the policy learned by your code"
+    assert result["trace_summary"] == {
+        "selection_strategy": "td_greedy_evaluation_fallback_trace",
+        "visible_step_count": 45,
+        "source_episode_indices": [0],
+        "contains_terminal_goal": False,
+    }
+    assert len(result["step_trace"]) == 45
+    assert [step["state"] for step in result["step_trace"][:15]] == list(range(15))
+    assert [step["state"] for step in result["step_trace"][15:30]] == list(range(22, 37))
+    assert [step["state"] for step in result["step_trace"][30:]] == list(range(45, 60))
+    assert result["trace_episodes"][0]["steps"] == result["step_trace"]
+    assert result["episode_summaries"] == [
+        {
+            "episode_index": 0,
+            "step_count": 60,
+            "total_reward": 0.0,
+            "terminated": False,
+            "truncated": False,
+        }
+    ]
+    assert result["evaluation_summary"]["selected_terminated"] is False
+
+
 def test_mc_first_visit_runtime_handles_tuple_observation_states():
     logger = _FakeTraceLogger()
     engine = RLEngine(adapter=_FakeBlackjackAdapter(), logger=logger)
@@ -858,6 +926,67 @@ def test_td_execution_response_exposes_evaluation_summary(monkeypatch, tmp_path)
         "selected_total_reward": 19.0,
         "selected_terminated": True,
     }
+
+
+def test_td_evaluation_falls_back_to_best_non_terminal_trace():
+    logger = _FakeTraceLogger()
+    engine = RLEngine(adapter=_FakeAdapter("Taxi", "/tmp"), logger=logger)
+    traces = [
+        {
+            "steps": [
+                {
+                    "grid_metadata": {"terminated": False, "truncated": True},
+                }
+            ],
+            "step_count": 40,
+            "total_reward": -5.0,
+            "terminated": False,
+        },
+        {
+            "steps": [
+                {
+                    "grid_metadata": {"terminated": False, "truncated": False},
+                }
+            ],
+            "step_count": 35,
+            "total_reward": 10.0,
+            "terminated": False,
+        },
+        {
+            "steps": [
+                {
+                    "grid_metadata": {"terminated": False, "truncated": False},
+                }
+            ],
+            "step_count": 20,
+            "total_reward": 9.0,
+            "terminated": False,
+        },
+    ]
+
+    def fake_q_learning_td_episode(*args, **kwargs):
+        del args, kwargs
+        return traces.pop(0)
+
+    engine._run_q_learning_td_episode = fake_q_learning_td_episode  # type: ignore[method-assign]
+
+    selected_trace, selected_seed, attempts_used = engine._evaluate_td_policy(
+        lesson_id="td_q_learning",
+        lesson_function=lambda *args, **kwargs: None,
+        q_table=[],
+        alpha=0.1,
+        gamma=0.9,
+        max_steps=100,
+        attempt_count=3,
+        seed_offset=7,
+        use_action_mask=False,
+    )
+
+    assert attempts_used == 3
+    assert selected_seed == 8
+    assert selected_trace is not None
+    assert selected_trace["terminated"] is False
+    assert selected_trace["total_reward"] == 10.0
 
 
 def test_execution_runtime_initializes_registry_for_spawned_process(monkeypatch, tmp_path):

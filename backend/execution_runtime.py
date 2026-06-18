@@ -456,27 +456,32 @@ def _build_trace_payload(
         )
 
     if trace_family == "TemporalDifferenceControl":
-        step_trace = json.loads(json.dumps(featured_episode, cls=NpEncoder))
+        curated_steps = _curate_td_control_episode(featured_episode)
+        step_trace = json.loads(json.dumps(curated_steps, cls=NpEncoder))
+        evaluation_summary = execution_metadata.get("evaluation_summary")
+        selected_terminated = bool((evaluation_summary or {}).get("selected_terminated"))
         episode_summaries = []
         if featured_episode_index >= 0:
             episode_summaries = [
                 _episode_summary(
                     featured_episode_index,
-                    step_trace,
-                    sum(step.get("reward", 0) for step in step_trace),
+                    featured_episode,
+                    sum(step.get("reward", 0) for step in featured_episode),
                 )
             ]
         return {
             "trace_family": trace_family,
             "trace_mode": (
                 "greedy evaluation replay from the policy learned by your code"
-                if execution_metadata.get("evaluation_summary")
+                if evaluation_summary
                 else "latest episode trace"
             ),
             "trace_summary": {
                 "selection_strategy": (
                     "td_greedy_evaluation_trace"
-                    if execution_metadata.get("evaluation_summary")
+                    if selected_terminated
+                    else "td_greedy_evaluation_fallback_trace"
+                    if evaluation_summary
                     else "latest_episode"
                 ),
                 "visible_step_count": len(step_trace),
@@ -492,7 +497,7 @@ def _build_trace_payload(
                 else []
             ),
             "episode_summaries": episode_summaries,
-            "evaluation_summary": execution_metadata.get("evaluation_summary"),
+            "evaluation_summary": evaluation_summary,
         }
 
     trace_episodes = json.loads(
@@ -600,6 +605,24 @@ def _curate_monte_carlo_episode(steps: list[dict[str, Any]]) -> list[dict[str, A
         chosen.add(update_indexes[-1])
 
     return [steps[index] for index in sorted(chosen)[:5]]
+
+
+def _curate_td_control_episode(
+    steps: list[dict[str, Any]],
+    *,
+    window_size: int = 15,
+) -> list[dict[str, Any]]:
+    visible_cap = window_size * 3
+    if len(steps) <= visible_cap:
+        return list(steps)
+
+    middle_start = max(0, (len(steps) - window_size) // 2)
+    chosen = {
+        *range(0, window_size),
+        *range(middle_start, middle_start + window_size),
+        *range(len(steps) - window_size, len(steps)),
+    }
+    return [steps[index] for index in sorted(chosen)]
 
 
 def _step_signal(step: dict[str, Any]) -> float:
