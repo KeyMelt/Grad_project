@@ -1573,3 +1573,45 @@ Hard-won rules (do not relitigate these — each was an explicit user rejection)
 
 These segments are plain 2D `BaseConceptScene`s, so the deterministic layout gate
 covers them — keep them gate-clean.
+
+---
+
+## 40. Four-Element Update Contract (thesis-mandated, QA-checked)
+
+Every platform video — concept videos AND trace/replay renders — must, **across
+its calculation/update content**, depict all four of the following. This is the
+thesis requirement: a video that visualizes a value/policy/Q update must record
+what was computed and how.
+
+1. **Environment state during the current calculation** — the real Gymnasium board
+   at the focal state (never an abstraction; §31).
+2. **The transition that occurred** — `(S, A, R, S', done)`.
+3. **The numerical or symbolic backup** used to compute the new estimate — the
+   target `R + γ·bootstrap`, the TD error `δ`, and the update arithmetic (§38).
+4. **The updated value/policy/Q entry after the step** — the before→after value.
+
+### Compliance bar: distributed, not per-frame
+
+Each element must appear **somewhere across the calculation segments** — they need
+not be co-located in a single frame. (A teaching segment that is pure narrative —
+a bridge, a code walkthrough — need not carry all four; the contract binds the
+segments that actually depict an update.)
+
+### Canonical helpers
+
+- **Concept videos:** use the per-env `*_base.py` helpers. For Taxi
+  (`workspaces/td_q_learning/segments/taxi_base.py`):
+  - `transition_chip(state, a_label, reward, next_state, done)` → element ②
+  - `q_entry_readout(state, a_label, old, new)` → element ④
+  - element ① is the env board (`TaxiGrid` etc.); element ③ is the §38 worked backup.
+  Add the equivalent pair to other envs' `*_base.py` when bringing them into
+  compliance.
+- **Trace/replay:** `manim_service/trace_scenes/trace_step_director.py` already
+  emits all four per step (transition beat → bootstrap lookup → `target=r+γB` →
+  `δ` → `Q:old→new`). New trace boards must preserve those beats.
+
+### QA gate
+
+Before shipping any video, confirm all four elements are present (extract
+update-moment frames and check). Record the four-element status in the lesson's
+`self_qa_report.md`. Exemplar: `td_q_learning` (V-09).

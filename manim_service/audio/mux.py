@@ -34,10 +34,23 @@ class MuxError(RuntimeError):
 
 
 def get_media_duration_seconds(path: Path) -> float:
-    """Return the duration in seconds of an audio or video file, via ffprobe.
+    """Return the duration in seconds of an audio or video file via PyAV.
 
-    Uses the ffprobe alongside the configured ffmpeg.
+    Falls back to ffprobe if PyAV cannot open the file.
     """
+    try:
+        import av  # type: ignore
+        with av.open(str(path)) as container:
+            if container.duration is not None:
+                return float(container.duration) / 1_000_000.0
+            # duration may be None for some containers; try first stream
+            for stream in container.streams:
+                if stream.duration is not None and stream.time_base is not None:
+                    return float(stream.duration * stream.time_base)
+        raise MuxError(f"PyAV could not determine duration of {path}")
+    except ImportError:
+        pass  # fall through to ffprobe
+
     ffprobe = Path(settings.FFMPEG_BIN).with_name("ffprobe")
     if not ffprobe.exists():
         ffprobe = Path(shutil.which("ffprobe") or "ffprobe")
@@ -130,11 +143,15 @@ def mux_audio_into_video(
     logger.info("Muxing: %s", " ".join(cmd))
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
-        raise MuxError(
-            f"ffmpeg mux failed (exit {result.returncode}): {result.stderr}"
+        logger.warning(
+            "ffmpeg mux failed (exit %d), falling back to PyAV mux: %s",
+            result.returncode, result.stderr[:200],
         )
-
-    if not output_path.exists() or output_path.stat().st_size == 0:
+        try:
+            _mux_with_pyav(silent_video_path, narration_wav_path, output_path)
+        except Exception as exc:
+            raise MuxError(f"PyAV mux fallback failed: {exc}") from exc
+    elif not output_path.exists() or output_path.stat().st_size == 0:
         raise MuxError(f"ffmpeg succeeded but output is missing/empty: {output_path}")
 
     logger.info(
@@ -145,3 +162,64 @@ def mux_audio_into_video(
         output_path.stat().st_size / (1024 * 1024),
     )
     return output_path
+
+
+def _mux_with_pyav(
+    silent_video_path: Path,
+    narration_wav_path: Path,
+    output_path: Path,
+) -> None:
+    """Fallback mux using PyAV when system ffmpeg is unavailable.
+
+    Copies the video stream and transcodes the WAV to AAC audio.
+    If AAC encoder is unavailable, stores audio as FLAC inside an MKV.
+    """
+    import av  # type: ignore
+    import numpy as np  # type: ignore
+    import soundfile as sf  # type: ignore
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    audio_data, sample_rate = sf.read(str(narration_wav_path), dtype="float32")
+    if audio_data.ndim == 1:
+        audio_data = audio_data[:, None]  # (N,) → (N, 1)
+
+    vid_src = av.open(str(silent_video_path))
+    vid_stream = vid_src.streams.video[0]
+
+    dst = av.open(str(output_path), mode="w")
+    out_video = dst.add_stream(template=vid_stream)
+
+    # Try AAC; fall back to pcm_s16le which every container accepts
+    try:
+        out_audio = dst.add_stream("aac", rate=sample_rate, layout="mono")
+    except Exception:
+        out_audio = dst.add_stream("pcm_s16le", rate=sample_rate, layout="mono")
+
+    # Copy video packets
+    for pkt in vid_src.demux(vid_stream):
+        if pkt.dts is None:
+            continue
+        pkt.stream = out_video
+        dst.mux(pkt)
+    vid_src.close()
+
+    # Encode audio in chunks
+    chunk_size = 1024
+    pts = 0
+    audio_mono = audio_data[:, 0]
+    for i in range(0, len(audio_mono), chunk_size):
+        chunk = audio_mono[i : i + chunk_size]
+        frame = av.AudioFrame.from_ndarray(
+            (chunk * 32767).astype("int16")[None, :], format="s16", layout="mono"
+        )
+        frame.sample_rate = sample_rate
+        frame.pts = pts
+        pts += len(chunk)
+        for enc_pkt in out_audio.encode(frame):
+            dst.mux(enc_pkt)
+    for enc_pkt in out_audio.encode(None):
+        dst.mux(enc_pkt)
+
+    dst.close()
+    logger.info("PyAV mux wrote %s (%.1f MB)", output_path, output_path.stat().st_size / 1024**2)

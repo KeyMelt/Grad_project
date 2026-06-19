@@ -1,0 +1,161 @@
+WEBVTT
+
+1
+00:00:00.000 --> 00:00:03.584
+SARSA asks: what action will I actually take next?
+
+2
+00:00:05.000 --> 00:00:08.733
+It samples that action and bootstraps from it — on-policy.
+
+3
+00:00:11.000 --> 00:00:15.267
+Q-learning swaps one symbol: instead of sampling, it takes the max.
+
+4
+00:00:17.000 --> 00:00:20.947
+The target is always greedy. The behavior still explores.
+
+5
+00:00:21.027 --> 00:00:24.035
+That single swap makes Q-learning off-policy.
+
+6
+00:00:27.000 --> 00:00:30.136
+Five rows, five columns — five hundred states.
+
+7
+00:00:32.000 --> 00:00:35.499
+Six actions: four directions, Pickup, and Dropoff.
+
+8
+00:00:37.000 --> 00:00:41.459
+Every step costs one. An illegal pickup or dropoff costs ten.
+
+9
+00:00:43.000 --> 00:00:46.968
+Legal dropoff: plus twenty — the only terminal reward.
+
+10
+00:00:49.000 --> 00:00:51.752
+The task has four sub-goals chained together.
+
+11
+00:00:54.000 --> 00:00:58.501
+Get to the passenger. Pick them up. Get to the destination. Drop them off.
+
+12
+00:01:02.000 --> 00:01:05.797
+Q-learning will compose all four — with no explicit plan.
+
+13
+00:01:10.000 --> 00:01:14.757
+State sixteen: taxi at R, passenger aboard, destination R.
+
+14
+00:01:16.000 --> 00:01:20.160
+The agent executes Dropoff. The Q-table starts learning.
+
+15
+00:01:22.000 --> 00:01:25.797
+The Q-learning update — TD target times learning rate.
+
+16
+00:01:28.000 --> 00:01:30.603
+Terminal step: the bootstrap is zero.
+
+17
+00:01:34.000 --> 00:01:36.368
+Target is just the reward — twenty.
+
+18
+00:01:40.000 --> 00:01:44.779
+Alpha times TD error: zero-point-one times twenty equals two.
+
+19
+00:01:46.000 --> 00:01:48.965
+The Dropoff bar rises to two-point-zero.
+
+20
+00:01:52.000 --> 00:01:56.885
+One step back: the target becomes zero-point-nine. The signal spreads.
+
+21
+00:01:58.000 --> 00:02:01.392
+Same transition — SARSA and Q-learning diverge.
+
+22
+00:02:03.000 --> 00:02:06.349
+SARSA samples the next action from the behavior policy.
+
+23
+00:02:08.000 --> 00:02:11.499
+Say it picks West: target is minus four-point-eight.
+
+24
+00:02:14.000 --> 00:02:17.264
+Q-learning ignores the sampled action entirely.
+
+25
+00:02:19.000 --> 00:02:22.200
+It asks: what is the best Q in the next state?
+
+26
+00:02:24.000 --> 00:02:28.565
+Target: plus zero-point-nine. Same data, opposite conclusion.
+
+27
+00:02:29.000 --> 00:02:33.715
+Off-policy means the behavior can be anything — the target stays greedy.
+
+28
+00:02:33.795 --> 00:02:37.656
+R is the goal. The first dropoff gave it value two.
+
+29
+00:02:39.000 --> 00:02:43.757
+One step away: target zero-point-nine. Two steps: point-eight-five.
+
+30
+00:02:45.000 --> 00:02:48.605
+Values decay by gamma each hop — point-nine-five.
+
+31
+00:02:51.000 --> 00:02:54.520
+The greedy policy arrows emerge — no map was given.
+
+32
+00:02:57.000 --> 00:03:01.224
+Greedy episode: navigate to Y, Pickup, drive north to R.
+
+33
+00:03:03.000 --> 00:03:07.437
+Dropoff. Plus twenty. Four sub-goals, zero explicit planner.
+
+34
+00:03:09.000 --> 00:03:12.989
+Every arrow is the argmax of a converged Q-value row.
+
+35
+00:03:15.000 --> 00:03:19.096
+The boxed term — max of Q next-state — is the off-policy hook.
+
+36
+00:03:20.000 --> 00:03:24.267
+In the exercise: best_next equals max of Q of next_state.
+
+37
+00:03:26.000 --> 00:03:29.200
+That is the entire algorithmic difference from SARSA.
+
+38
+00:03:31.000 --> 00:03:34.755
+SARSA needs a sampled next action. Q-learning does not.
+
+39
+00:03:36.000 --> 00:03:40.715
+Q-learning is a sampled Bellman optimality backup — no model needed.
+
+40
+00:03:41.000 --> 00:03:44.989
+This exact update, scaled to a neural network, is DQN.
