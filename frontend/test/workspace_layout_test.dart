@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rl_ide/core/backend_api.dart';
 import 'package:rl_ide/core/workbench_state.dart';
+import 'package:rl_ide/features/lessons/lesson_browser.dart';
 import 'package:rl_ide/layout/main_layout.dart';
 
 import 'support/fake_video_player_platform.dart';
@@ -33,6 +34,55 @@ const _layoutSections = [
   LessonSection(
     title: 'Dynamic Programming',
     lessons: [_layoutLesson],
+  ),
+];
+
+const _outlinePolicyEvalLesson = LessonDefinition(
+  id: 'dp_policy_eval',
+  title: 'Policy Evaluation',
+  description: 'Evaluate a policy on FrozenLake.',
+  category: 'Dynamic Programming',
+  starterCode: 'def policy_evaluation():\n    return []\n',
+  conceptVideo: LessonConceptVideo(
+    streamPath: '',
+    durationLabel: '',
+    summary: '',
+    highlights: [],
+  ),
+  exercise: LessonExerciseBrief(
+    title: 'Implement iterative policy evaluation',
+    overview: 'Complete the Bellman update.',
+    tasks: [],
+    successCriteria: [],
+    codeTip: '',
+  ),
+);
+
+const _outlineValueIterationLesson = LessonDefinition(
+  id: 'dp_value_iteration',
+  title: 'Value Iteration',
+  description: 'Find optimal values on FrozenLake.',
+  category: 'Dynamic Programming',
+  starterCode: 'def value_iteration():\n    return []\n',
+  conceptVideo: LessonConceptVideo(
+    streamPath: '',
+    durationLabel: '',
+    summary: '',
+    highlights: [],
+  ),
+  exercise: LessonExerciseBrief(
+    title: 'Implement value iteration',
+    overview: 'Complete the optimality backup.',
+    tasks: [],
+    successCriteria: [],
+    codeTip: '',
+  ),
+);
+
+const _outlineSections = [
+  LessonSection(
+    title: 'Dynamic Programming',
+    lessons: [_outlinePolicyEvalLesson, _outlineValueIterationLesson],
   ),
 ];
 
@@ -277,7 +327,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   installFakeVideoPlayerPlatform();
 
-  testWidgets('workspace desktop layout keeps course outline on concept/code only', (
+  testWidgets(
+      'workspace desktop layout keeps course outline on concept/code only', (
     tester,
   ) async {
     await _pumpWorkspace(tester, const Size(1440, 900));
@@ -438,6 +489,50 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
     await harness.close();
+  });
+
+  testWidgets('course outline dialog closes and selects lessons', (
+    tester,
+  ) async {
+    LessonDefinition? selectedLesson;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            return Center(
+              child: ElevatedButton(
+                onPressed: () => showCourseOutlineDialog(
+                  context: context,
+                  sections: _outlineSections,
+                  selectedLesson: _outlinePolicyEvalLesson,
+                  onLessonSelected: (lesson) {
+                    selectedLesson = lesson;
+                  },
+                ),
+                child: const Text('Open outline'),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open outline'));
+    await tester.pumpAndSettle();
+    expect(find.text('Value Iteration'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Close course outline'));
+    await tester.pumpAndSettle();
+    expect(find.text('Value Iteration'), findsNothing);
+
+    await tester.tap(find.text('Open outline'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Value Iteration'));
+    await tester.pumpAndSettle();
+
+    expect(selectedLesson?.id, 'dp_value_iteration');
+    expect(find.text('Value Iteration'), findsNothing);
   });
 
   testWidgets('generate marketing screenshots', (tester) async {

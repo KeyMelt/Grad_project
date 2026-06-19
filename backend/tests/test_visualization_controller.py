@@ -228,6 +228,46 @@ class TestTupleStateNormalisation:
         # Verify the body is fully JSON-serialisable (no remaining tuples)
         _json.dumps(body)
 
+    def test_enqueue_replay_render_accepts_curated_trace_episodes(self, monkeypatch):
+        captured_bodies: list[dict] = []
+
+        class _CapturingHttp:
+            def post(self, url, *, json, timeout):
+                captured_bodies.append(json)
+                return _StubResponse(payload={"job_id": "dp123", "status": "queued"})
+
+        monkeypatch.setenv("RL_IDE_MANIM_TIMEOUT_SECONDS", "10")
+        controller = VisualizationController(
+            base_url="http://manim:8200",
+            http_client=_CapturingHttp(),
+        )
+
+        trace_episodes = [
+            {
+                "episode_index": 7,
+                "steps": [
+                    {
+                        "state": 0,
+                        "action": -1,
+                        "reward": 0.0,
+                        "next_state": 0,
+                        "equation_update": {"kind": "policy_evaluation"},
+                    }
+                ],
+            }
+        ]
+
+        result = controller.enqueue_replay_render(trace_episodes, "dp_policy_eval")
+
+        assert result["replay_render_job_id"] == "dp123"
+        assert result["replay_render_status"] == "queued"
+        assert result["replay_episode_indices"] == [7]
+        body = captured_bodies[0]
+        assert body["episodes"][0]["episode_index"] == 7
+        assert body["episodes"][0]["steps"][0]["equation_update"]["kind"] == (
+            "policy_evaluation"
+        )
+
     def test_enqueue_replay_render_with_staged_td_payload_posts_episode_trace_only(self, monkeypatch):
         captured_bodies: list[dict] = []
 

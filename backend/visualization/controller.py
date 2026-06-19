@@ -129,25 +129,47 @@ class VisualizationController:
                 "replay_episode_indices": replay_episode_indices,
             }
 
-        selected = self._selected_episode_indices(log_data)
-        episodes = []
-        for role, episode_index in self._episode_roles(selected).items():
-            steps = log_data[episode_index] if 0 <= episode_index < len(log_data) else []
-            clipped = self._clip_episode_steps(steps)
-            if clipped:
+        if self._is_trace_episode_payload(log_data):
+            selected = self._selected_episode_indices(log_data)
+            episodes = []
+            replay_episode_indices: list[int] = []
+            for role, episode_index in self._episode_roles(selected).items():
+                episode = log_data[episode_index] if 0 <= episode_index < len(log_data) else {}
+                steps = episode.get("steps", []) if isinstance(episode, dict) else []
+                clipped = self._clip_episode_steps(steps)
+                if not clipped:
+                    continue
+                source_episode_index = episode.get("episode_index", episode_index)
+                if isinstance(source_episode_index, int):
+                    replay_episode_indices.append(source_episode_index)
                 episodes.append(
                     {
-                        "episode_index": episode_index,
+                        "episode_index": source_episode_index,
                         "role": role,
                         "steps": [self._normalize_step(step) for step in clipped],
                     }
                 )
+        else:
+            selected = self._selected_episode_indices(log_data)
+            episodes = []
+            replay_episode_indices = selected
+            for role, episode_index in self._episode_roles(selected).items():
+                steps = log_data[episode_index] if 0 <= episode_index < len(log_data) else []
+                clipped = self._clip_episode_steps(steps)
+                if clipped:
+                    episodes.append(
+                        {
+                            "episode_index": episode_index,
+                            "role": role,
+                            "steps": [self._normalize_step(step) for step in clipped],
+                        }
+                    )
 
         if not episodes:
             return {
                 "replay_render_job_id": "",
                 "replay_render_status": "unavailable",
-                "replay_episode_indices": selected,
+                "replay_episode_indices": replay_episode_indices,
             }
 
         payload = {
@@ -163,14 +185,14 @@ class VisualizationController:
             return {
                 "replay_render_job_id": "",
                 "replay_render_status": "unavailable",
-                "replay_episode_indices": selected,
+                "replay_episode_indices": replay_episode_indices,
             }
 
         job_id = str(job.get("job_id") or "")
         return {
             "replay_render_job_id": job_id,
             "replay_render_status": str(job.get("status") or ("queued" if job_id else "unavailable")),
-            "replay_episode_indices": selected,
+            "replay_episode_indices": replay_episode_indices,
         }
 
     def _post_json(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -184,6 +206,14 @@ class VisualizationController:
             log_data
             and isinstance(log_data[0], dict)
             and "stage" in log_data[0]
+            and isinstance(log_data[0].get("steps"), list)
+        )
+
+    @staticmethod
+    def _is_trace_episode_payload(log_data: list) -> bool:
+        return bool(
+            log_data
+            and isinstance(log_data[0], dict)
             and isinstance(log_data[0].get("steps"), list)
         )
 

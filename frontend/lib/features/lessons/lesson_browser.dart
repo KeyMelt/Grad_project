@@ -105,6 +105,7 @@ Future<void> showCourseOutlineDialog({
   final mediaSize = MediaQuery.sizeOf(context);
   return showDialog<void>(
     context: context,
+    useRootNavigator: true,
     barrierColor: const Color(0x990F172A),
     builder: (dialogContext) {
       return Dialog(
@@ -124,7 +125,7 @@ Future<void> showCourseOutlineDialog({
                 sections: sections,
                 selectedLesson: selectedLesson,
                 onLessonSelected: (lesson) {
-                  Navigator.of(dialogContext).pop();
+                  Navigator.of(dialogContext, rootNavigator: true).pop();
                   onLessonSelected(lesson);
                 },
               ),
@@ -202,7 +203,7 @@ class LessonBrowser extends StatelessWidget {
   }
 }
 
-class _CourseOutlineDialog extends StatelessWidget {
+class _CourseOutlineDialog extends StatefulWidget {
   final List<LessonSection> sections;
   final LessonDefinition selectedLesson;
   final ValueChanged<LessonDefinition> onLessonSelected;
@@ -214,8 +215,21 @@ class _CourseOutlineDialog extends StatelessWidget {
   });
 
   @override
+  State<_CourseOutlineDialog> createState() => _CourseOutlineDialogState();
+}
+
+class _CourseOutlineDialogState extends State<_CourseOutlineDialog> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final lessonCount = sections.fold<int>(
+    final lessonCount = widget.sections.fold<int>(
       0,
       (count, section) => count + section.lessons.length,
     );
@@ -232,7 +246,7 @@ class _CourseOutlineDialog extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      selectedLesson.title,
+                      widget.selectedLesson.title,
                       style:
                           Theme.of(context).textTheme.headlineSmall?.copyWith(
                                 fontWeight: FontWeight.w800,
@@ -250,7 +264,8 @@ class _CourseOutlineDialog extends StatelessWidget {
               ),
               IconButton(
                 tooltip: 'Close course outline',
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () =>
+                    Navigator.of(context, rootNavigator: true).pop(),
                 icon: const Icon(Icons.close_rounded),
               ),
             ],
@@ -258,17 +273,19 @@ class _CourseOutlineDialog extends StatelessWidget {
           const SizedBox(height: 18),
           Expanded(
             child: Scrollbar(
+              controller: _scrollController,
               thumbVisibility: true,
               child: ListView.builder(
-                itemCount: sections.length,
+                controller: _scrollController,
+                itemCount: widget.sections.length,
                 itemBuilder: (context, sectionIndex) {
-                  final section = sections[sectionIndex];
+                  final section = widget.sections[sectionIndex];
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16),
                     child: _OutlineSectionCard(
                       section: section,
-                      selectedLessonId: selectedLesson.id,
-                      onLessonSelected: onLessonSelected,
+                      selectedLessonId: widget.selectedLesson.id,
+                      onLessonSelected: widget.onLessonSelected,
                     ),
                   );
                 },

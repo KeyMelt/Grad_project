@@ -19,6 +19,12 @@ class ActionValueRow(list):
         return list(self)
 
 
+class _ToyModelEnv:
+    @property
+    def unwrapped(self):
+        return self
+
+
 def _q_table(rows: list[list[float]]) -> list[ActionValueRow]:
     return [ActionValueRow(row) for row in rows]
 
@@ -204,7 +210,7 @@ def _apply_mc_prediction_result(
 
 
 def _test_policy_evaluation(lesson_function: Callable[..., Any]) -> list[LessonTestCaseResult]:
-    class _ToyEnv:
+    class _ToyEnv(_ToyModelEnv):
         P = {
             0: {0: [(1.0, 0, 1.0, False)]},
             1: {0: [(1.0, 1, 0.0, True)]},
@@ -235,7 +241,7 @@ def _test_value_iteration(lesson_function: Callable[..., Any]) -> list[LessonTes
     class _ActionSpace:
         n = 2
 
-    class _ToyEnv:
+    class _ToyEnv(_ToyModelEnv):
         action_space = _ActionSpace()
         P = {
             0: {
@@ -272,7 +278,7 @@ def _test_policy_improvement(lesson_function: Callable[..., Any]) -> list[Lesson
     class _ActionSpace:
         n = 2
 
-    class _ToyEnv:
+    class _ToyEnv(_ToyModelEnv):
         action_space = _ActionSpace()
         P = {
             0: {

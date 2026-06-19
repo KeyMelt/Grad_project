@@ -211,6 +211,87 @@ class CodeValidatorTest(unittest.TestCase):
         self.assertEqual(result.errors, [])
         self.assertTrue(all(test["passed"] for test in result.test_results))
 
+    def test_accepts_dp_policy_eval_with_unwrapped_transition_model(self):
+        result = self.validator.validate_code(
+            (
+                "DISCOUNT_FACTOR = 0.95\n\n"
+                "def policy_evaluation(V, policy, env, gamma=DISCOUNT_FACTOR, theta=1e-8):\n"
+                "    delta = float('inf')\n"
+                "    while delta > theta:\n"
+                "        delta = 0.0\n"
+                "        for state in range(len(V)):\n"
+                "            old_value = V[state]\n"
+                "            new_value = 0.0\n"
+                "            for action, action_prob in enumerate(policy[state]):\n"
+                "                for probability, next_state, reward, terminated in env.unwrapped.P[state][action]:\n"
+                "                    bootstrap = 0.0 if terminated else V[next_state]\n"
+                "                    new_value += action_prob * probability * (reward + gamma * bootstrap)\n"
+                "            V[state] = new_value\n"
+                "            delta = max(delta, abs(old_value - V[state]))\n"
+                "    return V\n"
+            ),
+            "dp_policy_eval",
+        )
+
+        self.assertTrue(result.is_valid)
+        self.assertEqual(result.errors, [])
+        self.assertTrue(all(test["passed"] for test in result.test_results))
+
+    def test_accepts_value_iteration_with_unwrapped_transition_model(self):
+        result = self.validator.validate_code(
+            (
+                "DISCOUNT_FACTOR = 0.95\n\n"
+                "def value_iteration(V, env, gamma=DISCOUNT_FACTOR, theta=1e-8):\n"
+                "    action_count = env.action_space.n\n"
+                "    delta = float('inf')\n"
+                "    while delta > theta:\n"
+                "        delta = 0.0\n"
+                "        for state in range(len(V)):\n"
+                "            old_value = V[state]\n"
+                "            action_values = []\n"
+                "            for action in range(action_count):\n"
+                "                action_value = 0.0\n"
+                "                for probability, next_state, reward, terminated in env.unwrapped.P[state][action]:\n"
+                "                    bootstrap = 0.0 if terminated else V[next_state]\n"
+                "                    action_value += probability * (reward + gamma * bootstrap)\n"
+                "                action_values.append(action_value)\n"
+                "            V[state] = max(action_values)\n"
+                "            delta = max(delta, abs(old_value - V[state]))\n"
+                "    return V\n"
+            ),
+            "dp_value_iteration",
+        )
+
+        self.assertTrue(result.is_valid)
+        self.assertEqual(result.errors, [])
+        self.assertTrue(all(test["passed"] for test in result.test_results))
+
+    def test_accepts_policy_improvement_with_unwrapped_transition_model(self):
+        result = self.validator.validate_code(
+            (
+                "DISCOUNT_FACTOR = 0.95\n\n"
+                "def policy_improvement(V, env, gamma=DISCOUNT_FACTOR):\n"
+                "    action_count = env.action_space.n\n"
+                "    policy = [[0.0 for _ in range(action_count)] for _ in range(len(V))]\n"
+                "    for state in range(len(V)):\n"
+                "        action_values = []\n"
+                "        for action in range(action_count):\n"
+                "            action_value = 0.0\n"
+                "            for probability, next_state, reward, terminated in env.unwrapped.P[state][action]:\n"
+                "                bootstrap = 0.0 if terminated else V[next_state]\n"
+                "                action_value += probability * (reward + gamma * bootstrap)\n"
+                "            action_values.append(action_value)\n"
+                "        best_action = max(range(action_count), key=lambda index: action_values[index])\n"
+                "        policy[state][best_action] = 1.0\n"
+                "    return policy\n"
+            ),
+            "dp_policy_improvement",
+        )
+
+        self.assertTrue(result.is_valid)
+        self.assertEqual(result.errors, [])
+        self.assertTrue(all(test["passed"] for test in result.test_results))
+
     def test_accepts_policy_improvement_function(self):
         result = self.validator.validate_code(
             (
