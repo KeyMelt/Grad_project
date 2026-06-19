@@ -308,25 +308,35 @@ def _eval_action_values(step):
     return VGroup(*chips).arrange(RIGHT, buff=0.24)
 
 
-def _play_transition_replay(scene, board, step, env, *, pos, width, first):
+def _play_transition_replay(scene, board, step, env, *, pos, width, first, lite=False):
     """Steps with no update family (a greedy-evaluation rollout) still deserve to
     SHOW THE AGENT MOVING and to make the policy's decision legible. Drive the
     spatial board through the transition, then reveal an honest S-A-R-S' line and
     the action-value row Q(s,·) with the taken action boxed — no update math,
-    because no learning step occurred on this rollout."""
+    because no learning step occurred on this rollout.
+
+    ``lite=True`` (early/improving stages of a staged progression): play FAST and
+    minimal — quick agent move + the transition line only, no action-value
+    breakdown — because the message is just 'watch it flail', and to keep render
+    cost bounded. The rich treatment is reserved for the converged stage."""
+    move_rt = 0.32 if lite else 0.6
     if first and hasattr(board, "place"):
-        board.place(scene, step, run_time=0.4)
-        scene.wait(0.2)
+        board.place(scene, step, run_time=0.28 if lite else 0.4)
+        scene.wait(0.08 if lite else 0.2)
     if hasattr(board, "step"):
-        board.step(scene, step, run_time=0.6)
+        board.step(scene, step, run_time=move_rt)
 
     t = C.transition(step, env)
     s, a, r, ns = t["state"], C.tex_escape(t["action_label"]), C.signed(t["reward"]), \
         t["next_state"]
-    card = StepCard(scene, f"Greedy replay · {env}", C.STATE, pos=pos, width=width, height=3.3)
+    height = 2.2 if lite else 3.3
+    card = StepCard(scene, f"Replay · {env}", C.STATE, pos=pos, width=width, height=height)
     card.show()
     card.reveal(_tex(rf"s\,{s}\;\xrightarrow{{\;{a}\,\mid\,r\,{r}\;}}\;s'\,{ns}",
-                     size=23, color=C.STATE), wait=BEAT)
+                     size=22 if lite else 23, color=C.STATE),
+                wait=HOLD if lite else BEAT, rt=0.28 if lite else REVEAL_RT)
+    if lite:
+        return card
     av_row = _eval_action_values(step)
     if av_row is not None:
         card.reveal(_tex(r"Q(s,\cdot)\;\text{— the policy took the boxed action}",
@@ -343,9 +353,15 @@ def _play_transition_replay(scene, board, step, env, *, pos, width, first):
 
 
 # ============================================================ dispatch
-def play_step(scene, board, step, env, *, pos, width, first=False):
+def play_step(scene, board, step, env, *, pos, width, first=False, lite=False):
     fam = C.family(step)
     try:
+        # Lite stages (early/improving in a staged progression) always use the
+        # fast spatial replay regardless of family — the message is "watch it
+        # behave", not a per-step derivation.
+        if lite and getattr(board, "is_spatial", False):
+            return _play_transition_replay(scene, board, step, env,
+                                           pos=pos, width=width, first=first, lite=True)
         if fam == "dp":
             return _play_dp(scene, board, step, env, pos=pos, width=width)
         if fam == "td":
@@ -356,7 +372,7 @@ def play_step(scene, board, step, env, *, pos, width, first=False):
         # the trajectory on spatial boards instead of a dead static grid.
         if getattr(board, "is_spatial", False):
             return _play_transition_replay(scene, board, step, env,
-                                           pos=pos, width=width, first=first)
+                                           pos=pos, width=width, first=first, lite=lite)
     except Exception:  # noqa: BLE001 — never let one bad step kill the render
         pass
     card = StepCard(scene, "Update", C.STATE, pos=pos, width=width, height=2.2)
