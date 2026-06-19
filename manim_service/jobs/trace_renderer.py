@@ -349,7 +349,7 @@ def _invoke_trace_manim(data_json: Path, *, episode_label: str | None = None) ->
         )
 
     quality_flag = f"-q{quality}"
-    media_dir = ROOT / "manim_service" / "_manim_media"
+    media_dir = settings.TRACE_MANIM_MEDIA_DIR
     media_dir.mkdir(parents=True, exist_ok=True)
 
     cmd = [

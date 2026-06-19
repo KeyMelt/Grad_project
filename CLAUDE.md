@@ -42,3 +42,17 @@ Use the simplifier subagent on src/utils
 - Security fixes from the security-auditor take priority over all other changes
 - Simplification must not alter external API surface — flag it if it would
 - The orchestrator resolves conflicts between agent recommendations
+
+## Branch Handoff Note
+
+- Current working branch: `video/tql-four-element-polish`
+- Current dirty set was reviewed for pre-presentation stability on 2026-06-19.
+- Backend `gymnasium` was intentionally bumped to `1.3.0` to support Taxi v4. RL engine verification passed via `backend/tests/test_rl_engine.py`.
+- Frontend/backend connection changes are intentional for local development and iOS install behavior. Focused Flutter analyze/tests passed.
+- Manim/media-path risk was investigated and reduced. Root cause was frozen derived media paths after introducing configurable concept/trace directories.
+- The fix keeps explicit `CONCEPT_VIDEO_MEDIA_DIR` / `TRACE_MEDIA_DIR` overrides working, while deriving from `SHARED_MEDIA_DIR` at call time when those overrides are not explicitly configured.
+- Verified after the fix:
+  - `manim_service/tests/test_trace_routes.py::TestGetVideo::test_existing_file_served` passed.
+  - `manim_service/tests/test_trace_renderer.py manim_service/tests/test_trace_routes.py` passed (`50 passed`).
+  - Production-shaped path check still resolved to `/srv/rl-platform/animations/concept_videos/...` and `/srv/rl-platform/animations/traces/...`.
+- Remaining branch work may continue, but the current set was considered commit-safe after the checks above.

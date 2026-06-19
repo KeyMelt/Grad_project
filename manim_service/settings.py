@@ -26,6 +26,41 @@ def resolve_executable(command: str) -> str | None:
 SHARED_MEDIA_DIR: Path = Path(
     os.environ.get("SHARED_MEDIA_DIR", str(PROJECT_ROOT / "backend" / "media"))
 )
+CONCEPT_VIDEO_MEDIA_DIR_CONFIGURED: bool = "CONCEPT_VIDEO_MEDIA_DIR" in os.environ
+CONCEPT_VIDEO_MEDIA_DIR: Path = Path(
+    os.environ.get(
+        "CONCEPT_VIDEO_MEDIA_DIR",
+        str(SHARED_MEDIA_DIR / "concept_videos"),
+    )
+)
+TRACE_MEDIA_DIR_CONFIGURED: bool = "TRACE_MEDIA_DIR" in os.environ
+TRACE_MEDIA_DIR: Path = Path(
+    os.environ.get(
+        "TRACE_MEDIA_DIR",
+        str(SHARED_MEDIA_DIR / "traces"),
+    )
+)
+
+# Scratch/output trees for local Manim authoring. These default to repo-local
+# paths, but can be redirected to an off-repo support directory.
+MANIM_MEDIA_DIR: Path = Path(
+    os.environ.get(
+        "MANIM_MEDIA_DIR",
+        str(PROJECT_ROOT / "manim_service" / "_manim_media"),
+    )
+)
+TRACE_MANIM_MEDIA_DIR: Path = Path(
+    os.environ.get(
+        "TRACE_MANIM_MEDIA_DIR",
+        str(PROJECT_ROOT / "manim_service" / "_manim_media"),
+    )
+)
+MANIM_WORKSPACES_DIR: Path = Path(
+    os.environ.get(
+        "MANIM_WORKSPACES_DIR",
+        str(PROJECT_ROOT / "manim_service" / "workspaces"),
+    )
+)
 
 # Media publishing. The default keeps local development file-system based.
 MEDIA_STORAGE_BACKEND: str = os.environ.get("RL_IDE_MEDIA_STORAGE_BACKEND", "local").lower()

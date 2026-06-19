@@ -3,10 +3,12 @@ set -eu
 
 ROOT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
 SUPPORT_DIR="${HOME}/Desktop/grad_support_files/grad_project"
+GENERATED_RENDERS_DIR="${SUPPORT_DIR}/generated_renders"
 ENV_FILE="${RL_IDE_LOCAL_PROD_ENV_FILE:-${SUPPORT_DIR}/local-prod.env}"
 STATE_DIR_DEFAULT="${SUPPORT_DIR}/local_prod"
 CERTS_DIR_DEFAULT="${STATE_DIR_DEFAULT}/letsencrypt-empty"
 FIREBASE_DEFAULT="${HOME}/Desktop/grad_support_files/keys/rlplat-firebase-adminsdk-fbsvc-a681c11b6c.json"
+GENERATED_CONCEPT_MEDIA_DIR="${GENERATED_RENDERS_DIR}/backend/media/concept_videos"
 REPO_CONCEPT_MEDIA_DIR="${ROOT_DIR}/backend/media/concept_videos"
 REPO_TRACE_MEDIA_DIR="${ROOT_DIR}/backend/media/traces"
 REPO_VISUALIZATION_DIR="${ROOT_DIR}/backend/visualization/animations"
@@ -69,6 +71,7 @@ EOF
 
 ensure_state_dirs() {
   mkdir -p \
+    "${GENERATED_CONCEPT_MEDIA_DIR}" \
     "${STATE_DIR_DEFAULT}/data" \
     "${STATE_DIR_DEFAULT}/animations" \
     "${STATE_DIR_DEFAULT}/animations/traces" \
@@ -87,17 +90,19 @@ copy_if_present() {
 seed_media() {
   ensure_state_dirs
 
-  if [ -d "${REPO_CONCEPT_MEDIA_DIR}" ]; then
-    find "${REPO_CONCEPT_MEDIA_DIR}" -maxdepth 1 -type f \( -name '*.mp4' -o -name '*.vtt' \) | while IFS= read -r file; do
-      base="$(basename "${file}")"
-      case "${base}" in
-        *.prefix_bak)
-          continue
-          ;;
-      esac
-      copy_if_present "${file}" "${STATE_DIR_DEFAULT}/concept-videos/${base}"
-    done
-  fi
+  for concept_source_dir in "${GENERATED_CONCEPT_MEDIA_DIR}" "${REPO_CONCEPT_MEDIA_DIR}"; do
+    if [ -d "${concept_source_dir}" ]; then
+      find "${concept_source_dir}" -maxdepth 1 -type f \( -name '*.mp4' -o -name '*.vtt' \) | while IFS= read -r file; do
+        base="$(basename "${file}")"
+        case "${base}" in
+          *.prefix_bak)
+            continue
+            ;;
+        esac
+        copy_if_present "${file}" "${STATE_DIR_DEFAULT}/concept-videos/${base}"
+      done
+    fi
+  done
 
   # Alias narrated lesson videos back to the canonical filenames the app expects.
   find "${STATE_DIR_DEFAULT}/concept-videos" -maxdepth 1 -type f -name '*_concept_narrated.mp4' | while IFS= read -r file; do

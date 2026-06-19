@@ -111,7 +111,7 @@ document.addEventListener("DOMContentLoaded", () => {
     resize();
 
     const colors = ['#00C9A7', '#F5A623', '#00C9A7'];
-    const numTracers = 25;
+    const numTracers = 150;
     const tracers = [];
     const pulses = [];
     const sparks = [];
