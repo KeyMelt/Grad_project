@@ -192,7 +192,7 @@ pydantic-core==2.41.5
     # via pydantic
 pydub==0.25.1
     # via manim
-pygame==2.6.1
+pygame-ce==2.5.7
     # via gymnasium
 pyglet==2.1.14
     # via moderngl-window
