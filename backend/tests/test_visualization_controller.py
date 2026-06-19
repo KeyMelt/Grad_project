@@ -227,3 +227,65 @@ class TestTupleStateNormalisation:
         assert posted_state == [16, 10, False]
         # Verify the body is fully JSON-serialisable (no remaining tuples)
         _json.dumps(body)
+
+    def test_enqueue_replay_render_with_staged_td_payload_posts_episode_trace_only(self, monkeypatch):
+        captured_bodies: list[dict] = []
+
+        class _CapturingHttp:
+            def post(self, url, *, json, timeout):
+                captured_bodies.append(json)
+                return _StubResponse(payload={"job_id": "stage123", "status": "queued"})
+
+        monkeypatch.setenv("RL_IDE_MANIM_TIMEOUT_SECONDS", "10")
+        controller = VisualizationController(
+            base_url="http://manim:8200",
+            http_client=_CapturingHttp(),
+        )
+
+        staged_log_data = [
+            {
+                "stage": "untrained",
+                "stage_label": "① Untrained · episode 1",
+                "episode_index": 0,
+                "steps": [
+                    {
+                        "state": 1,
+                        "action": 0,
+                        "reward": -1.0,
+                        "next_state": 2,
+                    }
+                ],
+            },
+            {
+                "stage": "converged",
+                "stage_label": "③ Converged · solved in 2 steps",
+                "episode_index": 500,
+                "steps": [
+                    {
+                        "state": 12,
+                        "action": 2,
+                        "reward": -1.0,
+                        "next_state": 13,
+                    },
+                    {
+                        "state": 13,
+                        "action": 4,
+                        "reward": 20.0,
+                        "next_state": 14,
+                    },
+                ],
+            },
+        ]
+
+        result = controller.enqueue_replay_render(staged_log_data, "td_q_learning")
+
+        assert result["replay_render_job_id"] == "stage123"
+        assert result["replay_render_status"] == "queued"
+        assert result["replay_episode_indices"] == [0, 500]
+        body = captured_bodies[0]
+        assert "episodes" not in body
+        assert [stage["stage"] for stage in body["episode_trace"]["steps"]] == [
+            "untrained",
+            "converged",
+        ]
+        assert body["episode_trace"]["steps"][0]["steps"][0]["state"] == 1

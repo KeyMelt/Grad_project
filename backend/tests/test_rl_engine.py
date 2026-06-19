@@ -425,6 +425,138 @@ def test_masked_bootstrap_value_ignores_illegal_taxi_actions():
     assert best_value == 2.0
 
 
+def test_td_control_returns_staged_training_and_converged_traces(monkeypatch):
+    class _Logger:
+        def __init__(self) -> None:
+            self.steps: list[dict] = []
+            self.episode_end_count = 0
+
+        def log_step(self, payload):
+            self.steps.append(payload)
+
+        def end_episode(self):
+            self.episode_end_count += 1
+
+    engine = RLEngine(
+        adapter=SimpleNamespace(env=SimpleNamespace(action_space=SimpleNamespace(n=2))),
+        logger=_Logger(),
+    )
+
+    monkeypatch.setattr(
+        RLEngine,
+        "_td_control_config",
+        lambda self, lesson_id: {
+            "base_training_episodes": 4,
+            "max_training_episodes": 4,
+            "training_max_steps": 3,
+            "visible_step_cap": 5,
+            "evaluation_attempts": 1,
+            "adaptive_extension": 1,
+            "epsilon_start": 0.2,
+            "epsilon_end": 0.0,
+            "use_action_mask": False,
+        },
+    )
+    monkeypatch.setattr(RLEngine, "_empty_q_table", lambda self: [])
+    monkeypatch.setattr(RLEngine, "_scheduled_epsilon", lambda *args, **kwargs: 0.0)
+
+    training_calls: list[tuple[int, bool]] = []
+
+    def fake_q_learning_td_episode(
+        self,
+        lesson_function,
+        q_table,
+        *,
+        alpha,
+        gamma,
+        epsilon,
+        max_steps,
+        seed,
+        use_action_mask,
+        apply_updates,
+        record_trace,
+    ):
+        del self, lesson_function, q_table, alpha, gamma, epsilon, max_steps, use_action_mask
+        assert apply_updates is True
+        training_calls.append((seed, record_trace))
+        if not record_trace:
+            return {
+                "steps": [],
+                "step_count": 1,
+                "total_reward": -1.0,
+                "terminated": False,
+            }
+        return {
+            "steps": [
+                {
+                    "state": seed,
+                    "action": 0,
+                    "reward": -1.0,
+                    "next_state": seed + 1,
+                    "grid_metadata": {"terminated": False, "truncated": seed == 1},
+                }
+            ],
+            "step_count": 1,
+            "total_reward": -1.0,
+            "terminated": False,
+        }
+
+    def fake_evaluate_td_policy(
+        self,
+        *,
+        lesson_id,
+        lesson_function,
+        q_table,
+        alpha,
+        gamma,
+        max_steps,
+        attempt_count,
+        seed_offset,
+        use_action_mask,
+    ):
+        del self, lesson_id, lesson_function, q_table, alpha, gamma, max_steps, attempt_count, seed_offset
+        del use_action_mask
+        return (
+            {
+                "steps": [
+                    {
+                        "state": 10,
+                        "action": 1,
+                        "reward": 20.0,
+                        "next_state": 11,
+                        "grid_metadata": {"terminated": True, "truncated": False},
+                    }
+                ],
+                "step_count": 1,
+                "total_reward": 20.0,
+                "terminated": True,
+            },
+            7,
+            1,
+        )
+
+    monkeypatch.setattr(RLEngine, "_run_q_learning_td_episode", fake_q_learning_td_episode)
+    monkeypatch.setattr(RLEngine, "_evaluate_td_policy", fake_evaluate_td_policy)
+
+    result = engine._run_td_control_with_greedy_evaluation(
+        "td_q_learning",
+        lambda *args, **kwargs: None,
+        {"alpha": 0.1, "gamma": 0.95},
+    )
+
+    assert training_calls == [(0, True), (1, True), (2, False), (3, False)]
+    assert [stage["stage"] for stage in result["staged_trace_episodes"]] == [
+        "untrained",
+        "improving",
+        "converged",
+    ]
+    assert result["staged_trace_episodes"][0]["stage_label"] == "① Untrained · episode 1"
+    assert result["staged_trace_episodes"][1]["stage_label"] == "② Improving · episode 2"
+    assert result["staged_trace_episodes"][2]["stage_label"] == "③ Converged · solved in 1 step"
+    assert result["staged_trace_episodes"][2]["terminated"] is True
+    assert result["evaluation_summary"]["selected_terminated"] is True
+
+
 def test_q_learning_respects_episode_step_limit(monkeypatch):
     lesson_actions: list[int] = []
 
