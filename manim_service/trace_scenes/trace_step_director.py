@@ -280,29 +280,65 @@ def _play_mc(scene, board, step, env, *, pos, width, first):
 
 
 # ============================================================ greedy/transition replay
+def _eval_action_values(step):
+    """Compact action-value row Q(s,·) for the current state, with the action
+    the policy actually took boxed — so a greedy replay SHOWS the decision, not
+    just the move. Returns a VGroup or None when the Q-row isn't available."""
+    tb = step.get("tables") or {}
+    after = tb.get("after")
+    labels = tb.get("action_labels") or []
+    chosen = (tb.get("active_cell") or {}).get("column")
+    state = step.get("state")
+    if not (isinstance(after, list) and isinstance(state, int)
+            and 0 <= state < len(after) and isinstance(after[state], list)):
+        return None
+    row = after[state]
+    if not row:
+        return None
+    chips = []
+    for i, v in enumerate(row):
+        lab = C.tex_escape((labels[i][0] if i < len(labels) and labels[i] else str(i)))
+        is_sel = (i == chosen)
+        chip = MathTex(rf"{lab}\,{C.fmt(v)}", font_size=18,
+                       color=C.VALUE if is_sel else C.MUTED)
+        if is_sel:
+            chip = VGroup(chip, SurroundingRectangle(
+                chip, color=C.VALUE, buff=0.05, stroke_width=1.4))
+        chips.append(chip)
+    return VGroup(*chips).arrange(RIGHT, buff=0.24)
+
+
 def _play_transition_replay(scene, board, step, env, *, pos, width, first):
-    """Steps with no update family (e.g. a greedy-evaluation rollout) still
-    deserve to SHOW THE AGENT MOVING. Drive the spatial board through the
-    transition and reveal an honest S-A-R-S' card — no update math, because no
-    learning step occurred on this rollout."""
+    """Steps with no update family (a greedy-evaluation rollout) still deserve to
+    SHOW THE AGENT MOVING and to make the policy's decision legible. Drive the
+    spatial board through the transition, then reveal an honest S-A-R-S' line and
+    the action-value row Q(s,·) with the taken action boxed — no update math,
+    because no learning step occurred on this rollout."""
     if first and hasattr(board, "place"):
         board.place(scene, step, run_time=0.4)
-        scene.wait(0.15)
+        scene.wait(0.2)
     if hasattr(board, "step"):
-        board.step(scene, step, run_time=0.55)
+        board.step(scene, step, run_time=0.6)
 
     t = C.transition(step, env)
     s, a, r, ns = t["state"], C.tex_escape(t["action_label"]), C.signed(t["reward"]), \
         t["next_state"]
-    card = StepCard(scene, f"Greedy replay · {env}", C.STATE, pos=pos, width=width, height=2.6)
+    card = StepCard(scene, f"Greedy replay · {env}", C.STATE, pos=pos, width=width, height=3.3)
     card.show()
     card.reveal(_tex(rf"s\,{s}\;\xrightarrow{{\;{a}\,\mid\,r\,{r}\;}}\;s'\,{ns}",
                      size=23, color=C.STATE), wait=BEAT)
-    uv = step.get("updated_values") or {}
-    if uv:
-        key, val = next(iter(uv.items()))
-        card.reveal(_tex(rf"{C.tex_escape(str(key))}={C.fmt(val)}", size=21, color=C.VALUE),
-                    wait=HOLD)
+    av_row = _eval_action_values(step)
+    if av_row is not None:
+        card.reveal(_tex(r"Q(s,\cdot)\;\text{— the policy took the boxed action}",
+                         size=17, color=C.MUTED), wait=QUICK)
+        card.reveal(av_row, wait=BEAT)
+    else:
+        uv = step.get("updated_values") or {}
+        if uv:
+            key, val = next(iter(uv.items()))
+            card.reveal(_tex(rf"{C.tex_escape(str(key))}={C.fmt(val)}",
+                             size=21, color=C.VALUE), wait=HOLD)
+    scene.wait(BEAT)
     return card
 
 
