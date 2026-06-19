@@ -411,26 +411,31 @@ class RLEngine:
 
     def _td_control_config(self, lesson_id: str) -> dict[str, int | float | bool]:
         if lesson_id == "td_sarsa":
+            # Budgets raised to actually CONVERGE (CliffWalking SARSA solves in
+            # ~200 episodes, ~0.1s) so the greedy episode reaches the goal.
             return {
-                "base_training_episodes": 120,
-                "adaptive_extension": 40,
-                "max_training_episodes": 200,
-                "evaluation_attempts": 5,
-                "training_max_steps": 60,
-                "visible_step_cap": 25,
-                "epsilon_start": 0.20,
+                "base_training_episodes": 400,
+                "adaptive_extension": 100,
+                "max_training_episodes": 800,
+                "evaluation_attempts": 8,
+                "training_max_steps": 100,
+                "visible_step_cap": 40,
+                "epsilon_start": 0.30,
                 "epsilon_end": 0.02,
                 "use_action_mask": False,
             }
         if lesson_id == "td_q_learning":
+            # Taxi Q-learning needs ~2000+ episodes to converge (measured ~2.3s);
+            # the previous default of 500 did NOT solve the task, so the greedy
+            # episode truncated and the replay looked weak.
             return {
-                "base_training_episodes": 500,
-                "adaptive_extension": 250,
-                "max_training_episodes": 1500,
+                "base_training_episodes": 2000,
+                "adaptive_extension": 500,
+                "max_training_episodes": 4000,
                 "evaluation_attempts": 20,
                 "training_max_steps": 200,
-                "visible_step_cap": 30,
-                "epsilon_start": 0.20,
+                "visible_step_cap": 50,
+                "epsilon_start": 0.30,
                 "epsilon_end": 0.02,
                 "use_action_mask": True,
             }
