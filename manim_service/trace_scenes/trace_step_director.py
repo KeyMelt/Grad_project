@@ -279,6 +279,33 @@ def _play_mc(scene, board, step, env, *, pos, width, first):
     return card
 
 
+# ============================================================ greedy/transition replay
+def _play_transition_replay(scene, board, step, env, *, pos, width, first):
+    """Steps with no update family (e.g. a greedy-evaluation rollout) still
+    deserve to SHOW THE AGENT MOVING. Drive the spatial board through the
+    transition and reveal an honest S-A-R-S' card — no update math, because no
+    learning step occurred on this rollout."""
+    if first and hasattr(board, "place"):
+        board.place(scene, step, run_time=0.4)
+        scene.wait(0.15)
+    if hasattr(board, "step"):
+        board.step(scene, step, run_time=0.55)
+
+    t = C.transition(step, env)
+    s, a, r, ns = t["state"], C.tex_escape(t["action_label"]), C.signed(t["reward"]), \
+        t["next_state"]
+    card = StepCard(scene, f"Greedy replay · {env}", C.STATE, pos=pos, width=width, height=2.6)
+    card.show()
+    card.reveal(_tex(rf"s\,{s}\;\xrightarrow{{\;{a}\,\mid\,r\,{r}\;}}\;s'\,{ns}",
+                     size=23, color=C.STATE), wait=BEAT)
+    uv = step.get("updated_values") or {}
+    if uv:
+        key, val = next(iter(uv.items()))
+        card.reveal(_tex(rf"{C.tex_escape(str(key))}={C.fmt(val)}", size=21, color=C.VALUE),
+                    wait=HOLD)
+    return card
+
+
 # ============================================================ dispatch
 def play_step(scene, board, step, env, *, pos, width, first=False):
     fam = C.family(step)
@@ -289,6 +316,11 @@ def play_step(scene, board, step, env, *, pos, width, first=False):
             return _play_td(scene, board, step, env, pos=pos, width=width, first=first)
         if fam == "mc":
             return _play_mc(scene, board, step, env, pos=pos, width=width, first=first)
+        # No update family (greedy-evaluation replay): animate the agent through
+        # the trajectory on spatial boards instead of a dead static grid.
+        if getattr(board, "is_spatial", False):
+            return _play_transition_replay(scene, board, step, env,
+                                           pos=pos, width=width, first=first)
     except Exception:  # noqa: BLE001 — never let one bad step kill the render
         pass
     card = StepCard(scene, "Update", C.STATE, pos=pos, width=width, height=2.2)
