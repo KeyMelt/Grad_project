@@ -1,13 +1,23 @@
-"""Taxi-specific trace replay board helpers."""
+"""Taxi-specific trace replay board helpers.
+
+Renders the REAL Gymnasium Taxi sprites (cab / hotel / passenger) on a 5x5
+board, matching the asset mandate (STYLE_BIBLE §31) and the concept video's
+TaxiGrid. Colored-rectangle substitution is banned.
+"""
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from manim import (
     DOWN,
+    LEFT,
+    RIGHT,
+    UP,
     Dot,
     FadeIn,
     FadeOut,
+    ImageMobject,
     Line,
     ReplacementTransform,
     RoundedRectangle,
@@ -20,12 +30,44 @@ from backend.rl_engine.taxi import decode_taxi_state
 
 from . import trace_common as C
 
+# Letter-marker colors for the four pickup/dropoff locations (on dark cells).
 _LOCATION_COLORS = {
-    "R": "#7F1D1D",
-    "G": "#14532D",
-    "Y": "#713F12",
-    "B": "#1E3A5F",
+    "R": "#F87171",
+    "G": "#34D399",
+    "Y": "#FB923C",
+    "B": "#38BDF8",
 }
+
+# Gymnasium action index -> cab sprite direction (mirrors the concept video).
+_CAB_DIR = {0: "front", 1: "rear", 2: "right", 3: "left", 4: "front", 5: "front"}
+
+_TAXI_IMG_DIR: Path | None = None
+
+
+def _taxi_img_dir() -> Path:
+    """Locate the Gymnasium toy_text image dir (cab/hotel/passenger sprites)."""
+    global _TAXI_IMG_DIR
+    if _TAXI_IMG_DIR is None:
+        import gymnasium.envs.toy_text.taxi as _taxi
+        _TAXI_IMG_DIR = Path(_taxi.__file__).resolve().parent / "img"
+    return _TAXI_IMG_DIR
+
+
+def _sprite(name: str, height: float) -> ImageMobject | None:
+    """Load a real Gymnasium sprite, or None if the asset is missing."""
+    path = _taxi_img_dir() / name
+    if not path.exists():
+        return None
+    img = ImageMobject(str(path))
+    img.set_height(height)
+    return img
+
+
+def _as_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def classify_taxi_transition(step: dict[str, Any]) -> str:
@@ -65,6 +107,7 @@ class TaxiBoard:
         self.destination = None
         self.passenger = None
         self._onboard = False
+        self._dir = "front"
 
     def _build_grid(self, *, width: float, at: tuple[float, float]) -> VGroup:
         grid = VGroup()
@@ -76,7 +119,7 @@ class TaxiBoard:
                     width=self._cell_size,
                     height=self._cell_size,
                     corner_radius=0.06,
-                    fill_color=_LOCATION_COLORS.get(tile_type, C.PANEL_2),
+                    fill_color=C.PANEL_2,
                     fill_opacity=1.0,
                     stroke_color=C.STROKE,
                     stroke_width=1.4,
@@ -86,7 +129,11 @@ class TaxiBoard:
                 grid.add(cell)
                 label = self._cell_label(tile_type)
                 if label is not None:
-                    label.move_to(cell.get_center()).set_z_index(6)
+                    # Anchor the letter to the cell's bottom-left corner: clears
+                    # the cab (cell centre) and the hotel sprite (top-left).
+                    label.move_to(cell.get_corner(DOWN + LEFT)).shift(
+                        RIGHT * self._cell_size * 0.18 + UP * self._cell_size * 0.18
+                    ).set_z_index(6)
                     grid.add(label)
 
         for wall in self._gm.get("walls") or []:
@@ -94,7 +141,7 @@ class TaxiBoard:
             if line is not None:
                 grid.add(line)
 
-        title = Text("Taxi-v3", font_size=20, color=C.TEXT)
+        title = Text("Taxi-v4", font_size=20, color=C.TEXT)
         title.move_to([0.0, self._cell_size * 3.05, 0.0]).set_z_index(6)
         grid.add(title)
         grid.move_to([at[0], at[1], 0.0])
@@ -107,9 +154,9 @@ class TaxiBoard:
         return "F"
 
     def _cell_label(self, tile_type: str):
-        if tile_type == "F":
+        if tile_type not in _LOCATION_COLORS:
             return None
-        return Text(tile_type, font_size=20, color=C.TEXT, weight="BOLD")
+        return Text(tile_type, font_size=16, color=_LOCATION_COLORS[tile_type], weight="BOLD")
 
     def _wall_line(self, wall: dict[str, Any]) -> Line | None:
         start = wall.get("start") or {}
@@ -174,7 +221,8 @@ class TaxiBoard:
         self._ensure_destination(scene, gm)
         self._ensure_passenger(scene, gm)
         self._onboard = bool((gm.get("passenger") or {}).get("in_taxi"))
-        self.agent = self._make_agent(self._onboard).move_to(self.center(step.get("state")))
+        self._dir = _CAB_DIR.get(_as_int(step.get("action")), "front")
+        self.agent = self._make_agent(self._dir).move_to(self.center(step.get("state")))
         scene.play(FadeIn(self.agent, scale=0.7), run_time=run_time)
 
     def step(self, scene, step, *, run_time=0.45):
@@ -183,6 +231,14 @@ class TaxiBoard:
             self.place(scene, step, run_time=run_time * 0.7)
         self._ensure_destination(scene, gm)
         self._sync_passenger_marker(scene, gm)
+
+        # Swap the cab sprite to face its travel direction (real sprites).
+        new_dir = _CAB_DIR.get(_as_int(step.get("action")), self._dir)
+        if new_dir != self._dir and self.agent is not None:
+            swapped = self._make_agent(new_dir).move_to(self.agent.get_center())
+            scene.play(FadeOut(self.agent, run_time=run_time * 0.2),
+                       FadeIn(swapped, run_time=run_time * 0.2))
+            self.agent, self._dir = swapped, new_dir
 
         next_state = step.get("next_state")
         current_center = self.center(step.get("state"))
@@ -216,15 +272,21 @@ class TaxiBoard:
         cell = self._cells.get(state)
         if cell is None:
             return
-        badge = SurroundingRectangle(
-            cell,
-            color=C.REWARD,
-            buff=0.03,
-            stroke_width=3.0,
-        ).set_z_index(14)
-        icon = Text("D", font_size=16, color=C.REWARD, weight="BOLD")
-        icon.move_to(cell.get_center() + DOWN * (self._cell_size * 0.22)).set_z_index(15)
-        self.destination = VGroup(badge, icon)
+        hotel = _sprite("hotel.png", self._cell_size * 0.5)
+        if hotel is not None:
+            # Corner-anchor so the cab can occupy the cell centre at dropoff
+            # without fusing into the hotel (same fix as the concept video).
+            hotel.move_to(cell.get_corner(UP + LEFT)).shift(
+                RIGHT * self._cell_size * 0.30 + DOWN * self._cell_size * 0.30
+            ).set_z_index(14)
+            self.destination = hotel
+        else:
+            badge = SurroundingRectangle(
+                cell, color=C.REWARD, buff=0.03, stroke_width=3.0,
+            ).set_z_index(14)
+            icon = Text("D", font_size=16, color=C.REWARD, weight="BOLD")
+            icon.move_to(cell.get_center() + DOWN * (self._cell_size * 0.22)).set_z_index(15)
+            self.destination = VGroup(badge, icon)
         scene.add(self.destination)
 
     def _ensure_passenger(self, scene, gm: dict[str, Any]) -> None:
@@ -294,27 +356,22 @@ class TaxiBoard:
         scene.play(FadeOut(ring), run_time=run_time * 0.3)
 
     def _sync_onboard(self, scene, onboard: bool) -> None:
-        if self.agent is None or onboard == self._onboard:
-            self._onboard = onboard
-            return
-        replacement = self._make_agent(onboard).move_to(self.agent.get_center())
-        scene.play(ReplacementTransform(self.agent, replacement), run_time=0.2)
-        self.agent = replacement
+        # The passenger sprite's presence (in cell vs. removed) conveys onboard
+        # state; the cab sprite itself is unchanged, so just track the flag.
         self._onboard = onboard
 
-    def _make_agent(self, onboard: bool) -> VGroup:
+    def _make_agent(self, direction: str):
+        """Real Gymnasium cab sprite facing ``direction`` (falls back to a
+        rounded chip only if the asset is genuinely missing)."""
+        cab = _sprite(f"cab_{direction}.png", self._cell_size * 0.7)
+        if cab is not None:
+            return cab.set_z_index(25)
         body = RoundedRectangle(
-            width=self._cell_size * 0.52,
-            height=self._cell_size * 0.42,
-            corner_radius=0.08,
-            fill_color="#FBBF24" if not onboard else "#F59E0B",
-            fill_opacity=1.0,
-            stroke_color=C.TEXT,
-            stroke_width=1.4,
+            width=self._cell_size * 0.52, height=self._cell_size * 0.42,
+            corner_radius=0.08, fill_color="#FBBF24", fill_opacity=1.0,
+            stroke_color=C.TEXT, stroke_width=1.4,
         ).set_z_index(25)
-        label = Text("T*" if onboard else "T", font_size=18, color=C.PANEL, weight="BOLD")
-        label.move_to(body.get_center()).set_z_index(26)
-        return VGroup(body, label)
+        return body
 
     def _passenger_marker(self, payload: dict[str, Any]):
         row, column = payload.get("row"), payload.get("column")
@@ -324,12 +381,14 @@ class TaxiBoard:
         cell = self._cells.get(state)
         if cell is None:
             return None
-        marker = Dot(
+        pax = _sprite("passenger.png", self._cell_size * 0.5)
+        if pax is not None:
+            pax.move_to(cell.get_center() + DOWN * (self._cell_size * 0.16))
+            return pax.set_z_index(18)
+        return Dot(
             point=cell.get_center() + DOWN * (self._cell_size * 0.18),
-            radius=self._cell_size * 0.1,
-            color=C.POLICY,
+            radius=self._cell_size * 0.1, color=C.POLICY,
         ).set_z_index(18)
-        return marker
 
     def _display_state(self, value: Any) -> int:
         try:

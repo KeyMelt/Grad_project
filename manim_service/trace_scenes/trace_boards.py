@@ -426,13 +426,13 @@ class BlackjackBoard:
         scene.add(self.panel)
 
     def step(self, scene, step, *, run_time=0.4):
-        from manim import ReplacementTransform
+        # FadeOut/FadeIn (not ReplacementTransform): when consecutive steps share
+        # the same observation the two panels are identical, and a transform
+        # between identical mobjects renders ZERO frames — manim then lists a
+        # partial-movie file it never writes, which crashes combine_to_movie.
+        # A fade always produces real frames. (Same lesson as the TaxiGrid fix.)
         new = self._frame_panel(step).move_to(self.panel.get_center())
-        try:
-            scene.play(ReplacementTransform(self.panel, new), run_time=run_time)
-        except Exception:
-            scene.remove(self.panel)
-            scene.add(new)
+        scene.play(FadeOut(self.panel), FadeIn(new), run_time=run_time)
         self.panel = new
 
 

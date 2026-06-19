@@ -560,7 +560,7 @@ _CORE_LESSONS: list[dict[str, Any]] = [
         "concept_video": {
             "stream_path": "/media/concept-videos/td_q_learning_concept.mp4",
             "caption_path": "/media/concept-videos/td_q_learning_captions.vtt",
-            "duration_label": "03:25",
+            "duration_label": "03:46",
             "summary": "An off-policy Taxi update showing how Q-learning bootstraps from the greedy next-state action value to compose sub-goals.",
             "highlights": [
                 "How Q-learning uses a max over next-state action values.",

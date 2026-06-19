@@ -27,8 +27,11 @@ class BackendConnectionManager extends ChangeNotifier {
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     final savedUrl = prefs.getString(AppConstants.backendUrlPreferenceKey);
-    if (savedUrl != null && savedUrl.isNotEmpty) {
-      _baseUrl = _normalizeBackendUrl(savedUrl);
+    if (shouldUseSavedBackendUrl(
+      configuredBaseUrl: _configuredBackendBaseUrl,
+      savedUrl: savedUrl,
+    )) {
+      _baseUrl = _normalizeBackendUrl(savedUrl!);
     }
     notifyListeners();
     unawaited(checkHealth());
@@ -36,7 +39,12 @@ class BackendConnectionManager extends ChangeNotifier {
       AppConstants.backendHealthInterval,
       (_) => checkHealth(),
     );
-    if (_shouldAutoDiscoverBackend(savedUrl: savedUrl)) {
+    if (shouldAutoDiscoverBackend(
+      savedUrl: savedUrl,
+      configuredBaseUrl: _configuredBackendBaseUrl,
+      isWeb: kIsWeb,
+      nativePlatform: defaultTargetPlatform,
+    )) {
       unawaited(_autoDiscover());
     }
   }
@@ -79,6 +87,14 @@ class BackendConnectionManager extends ChangeNotifier {
   }
 
   Future<void> checkHealth() async {
+    if (_baseUrl.isEmpty) {
+      _status = WorkspaceConnectionStatus.failed;
+      _lastError =
+          'BACKEND_BASE_URL is required for iOS installs. Rebuild with the VPS URL.';
+      notifyListeners();
+      return;
+    }
+
     try {
       final response = await http.get(Uri.parse('$_baseUrl/')).timeout(
             AppConstants.backendHealthTimeout,
@@ -113,6 +129,7 @@ String get defaultBackendBaseUrl => resolveBackendBaseUrl(
       isWeb: kIsWeb,
       isReleaseMode: kReleaseMode,
       currentUri: kIsWeb ? Uri.base : null,
+      nativePlatform: defaultTargetPlatform,
     );
 
 @visibleForTesting
@@ -121,6 +138,7 @@ String resolveBackendBaseUrl({
   required bool isWeb,
   required bool isReleaseMode,
   Uri? currentUri,
+  TargetPlatform? nativePlatform,
 }) {
   final configured = configuredBaseUrl.trim();
   if (configured.isNotEmpty) {
@@ -128,6 +146,9 @@ String resolveBackendBaseUrl({
   }
 
   if (!isWeb) {
+    if ((nativePlatform ?? defaultTargetPlatform) == TargetPlatform.iOS) {
+      return '';
+    }
     return AppConstants.defaultBackendLocalUrl;
   }
 
@@ -144,16 +165,35 @@ String resolveBackendBaseUrl({
   return _originWithoutTrailingSlash(runtimeUri);
 }
 
-bool _shouldAutoDiscoverBackend({required String? savedUrl}) {
+@visibleForTesting
+bool shouldUseSavedBackendUrl({
+  required String configuredBaseUrl,
+  required String? savedUrl,
+}) {
+  if (configuredBaseUrl.trim().isNotEmpty) {
+    return false;
+  }
+
+  return savedUrl != null && savedUrl.trim().isNotEmpty;
+}
+
+@visibleForTesting
+bool shouldAutoDiscoverBackend({
+  required String? savedUrl,
+  required String configuredBaseUrl,
+  required bool isWeb,
+  required TargetPlatform nativePlatform,
+}) {
   if (savedUrl != null && savedUrl.trim().isNotEmpty) {
     return false;
   }
-  if (_configuredBackendBaseUrl.trim().isNotEmpty) {
+  if (configuredBaseUrl.trim().isNotEmpty) {
     return false;
   }
-  if (!kIsWeb) {
-    return true;
+  if (!isWeb) {
+    return nativePlatform == TargetPlatform.macOS;
   }
+
   return _isLocalDevelopmentHost(Uri.base.host.toLowerCase());
 }
 

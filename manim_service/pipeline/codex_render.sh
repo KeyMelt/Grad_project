@@ -21,6 +21,14 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 
 PROJECT_ROOT="/Users/ultramarine/Desktop/grad_project"
+RENDER_ENV_HELPER="/Users/ultramarine/Desktop/grad_support_files/grad_project/render-env.sh"
+
+if [[ -f "${RENDER_ENV_HELPER}" ]]; then
+  # Keep local generated renders out of the repo worktree by default.
+  # shellcheck disable=SC1090
+  source "${RENDER_ENV_HELPER}"
+fi
+
 # Prefer the Homebrew CLI; fall back to the app-bundle binary.
 if [[ -z "${CODEX_BIN:-}" ]]; then
   if [[ -x "/opt/homebrew/bin/codex" ]]; then

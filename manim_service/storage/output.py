@@ -21,20 +21,32 @@ CONCEPT_VIDEOS_SUBDIR = "concept_videos"
 TRACES_SUBDIR = "traces"
 
 
+def _concept_video_media_dir() -> Path:
+    if settings.CONCEPT_VIDEO_MEDIA_DIR_CONFIGURED:
+        return settings.CONCEPT_VIDEO_MEDIA_DIR
+    return settings.SHARED_MEDIA_DIR / CONCEPT_VIDEOS_SUBDIR
+
+
+def _trace_media_dir() -> Path:
+    if settings.TRACE_MEDIA_DIR_CONFIGURED:
+        return settings.TRACE_MEDIA_DIR
+    return settings.SHARED_MEDIA_DIR / TRACES_SUBDIR
+
+
 def ensure_subdirs() -> None:
     """Make sure both output subdirectories exist."""
-    (settings.SHARED_MEDIA_DIR / CONCEPT_VIDEOS_SUBDIR).mkdir(parents=True, exist_ok=True)
-    (settings.SHARED_MEDIA_DIR / TRACES_SUBDIR).mkdir(parents=True, exist_ok=True)
+    _concept_video_media_dir().mkdir(parents=True, exist_ok=True)
+    _trace_media_dir().mkdir(parents=True, exist_ok=True)
 
 
 def concept_video_path(lesson_id: str) -> Path:
     """Canonical output path for a concept video."""
-    return settings.SHARED_MEDIA_DIR / CONCEPT_VIDEOS_SUBDIR / f"{lesson_id}_concept.mp4"
+    return _concept_video_media_dir() / f"{lesson_id}_concept.mp4"
 
 
 def trace_video_path(job_id: str) -> Path:
     """Canonical output path for a trace video."""
-    return settings.SHARED_MEDIA_DIR / TRACES_SUBDIR / f"{job_id}.mp4"
+    return _trace_media_dir() / f"{job_id}.mp4"
 
 
 def store_rendered_video(src: Path, dest: Path) -> Path:
@@ -49,7 +61,18 @@ def store_rendered_video(src: Path, dest: Path) -> Path:
 
 def media_object_key(path: Path) -> str:
     """Return the Spaces object key for a file inside SHARED_MEDIA_DIR."""
-    return path.resolve().relative_to(settings.SHARED_MEDIA_DIR.resolve()).as_posix()
+    resolved = path.resolve()
+    try:
+        relative = resolved.relative_to(_concept_video_media_dir().resolve()).as_posix()
+        return f"{CONCEPT_VIDEOS_SUBDIR}/{relative}"
+    except ValueError:
+        pass
+    try:
+        relative = resolved.relative_to(_trace_media_dir().resolve()).as_posix()
+        return f"{TRACES_SUBDIR}/{relative}"
+    except ValueError:
+        pass
+    return resolved.relative_to(settings.SHARED_MEDIA_DIR.resolve()).as_posix()
 
 
 def publish_media_file(path: Path) -> str | None:
@@ -74,14 +97,16 @@ def resolve_safe_video_path(filename: str) -> Path | None:
     safe_name = Path(filename).name  # strip any directory components
     if not safe_name or safe_name != filename:
         return None
-    media_root = settings.SHARED_MEDIA_DIR.resolve()
-    for subdir in (CONCEPT_VIDEOS_SUBDIR, TRACES_SUBDIR):
-        candidate = (media_root / subdir / safe_name).resolve()
+    search_roots = (
+        _concept_video_media_dir().resolve(),
+        _trace_media_dir().resolve(),
+    )
+    for root in search_roots:
+        candidate = (root / safe_name).resolve()
         try:
-            candidate.relative_to(media_root)
+            candidate.relative_to(root)
         except ValueError:
             continue
         if candidate.is_file():
             return candidate
     return None
-

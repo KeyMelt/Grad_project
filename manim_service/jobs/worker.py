@@ -146,9 +146,7 @@ def _maybe_mux_narration(*, lesson_id: str, silent_mp4: Path) -> Path | None:
     if not phase_sidecar.exists():
         # Fall back to the location next to the original render
         rendered_dir = (
-            ROOT
-            / "manim_service"
-            / "_manim_media"
+            settings.MANIM_MEDIA_DIR
             / "videos"
             / silent_mp4.stem.replace(f"_concept", "_concept")  # no-op, future-proofs naming
         )
@@ -196,7 +194,7 @@ def _invoke_manim(scene_file: Path, scene_class: str) -> Path:
             f"expected one of {sorted(QUALITY_TO_DIR)}"
         )
 
-    media_dir = ROOT / "manim_service" / "_manim_media"
+    media_dir = settings.MANIM_MEDIA_DIR
     media_dir.mkdir(parents=True, exist_ok=True)
 
     cmd = [

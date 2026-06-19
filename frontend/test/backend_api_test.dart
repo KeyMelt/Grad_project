@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rl_ide/core/backend_api.dart';
 
@@ -52,9 +53,65 @@ void main() {
         configuredBaseUrl: '',
         isWeb: false,
         isReleaseMode: false,
+        nativePlatform: TargetPlatform.macOS,
       );
 
       expect(resolved, 'http://127.0.0.1:8000');
+    });
+
+    test('requires explicit backend config for iOS installs', () {
+      final resolved = resolveBackendBaseUrl(
+        configuredBaseUrl: '',
+        isWeb: false,
+        isReleaseMode: true,
+        nativePlatform: TargetPlatform.iOS,
+      );
+
+      expect(resolved, '');
+    });
+  });
+
+  group('shouldUseSavedBackendUrl', () {
+    test('ignores saved backend url when build-time config is provided', () {
+      final shouldUseSaved = shouldUseSavedBackendUrl(
+        configuredBaseUrl: 'https://reinfource.app',
+        savedUrl: 'http://192.168.1.25:8000',
+      );
+
+      expect(shouldUseSaved, isFalse);
+    });
+
+    test('uses saved backend url when build-time config is absent', () {
+      final shouldUseSaved = shouldUseSavedBackendUrl(
+        configuredBaseUrl: '',
+        savedUrl: 'http://192.168.1.25:8000',
+      );
+
+      expect(shouldUseSaved, isTrue);
+    });
+  });
+
+  group('shouldAutoDiscoverBackend', () {
+    test('does not auto-discover on iOS without explicit config', () {
+      final shouldAutoDiscover = shouldAutoDiscoverBackend(
+        savedUrl: null,
+        configuredBaseUrl: '',
+        isWeb: false,
+        nativePlatform: TargetPlatform.iOS,
+      );
+
+      expect(shouldAutoDiscover, isFalse);
+    });
+
+    test('auto-discovers on macOS without saved or configured url', () {
+      final shouldAutoDiscover = shouldAutoDiscoverBackend(
+        savedUrl: null,
+        configuredBaseUrl: '',
+        isWeb: false,
+        nativePlatform: TargetPlatform.macOS,
+      );
+
+      expect(shouldAutoDiscover, isTrue);
     });
   });
 }

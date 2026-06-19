@@ -145,6 +145,54 @@ class _FakeTdEvaluationEngine:
 
     def run_episodes(self, lesson_id, code_module_str, num_episodes, hyperparameters):
         del lesson_id, code_module_str, num_episodes, hyperparameters
+        staged_trace_episodes = [
+            {
+                "stage": "untrained",
+                "stage_label": "① Untrained · episode 1",
+                "episode_index": 0,
+                "total_reward": -2.0,
+                "terminated": False,
+                "steps": [
+                    {
+                        "state": 7,
+                        "action": 0,
+                        "next_state": 8,
+                        "reward": -1.0,
+                        "grid_metadata": {"terminated": False, "truncated": False},
+                    },
+                    {
+                        "state": 8,
+                        "action": 3,
+                        "next_state": 7,
+                        "reward": -1.0,
+                        "grid_metadata": {"terminated": False, "truncated": True},
+                    },
+                ],
+            },
+            {
+                "stage": "improving",
+                "stage_label": "② Improving · episode 250",
+                "episode_index": 249,
+                "total_reward": -1.0,
+                "terminated": False,
+                "steps": [
+                    {
+                        "state": 11,
+                        "action": 2,
+                        "next_state": 12,
+                        "reward": -1.0,
+                        "grid_metadata": {"terminated": False, "truncated": False},
+                    },
+                    {
+                        "state": 12,
+                        "action": 2,
+                        "next_state": 13,
+                        "reward": 0.0,
+                        "grid_metadata": {"terminated": False, "truncated": True},
+                    },
+                ],
+            },
+        ]
         self.logger.log_step(
             {
                 "state": 12,
@@ -187,7 +235,47 @@ class _FakeTdEvaluationEngine:
                 "selected_step_count": 2,
                 "selected_total_reward": 19.0,
                 "selected_terminated": True,
-            }
+            },
+            "staged_trace_episodes": [
+                *staged_trace_episodes,
+                {
+                    "stage": "converged",
+                    "stage_label": "③ Converged · solved in 2 steps",
+                    "episode_index": 500,
+                    "total_reward": 19.0,
+                    "terminated": True,
+                    "steps": [
+                        {
+                            "state": 12,
+                            "action": 2,
+                            "next_state": 13,
+                            "reward": -1.0,
+                            "updated_values": {"Q(12, 2)": 0.5},
+                            "grid_metadata": {"terminated": False, "truncated": False},
+                            "equation_update": {
+                                "kind": "q_learning",
+                                "lhs": "Q(12,2)",
+                                "td_target": 0.5,
+                                "new_value": 0.5,
+                            },
+                        },
+                        {
+                            "state": 13,
+                            "action": 4,
+                            "next_state": 14,
+                            "reward": 20.0,
+                            "updated_values": {"Q(13, 4)": 1.0},
+                            "grid_metadata": {"terminated": True, "truncated": False},
+                            "equation_update": {
+                                "kind": "q_learning",
+                                "lhs": "Q(13,4)",
+                                "td_target": 1.0,
+                                "new_value": 1.0,
+                            },
+                        },
+                    ],
+                },
+            ],
         }
 
 
@@ -913,10 +1001,17 @@ def test_td_execution_response_exposes_evaluation_summary(monkeypatch, tmp_path)
     assert result["trace_mode"] == "greedy evaluation replay from the policy learned by your code"
     assert result["trace_summary"] == {
         "selection_strategy": "td_greedy_evaluation_trace",
-        "visible_step_count": 2,
-        "source_episode_indices": [0],
+        "visible_step_count": 6,
+        "source_episode_indices": [0, 249, 500],
         "contains_terminal_goal": True,
     }
+    assert result["step_trace"] == result["trace_episodes"][-1]["steps"]
+    assert [episode["stage"] for episode in result["trace_episodes"]] == [
+        "untrained",
+        "improving",
+        "converged",
+    ]
+    assert result["trace_episodes"][-1]["stage_label"] == "③ Converged · solved in 2 steps"
     assert result["evaluation_summary"] == {
         "mode": "greedy_evaluation",
         "training_episodes_run": 500,
@@ -926,6 +1021,7 @@ def test_td_execution_response_exposes_evaluation_summary(monkeypatch, tmp_path)
         "selected_total_reward": 19.0,
         "selected_terminated": True,
     }
+    assert result["episode_summaries"][-1]["terminated"] is True
 
 
 def test_td_evaluation_falls_back_to_best_non_terminal_trace():

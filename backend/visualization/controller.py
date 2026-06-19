@@ -94,6 +94,41 @@ class VisualizationController:
                 "replay_episode_indices": [],
             }
 
+        if self._is_staged_trace_payload(log_data):
+            stages = self._normalize_staged_trace(log_data)
+            if not stages:
+                return {
+                    "replay_render_job_id": "",
+                    "replay_render_status": "unavailable",
+                    "replay_episode_indices": [],
+                }
+
+            payload = {
+                "lesson_id": lesson_id,
+                "episode_trace": {"steps": stages},
+            }
+            replay_episode_indices = [
+                int(stage["episode_index"])
+                for stage in stages
+                if isinstance(stage.get("episode_index"), int)
+            ]
+            try:
+                job = self._post_json(f"{self.base_url}/render/trace", payload)
+            except requests.RequestException as error:
+                logger.error("manim_service trace enqueue failed: %s", error)
+                return {
+                    "replay_render_job_id": "",
+                    "replay_render_status": "unavailable",
+                    "replay_episode_indices": replay_episode_indices,
+                }
+
+            job_id = str(job.get("job_id") or "")
+            return {
+                "replay_render_job_id": job_id,
+                "replay_render_status": str(job.get("status") or ("queued" if job_id else "unavailable")),
+                "replay_episode_indices": replay_episode_indices,
+            }
+
         selected = self._selected_episode_indices(log_data)
         episodes = []
         for role, episode_index in self._episode_roles(selected).items():
@@ -142,6 +177,42 @@ class VisualizationController:
         response = self._http.post(url, json=payload, timeout=self.manim_timeout_seconds)
         response.raise_for_status()
         return response.json()
+
+    @staticmethod
+    def _is_staged_trace_payload(log_data: list) -> bool:
+        return bool(
+            log_data
+            and isinstance(log_data[0], dict)
+            and "stage" in log_data[0]
+            and isinstance(log_data[0].get("steps"), list)
+        )
+
+    def _normalize_staged_trace(self, trace_episodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        normalized_stages: list[dict[str, Any]] = []
+        for episode in trace_episodes:
+            if not isinstance(episode, dict):
+                continue
+            normalized_steps = [
+                self._normalize_step(step)
+                for step in (episode.get("steps") or [])
+                if isinstance(step, dict)
+            ]
+            if not normalized_steps:
+                continue
+            first_step = normalized_steps[0]
+            stage_payload = {
+                "state": first_step.get("state", 0),
+                "action": first_step.get("action", 0),
+                "reward": first_step.get("reward", 0.0),
+                "next_state": first_step.get("next_state", first_step.get("state", 0)),
+                "done": bool(first_step.get("done", False)),
+                "episode_index": episode.get("episode_index"),
+                "stage": episode.get("stage"),
+                "stage_label": episode.get("stage_label"),
+                "steps": normalized_steps,
+            }
+            normalized_stages.append(self._to_json_safe(stage_payload))
+        return normalized_stages
 
     def _poll_until_complete(self, job_id: str) -> str:
         deadline = time.monotonic() + self.manim_timeout_seconds

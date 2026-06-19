@@ -411,26 +411,31 @@ class RLEngine:
 
     def _td_control_config(self, lesson_id: str) -> dict[str, int | float | bool]:
         if lesson_id == "td_sarsa":
+            # Budgets raised to actually CONVERGE (CliffWalking SARSA solves in
+            # ~200 episodes, ~0.1s) so the greedy episode reaches the goal.
             return {
-                "base_training_episodes": 120,
-                "adaptive_extension": 40,
-                "max_training_episodes": 200,
-                "evaluation_attempts": 5,
-                "training_max_steps": 60,
-                "visible_step_cap": 25,
-                "epsilon_start": 0.20,
+                "base_training_episodes": 400,
+                "adaptive_extension": 100,
+                "max_training_episodes": 800,
+                "evaluation_attempts": 8,
+                "training_max_steps": 100,
+                "visible_step_cap": 40,
+                "epsilon_start": 0.30,
                 "epsilon_end": 0.02,
                 "use_action_mask": False,
             }
         if lesson_id == "td_q_learning":
+            # Taxi Q-learning needs ~2000+ episodes to converge (measured ~2.3s);
+            # the previous default of 500 did NOT solve the task, so the greedy
+            # episode truncated and the replay looked weak.
             return {
-                "base_training_episodes": 500,
-                "adaptive_extension": 250,
-                "max_training_episodes": 1500,
+                "base_training_episodes": 2000,
+                "adaptive_extension": 500,
+                "max_training_episodes": 4000,
                 "evaluation_attempts": 20,
                 "training_max_steps": 200,
-                "visible_step_cap": 30,
-                "epsilon_start": 0.20,
+                "visible_step_cap": 50,
+                "epsilon_start": 0.30,
                 "epsilon_end": 0.02,
                 "use_action_mask": True,
             }
@@ -1141,6 +1146,8 @@ class RLEngine:
         selected_trace = None
         selected_seed = None
         target_training_episodes = int(config["base_training_episodes"])
+        capture_targets = self._td_stage_capture_targets(int(config["base_training_episodes"]))
+        captured_training_traces: dict[str, dict[str, Any]] = {}
 
         while True:
             while training_episodes_run < target_training_episodes:
@@ -1150,8 +1157,10 @@ class RLEngine:
                     float(config["epsilon_start"]),
                     float(config["epsilon_end"]),
                 )
+                capture_stage = capture_targets.get(training_episodes_run)
+                record_trace = capture_stage is not None and capture_stage not in captured_training_traces
                 if lesson_id == "td_q_learning":
-                    self._run_q_learning_td_episode(
+                    trace = self._run_q_learning_td_episode(
                         lesson_function,
                         q_table,
                         alpha=float(hyperparameters["alpha"]),
@@ -1161,10 +1170,10 @@ class RLEngine:
                         seed=training_episodes_run,
                         use_action_mask=bool(config["use_action_mask"]),
                         apply_updates=True,
-                        record_trace=False,
+                        record_trace=record_trace,
                     )
                 else:
-                    self._run_sarsa_td_episode(
+                    trace = self._run_sarsa_td_episode(
                         lesson_function,
                         q_table,
                         alpha=float(hyperparameters["alpha"]),
@@ -1173,7 +1182,13 @@ class RLEngine:
                         max_steps=int(config["training_max_steps"]),
                         seed=training_episodes_run,
                         apply_updates=True,
-                        record_trace=False,
+                        record_trace=record_trace,
+                    )
+                if record_trace and trace["steps"]:
+                    captured_training_traces[capture_stage] = self._build_td_stage_trace(
+                        stage=capture_stage,
+                        episode_index=training_episodes_run,
+                        trace=trace,
                     )
                 training_episodes_run += 1
 
@@ -1212,6 +1227,19 @@ class RLEngine:
         selected_steps = [] if selected_trace is None else selected_trace["steps"]
         selected_total_reward = 0.0 if selected_trace is None else float(selected_trace["total_reward"])
         selected_terminated = bool(selected_trace and selected_trace["terminated"])
+        staged_trace_episodes = [
+            captured_training_traces[stage]
+            for stage in ("untrained", "improving")
+            if stage in captured_training_traces
+        ]
+        if selected_trace is not None:
+            staged_trace_episodes.append(
+                self._build_td_stage_trace(
+                    stage="converged",
+                    episode_index=training_episodes_run,
+                    trace=selected_trace,
+                )
+            )
         return {
             "evaluation_summary": {
                 "mode": "greedy_evaluation",
@@ -1221,8 +1249,62 @@ class RLEngine:
                 "selected_step_count": len(selected_steps),
                 "selected_total_reward": round(selected_total_reward, 4),
                 "selected_terminated": selected_terminated,
-            }
+            },
+            "staged_trace_episodes": staged_trace_episodes,
         }
+
+    def _td_stage_capture_targets(self, base_training_episodes: int) -> dict[int, str]:
+        if base_training_episodes <= 1:
+            return {0: "untrained"}
+
+        improving_index = max(1, (base_training_episodes // 2) - 1)
+        return {
+            0: "untrained",
+            improving_index: "improving",
+        }
+
+    def _build_td_stage_trace(
+        self,
+        *,
+        stage: str,
+        episode_index: int,
+        trace: dict[str, Any],
+    ) -> dict[str, Any]:
+        step_count = int(trace.get("step_count") or len(trace.get("steps") or []))
+        terminated = bool(trace.get("terminated"))
+        total_reward = round(float(trace.get("total_reward") or 0.0), 4)
+        stage_label = self._td_stage_label(
+            stage=stage,
+            episode_index=episode_index,
+            step_count=step_count,
+            terminated=terminated,
+        )
+        return {
+            "stage": stage,
+            "stage_label": stage_label,
+            "episode_index": episode_index,
+            "step_count": step_count,
+            "total_reward": total_reward,
+            "terminated": terminated,
+            "steps": trace.get("steps") or [],
+        }
+
+    def _td_stage_label(
+        self,
+        *,
+        stage: str,
+        episode_index: int,
+        step_count: int,
+        terminated: bool,
+    ) -> str:
+        if stage == "untrained":
+            return f"① Untrained · episode {episode_index + 1}"
+        if stage == "improving":
+            return f"② Improving · episode {episode_index + 1}"
+        if terminated:
+            step_label = "step" if step_count == 1 else "steps"
+            return f"③ Converged · solved in {step_count} {step_label}"
+        return f"③ Converged · best evaluation after {episode_index} training episodes"
 
     def _evaluate_td_policy(
         self,

@@ -23,7 +23,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from manim import (  # noqa: E402
-    DOWN, FadeIn, Scene, Text, Transform, UP,
+    DOWN, FadeIn, FadeOut, Scene, Text, Transform, UP,
 )
 
 from manim_service.trace_scenes import trace_common as C  # noqa: E402
@@ -66,22 +66,47 @@ class TraceReplayScene(Scene):
         if not DATA_PATH:
             return self._error("TRACE_DATA_PATH is not set.")
         try:
-            steps = json.loads(Path(DATA_PATH).read_text(encoding="utf-8"))
+            data = json.loads(Path(DATA_PATH).read_text(encoding="utf-8"))
         except Exception as exc:  # noqa: BLE001
             return self._error(f"Could not load trace data: {exc}")
-        if not isinstance(steps, list) or not steps:
+        if not isinstance(data, list) or not data:
             return self._error("No replay trace available.")
 
+        # Staged learning-progression: a list of {stage, stage_label, steps:[...]}
+        # episodes sampled across training (untrained -> improving -> converged).
+        # Legacy: a flat list of step dicts (a single episode).
+        if isinstance(data[0], dict) and "steps" in data[0] and "stage" in data[0]:
+            stages = [s for s in data if s.get("steps")]
+        else:
+            stages = [{"stage": "converged", "stage_label": EPISODE_LABEL, "steps": data}]
+
+        for si, ep in enumerate(stages):
+            lite = ep.get("stage") not in (None, "converged")
+            self._render_episode(
+                ep["steps"], ep.get("stage_label") or "",
+                lite=lite, last=(si == len(stages) - 1),
+            )
+
+        self.wait(1.0)
+
+    def _render_episode(self, steps, stage_label, *, lite, last) -> None:
         env = C.detect_env(steps)
         kind = (steps[0].get("equation_update") or {}).get("kind", "")
         algo = _KIND_NAME.get(kind, "Trace replay")
+        title = stage_label or EPISODE_LABEL or f"{algo}  ·  {env}"
 
-        # ---- header -------------------------------------------------------
-        header_txt = EPISODE_LABEL or f"{algo}  ·  {env}"
-        header = Text(header_txt, font_size=26, color=C.TEXT).to_edge(UP, buff=0.3)
-        counter = self._counter(1, len(steps)).next_to(header, DOWN, buff=0.12)
+        # Bound rendered steps so neither flailing nor a long solve blows up the
+        # render time / video length. Lite stages get a tiny window; the rich
+        # converged stage keeps the opening and the decisive ending (the goal).
+        if lite and len(steps) > 8:
+            steps = steps[:6] + steps[-2:]
+        elif not lite and len(steps) > 16:
+            steps = steps[:10] + steps[-6:]
 
-        # ---- board --------------------------------------------------------
+        header = Text(title, font_size=24, color=C.TEXT).to_edge(UP, buff=0.3)
+        n = len(steps)
+        counter = self._counter(1, n).next_to(header, DOWN, buff=0.12)
+
         board = make_board(env, steps[0])
         # CliffWalking is a wide 4x12 grid -> a wide card sits below it; Taxi,
         # FrozenLake, and Blackjack leave room for a tall card on the right.
@@ -90,20 +115,22 @@ class TraceReplayScene(Scene):
         else:
             card_pos, card_w = [3.4, 0.1, 0.0], 5.7
 
-        self.play(FadeIn(header), FadeIn(counter), FadeIn(board.mob), run_time=0.6)
-        self.wait(0.2)
+        self.play(FadeIn(header), FadeIn(counter), FadeIn(board.mob), run_time=0.5)
+        self.wait(0.15)
 
-        # ---- step loop: each step is a deliberately paced beat sequence ----
-        n = len(steps)
         for idx, step in enumerate(steps, start=1):
             new_counter = self._counter(idx, n).next_to(header, DOWN, buff=0.12)
-            self.play(Transform(counter, new_counter), run_time=0.25)
-            card = play_step(self, board, step, env,
-                             pos=card_pos, width=card_w, first=(idx == 1))
+            self.play(Transform(counter, new_counter), run_time=0.2)
+            card = play_step(self, board, step, env, pos=card_pos, width=card_w,
+                             first=(idx == 1), lite=lite)
             if idx < n:
                 card.fade()
 
-        self.wait(1.2)
+        self.wait(0.5 if lite else 1.2)
+        # Clean slate between staged episodes (fade everything, then clear).
+        if not last and self.mobjects:
+            self.play(*[FadeOut(m) for m in self.mobjects], run_time=0.4)
+            self.clear()
 
     def _counter(self, i: int, n: int) -> Text:
         return Text(f"step {i} / {n}", font_size=18, color=C.MUTED)

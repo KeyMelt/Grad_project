@@ -54,8 +54,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+from manim_service import settings
+
 REPO = Path(__file__).resolve().parents[2]
-WORKSPACES = REPO / "manim_service" / "workspaces"
+WORKSPACES = settings.MANIM_WORKSPACES_DIR
 SHARED_GLOB = REPO / "manim_service" / "scenes"
 PYBIN = sys.executable
 
@@ -78,12 +80,25 @@ def _segment_hash(seg_file: Path, shared: str, quality: str) -> str:
 def _render_segment(seg_file: Path, scene: str, quality: str) -> Path:
     """Render one segment with manim; return the path to the produced MP4."""
     subprocess.run(
-        [PYBIN, "-m", "manim", quality, "--disable_caching", str(seg_file), scene],
+        [
+            PYBIN,
+            "-m",
+            "manim",
+            quality,
+            "--disable_caching",
+            "--media_dir",
+            str(settings.MANIM_MEDIA_DIR),
+            str(seg_file),
+            scene,
+        ],
         cwd=str(REPO), check=True, capture_output=True, text=True,
     )
     stem = seg_file.stem
-    candidates = sorted((REPO / "media" / "videos" / stem).rglob(f"{scene}.mp4"),
-                        key=lambda p: p.stat().st_mtime, reverse=True)
+    candidates = sorted(
+        (settings.MANIM_MEDIA_DIR / "videos" / stem).rglob(f"{scene}.mp4"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
     if not candidates:
         raise RuntimeError(f"render produced no MP4 for {scene} in {seg_file}")
     return candidates[0]

@@ -295,11 +295,7 @@ def _package_results(
     )
     replay_render = _enqueue_replay_render(
         visualizer,
-        [
-            episode.get("steps", [])
-            for episode in trace_payload.get("trace_episodes", [])
-            if isinstance(episode, dict)
-        ],
+        trace_payload.get("trace_episodes", []),
         submission_payload["lesson_id"],
     )
     return _build_success_response(
@@ -313,14 +309,21 @@ def _package_results(
 
 def _enqueue_replay_render(
     visualizer: VisualizationService,
-    log_data: list[list[dict[str, Any]]],
+    trace_episodes: list[Any],
     lesson_id: str,
 ) -> dict[str, Any]:
     enqueue = getattr(visualizer, "enqueue_replay_render", None)
     if callable(enqueue):
-        return enqueue(log_data, lesson_id)
+        return enqueue(trace_episodes, lesson_id)
 
-    video_path = visualizer.generate_animation(log_data, lesson_id)
+    video_path = visualizer.generate_animation(
+        [
+            episode.get("steps", [])
+            for episode in trace_episodes
+            if isinstance(episode, dict) and isinstance(episode.get("steps"), list)
+        ],
+        lesson_id,
+    )
     return {
         "video_path": video_path,
         "replay_render_job_id": "",
@@ -456,9 +459,56 @@ def _build_trace_payload(
         )
 
     if trace_family == "TemporalDifferenceControl":
+        evaluation_summary = execution_metadata.get("evaluation_summary")
+        staged_trace_episodes = execution_metadata.get("staged_trace_episodes") or []
+        if staged_trace_episodes:
+            safe_trace_episodes = json.loads(json.dumps(staged_trace_episodes, cls=NpEncoder))
+            converged_steps = list((safe_trace_episodes[-1] or {}).get("steps") or [])
+            source_episode_indices = [
+                int(episode["episode_index"])
+                for episode in safe_trace_episodes
+                if isinstance(episode, dict) and isinstance(episode.get("episode_index"), (int, float))
+            ]
+            visible_step_count = sum(
+                len(episode.get("steps") or [])
+                for episode in safe_trace_episodes
+                if isinstance(episode, dict)
+            )
+            return {
+                "trace_family": trace_family,
+                "trace_mode": (
+                    "greedy evaluation replay from the policy learned by your code"
+                    if evaluation_summary
+                    else "latest episode trace"
+                ),
+                "trace_summary": {
+                    "selection_strategy": (
+                        "td_greedy_evaluation_trace"
+                        if bool((evaluation_summary or {}).get("selected_terminated"))
+                        else "td_greedy_evaluation_fallback_trace"
+                        if evaluation_summary
+                        else "latest_episode"
+                    ),
+                    "visible_step_count": visible_step_count,
+                    "source_episode_indices": source_episode_indices,
+                    "contains_terminal_goal": any(
+                        _episode_contains_terminal_goal(episode.get("steps") or [])
+                        for episode in safe_trace_episodes
+                        if isinstance(episode, dict)
+                    ),
+                },
+                "step_trace": converged_steps,
+                "trace_episodes": safe_trace_episodes,
+                "episode_summaries": [
+                    _trace_episode_summary(episode)
+                    for episode in safe_trace_episodes
+                    if isinstance(episode, dict)
+                ],
+                "evaluation_summary": evaluation_summary,
+            }
+
         curated_steps = _curate_td_control_episode(featured_episode)
         step_trace = json.loads(json.dumps(curated_steps, cls=NpEncoder))
-        evaluation_summary = execution_metadata.get("evaluation_summary")
         selected_terminated = bool((evaluation_summary or {}).get("selected_terminated"))
         episode_summaries = []
         if featured_episode_index >= 0:
@@ -754,6 +804,20 @@ def _episode_summary(
         "terminated": terminated,
         "truncated": truncated,
     }
+
+
+def _trace_episode_summary(trace_episode: dict[str, Any]) -> dict[str, Any]:
+    steps = list(trace_episode.get("steps") or [])
+    summary = _episode_summary(
+        int(trace_episode.get("episode_index", 0)),
+        steps,
+        float(trace_episode.get("total_reward") or sum(step.get("reward", 0) for step in steps)),
+    )
+    if "stage" in trace_episode:
+        summary["stage"] = trace_episode["stage"]
+    if "stage_label" in trace_episode:
+        summary["stage_label"] = trace_episode["stage_label"]
+    return summary
 
 
 def _failure_detail(
