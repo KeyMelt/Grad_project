@@ -258,9 +258,10 @@ def _play_mc(scene, board, step, env, *, pos, width, first):
     card = StepCard(scene, title, C.REWARD, pos=pos, width=width, height=4.7)
     card.show()
     card.reveal(_tex(rf"S=\text{{{C.tex_escape(obs)}}}", size=23, color=C.STATE), wait=HOLD)
-    card.reveal(_tex(rf"\text{{action }}{C.tex_escape(p.get('action_label') or '-')}"
-                     rf"\quad r\,{C.signed(p.get('reward'))}", size=22, color=C.ACTION),
-                wait=HOLD)
+    action_line = rf"\text{{action }}{C.tex_escape(p.get('action_label') or '-')}"
+    if p.get("reward") is not None:
+        action_line += rf"\quad r\,{C.signed(p.get('reward'))}"
+    card.reveal(_tex(action_line, size=22, color=C.ACTION), wait=HOLD)
 
     if p.get("is_return_update"):
         card.reveal(_tex(rf"\text{{return }}G={C.signed(p.get('return_value'))}",
