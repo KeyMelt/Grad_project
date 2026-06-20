@@ -379,16 +379,10 @@ def _invoke_trace_manim(data_json: Path, *, episode_label: str | None = None) ->
             check=True,
             cwd=str(ROOT),
             env=env,
-            timeout=settings.TRACE_RENDER_TIMEOUT_SECONDS,
         )
     except subprocess.CalledProcessError as error:
         raise RenderError(
             f"Manim trace render failed (exit code {error.returncode}) for "
-            f"{TRACE_SCENE_FILE.name}:{TRACE_SCENE_CLASS}"
-        ) from error
-    except subprocess.TimeoutExpired as error:
-        raise RenderError(
-            f"Manim trace render exceeded {settings.TRACE_RENDER_TIMEOUT_SECONDS}s for "
             f"{TRACE_SCENE_FILE.name}:{TRACE_SCENE_CLASS}"
         ) from error
 

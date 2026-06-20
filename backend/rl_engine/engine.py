@@ -1145,6 +1145,8 @@ class RLEngine:
         evaluation_attempts_run = 0
         selected_trace = None
         selected_seed = None
+        best_selected_trace = None
+        best_selected_seed = None
         target_training_episodes = int(config["base_training_episodes"])
         capture_targets = self._td_stage_capture_targets(int(config["base_training_episodes"]))
         captured_training_traces: dict[str, dict[str, Any]] = {}
@@ -1212,13 +1214,20 @@ class RLEngine:
                 use_action_mask=bool(config["use_action_mask"]),
             )
             evaluation_attempts_run += attempts_used
-            if selected_trace is not None or training_episodes_run >= int(config["max_training_episodes"]):
+            if self._prefer_td_trace(selected_trace, best_selected_trace):
+                best_selected_trace = selected_trace
+                best_selected_seed = selected_seed
+            if bool(selected_trace and selected_trace["terminated"]):
+                break
+            if training_episodes_run >= int(config["max_training_episodes"]):
                 break
             target_training_episodes = min(
                 training_episodes_run + int(config["adaptive_extension"]),
                 int(config["max_training_episodes"]),
             )
 
+        selected_trace = best_selected_trace
+        selected_seed = best_selected_seed
         if selected_trace:
             for step in selected_trace["steps"]:
                 self._log_trace_step(step)
@@ -1404,6 +1413,27 @@ class RLEngine:
         last_step = steps[-1] if steps else {}
         grid_metadata = last_step.get("grid_metadata") or {}
         return not bool(grid_metadata.get("truncated"))
+
+    def _prefer_td_trace(
+        self,
+        candidate: dict[str, Any] | None,
+        incumbent: dict[str, Any] | None,
+    ) -> bool:
+        if candidate is None:
+            return False
+        if incumbent is None:
+            return True
+        if bool(candidate.get("terminated")) != bool(incumbent.get("terminated")):
+            return bool(candidate.get("terminated"))
+        candidate_reward = float(candidate.get("total_reward") or 0.0)
+        incumbent_reward = float(incumbent.get("total_reward") or 0.0)
+        if candidate_reward != incumbent_reward:
+            return candidate_reward > incumbent_reward
+        candidate_not_truncated = self._trace_is_not_truncated(candidate)
+        incumbent_not_truncated = self._trace_is_not_truncated(incumbent)
+        if candidate_not_truncated != incumbent_not_truncated:
+            return candidate_not_truncated
+        return int(candidate.get("step_count") or 0) < int(incumbent.get("step_count") or 0)
 
     def _run_q_learning_td_episode(
         self,

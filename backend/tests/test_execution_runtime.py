@@ -644,11 +644,25 @@ def test_build_success_response_curates_dynamic_programming_trace_family():
                 "state": 3,
                 "action": 1,
                 "next_state": 4,
-                "reward": 1.0,
-                "updated_values": {"V(3)": 2.0},
+                "reward": 0.0,
+                "updated_values": {"V(3)": 1.8},
                 "equation_update": {
                     "kind": "value_iteration",
                     "lhs": "V(3)",
+                    "td_target": 1.8,
+                    "new_value": 1.8,
+                    "dp_details": {"delta": 0.2},
+                },
+            },
+            {
+                "state": 4,
+                "action": 1,
+                "next_state": 5,
+                "reward": 1.0,
+                "updated_values": {"V(4)": 2.0},
+                "equation_update": {
+                    "kind": "value_iteration",
+                    "lhs": "V(4)",
                     "td_target": 2.0,
                     "new_value": 2.0,
                     "dp_details": {"delta": 0.0},
@@ -665,20 +679,20 @@ def test_build_success_response_curates_dynamic_programming_trace_family():
     )
 
     assert result["trace_family"] == "DynamicProgramming"
-    assert result["trace_mode"] == "curated backup trace"
+    assert result["trace_mode"] == "full backup trace"
     assert result["trace_summary"] == {
-        "selection_strategy": "dp_curated_backup_trace",
-        "visible_step_count": 4,
+        "selection_strategy": "dp_featured_episode",
+        "visible_step_count": 5,
         "source_episode_indices": [0],
         "contains_terminal_goal": True,
     }
-    assert len(result["step_trace"]) == 4
-    assert [step["state"] for step in result["step_trace"]] == [0, 1, 2, 3]
+    assert len(result["step_trace"]) == 5
+    assert [step["state"] for step in result["step_trace"]] == [0, 1, 2, 3, 4]
     assert result["trace_episodes"][0]["steps"] == result["step_trace"]
     assert result["episode_summaries"] == [
         {
             "episode_index": 0,
-            "step_count": 4,
+            "step_count": 5,
             "total_reward": 1.0,
             "terminated": True,
             "truncated": False,

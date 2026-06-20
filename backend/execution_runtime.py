@@ -37,10 +37,10 @@ def run_submission_with_timeout(
     submission_payload: dict[str, Any],
     timeout_seconds: int | None = None,
 ) -> dict[str, Any]:
-    """Run one lesson submission in a spawned process with a hard timeout."""
+    """Run one lesson submission in a spawned process without a hard timeout."""
     _ensure_process_lesson_registry()
     submission_payload = _resolve_submission_lesson_contract(submission_payload)
-    effective_timeout = timeout_seconds or _derive_timeout_seconds(submission_payload)
+    del timeout_seconds
     lesson = get_lesson_definition(submission_payload["lesson_id"])
     feedback_service = StudentFeedbackService()
     ctx = multiprocessing.get_context("spawn")
@@ -53,9 +53,8 @@ def run_submission_with_timeout(
     process.start()
     child_conn.close()
 
-    deadline = time.monotonic() + effective_timeout
     outcome: dict[str, Any] | None = None
-    while time.monotonic() < deadline:
+    while True:
         if parent_conn.poll(0.1):
             outcome = parent_conn.recv()
             break
@@ -64,25 +63,6 @@ def run_submission_with_timeout(
 
     if outcome is None and parent_conn.poll():
         outcome = parent_conn.recv()
-
-    if outcome is None and process.is_alive():
-        process.terminate()
-        process.join()
-        parent_conn.close()
-        issues = [
-            f"The lesson execution exceeded the {effective_timeout}-second limit.",
-        ]
-        raise ExecutionPipelineError(
-            status_code=408,
-            detail=_failure_detail(
-                lesson=lesson,
-                submitted_code=submission_payload.get("code", ""),
-                failure_kind="runtime_error",
-                message="Execution timed out.",
-                issues=issues,
-                feedback_service=feedback_service,
-            ),
-        )
 
     process.join(timeout=1.0)
     if process.is_alive():
@@ -439,13 +419,12 @@ def _build_trace_payload(
     execution_metadata = execution_metadata or {}
 
     if trace_family == "DynamicProgramming":
-        curated_steps = _curate_dynamic_programming_episode(featured_episode)
         return _build_curated_trace_payload(
             trace_family=trace_family,
-            trace_mode="curated backup trace",
-            selection_strategy="dp_curated_backup_trace",
+            trace_mode="full backup trace",
+            selection_strategy="dp_featured_episode",
             source_episode_index=featured_episode_index,
-            steps=curated_steps,
+            steps=featured_episode,
         )
 
     if trace_family == "MonteCarlo":
@@ -619,16 +598,6 @@ def _build_curated_trace_payload(
             else []
         ),
     }
-
-
-def _curate_dynamic_programming_episode(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    if len(steps) <= 4:
-        return list(steps)
-
-    chosen = {0, len(steps) - 1, len(steps) // 2}
-    strongest_index = max(range(len(steps)), key=lambda index: _step_signal(steps[index]))
-    chosen.add(strongest_index)
-    return [steps[index] for index in sorted(chosen)[:4]]
 
 
 def _curate_monte_carlo_episode(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:

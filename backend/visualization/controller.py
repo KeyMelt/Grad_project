@@ -196,7 +196,7 @@ class VisualizationController:
         }
 
     def _post_json(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
-        response = self._http.post(url, json=payload, timeout=self.manim_timeout_seconds)
+        response = self._http.post(url, json=payload, timeout=None)
         response.raise_for_status()
         return response.json()
 
@@ -245,11 +245,10 @@ class VisualizationController:
         return normalized_stages
 
     def _poll_until_complete(self, job_id: str) -> str:
-        deadline = time.monotonic() + self.manim_timeout_seconds
         url = f"{self.base_url}/jobs/{job_id}"
-        while time.monotonic() < deadline:
+        while True:
             try:
-                response = self._http.get(url, timeout=self.manim_timeout_seconds)
+                response = self._http.get(url, timeout=None)
                 response.raise_for_status()
                 data = response.json()
             except requests.RequestException as error:
@@ -267,9 +266,6 @@ class VisualizationController:
                 logger.error("manim_service job %s failed: %s", job_id, data.get("error"))
                 return ""
             time.sleep(self.poll_interval_seconds)
-
-        logger.error("manim_service job %s did not complete within %ss", job_id, self.manim_timeout_seconds)
-        return ""
 
     @staticmethod
     def _selected_episode_indices(log_data: list) -> list[int]:

@@ -23,7 +23,7 @@ def get_manim_job(
     job_id: str,
     *,
     base_url: str | None = None,
-    timeout_seconds: float = 10.0,
+    timeout_seconds: float | None = None,
     http_get: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
     client = http_get or requests.get
@@ -70,7 +70,7 @@ def enrich_snapshot_with_replay(
     snapshot: dict[str, Any],
     *,
     base_url: str | None = None,
-    timeout_seconds: float = 10.0,
+    timeout_seconds: float | None = None,
     http_get: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
     result = snapshot.get("result")

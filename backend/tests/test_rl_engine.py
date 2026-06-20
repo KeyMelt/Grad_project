@@ -648,6 +648,137 @@ def test_q_learning_respects_episode_step_limit(monkeypatch):
     assert logger.steps[-1]["grid_metadata"]["truncated"] is True
 
 
+def test_td_control_continues_training_after_weak_fallback_until_terminal_trace(monkeypatch):
+    class _Logger:
+        def __init__(self) -> None:
+            self.steps: list[dict] = []
+            self.episode_end_count = 0
+
+        def log_step(self, payload):
+            self.steps.append(payload)
+
+        def end_episode(self):
+            self.episode_end_count += 1
+
+    engine = RLEngine(
+        adapter=SimpleNamespace(env=SimpleNamespace(action_space=SimpleNamespace(n=2))),
+        logger=_Logger(),
+    )
+
+    monkeypatch.setattr(
+        RLEngine,
+        "_td_control_config",
+        lambda self, lesson_id: {
+            "base_training_episodes": 2,
+            "max_training_episodes": 3,
+            "training_max_steps": 3,
+            "visible_step_cap": 5,
+            "evaluation_attempts": 2,
+            "adaptive_extension": 1,
+            "epsilon_start": 0.2,
+            "epsilon_end": 0.0,
+            "use_action_mask": False,
+        },
+    )
+    monkeypatch.setattr(RLEngine, "_empty_q_table", lambda self: [])
+    monkeypatch.setattr(RLEngine, "_scheduled_epsilon", lambda *args, **kwargs: 0.0)
+
+    training_seeds: list[int] = []
+    evaluation_round = {"count": 0}
+
+    def fake_q_learning_td_episode(
+        self,
+        lesson_function,
+        q_table,
+        *,
+        alpha,
+        gamma,
+        epsilon,
+        max_steps,
+        seed,
+        use_action_mask,
+        apply_updates,
+        record_trace,
+    ):
+        del self, lesson_function, q_table, alpha, gamma, epsilon, max_steps, use_action_mask
+        if apply_updates:
+            training_seeds.append(seed)
+        return {
+            "steps": [],
+            "step_count": 1,
+            "total_reward": -1.0,
+            "terminated": False,
+        }
+
+    def fake_evaluate_td_policy(
+        self,
+        *,
+        lesson_id,
+        lesson_function,
+        q_table,
+        alpha,
+        gamma,
+        max_steps,
+        attempt_count,
+        seed_offset,
+        use_action_mask,
+    ):
+        del self, lesson_id, lesson_function, q_table, alpha, gamma, max_steps, attempt_count, seed_offset
+        del use_action_mask
+        evaluation_round["count"] += 1
+        if evaluation_round["count"] == 1:
+            return (
+                {
+                    "steps": [
+                        {
+                            "state": 12,
+                            "action": 0,
+                            "reward": -1.0,
+                            "next_state": 12,
+                            "grid_metadata": {"terminated": False, "truncated": False},
+                        }
+                    ],
+                    "step_count": 1,
+                    "total_reward": -1.0,
+                    "terminated": False,
+                },
+                11,
+                1,
+            )
+        return (
+            {
+                "steps": [
+                    {
+                        "state": 12,
+                        "action": 1,
+                        "reward": 20.0,
+                        "next_state": 13,
+                        "grid_metadata": {"terminated": True, "truncated": False},
+                    }
+                ],
+                "step_count": 1,
+                "total_reward": 20.0,
+                "terminated": True,
+            },
+            12,
+            1,
+        )
+
+    monkeypatch.setattr(RLEngine, "_run_q_learning_td_episode", fake_q_learning_td_episode)
+    monkeypatch.setattr(RLEngine, "_evaluate_td_policy", fake_evaluate_td_policy)
+
+    result = engine._run_td_control_with_greedy_evaluation(
+        "td_q_learning",
+        lambda *args, **kwargs: None,
+        {"alpha": 0.1, "gamma": 0.95},
+    )
+
+    assert training_seeds == [0, 1, 2]
+    assert evaluation_round["count"] == 2
+    assert result["evaluation_summary"]["selected_terminated"] is True
+    assert result["evaluation_summary"]["selected_seed"] == 12
+
+
 def test_sarsa_emits_sampled_bootstrap_q_table_schema(monkeypatch):
     selected_actions = iter([0, 1, 0])
 
