@@ -802,6 +802,35 @@ def test_visualization_video_rejects_paths_outside_output_root(tmp_path, monkeyp
     os.remove(outside_path)
 
 
+def test_visualization_video_redirects_cdn_url(monkeypatch):
+    monkeypatch.setenv("DO_SPACES_CDN_URL", "https://cdn.example.test")
+    cdn_video_url = "https://cdn.example.test/traces/lesson_abc123.mp4"
+
+    client = _make_client()
+    response = client.get(
+        "/visualization/video",
+        params={"path": cdn_video_url},
+        headers=_auth_headers(),
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["location"] == cdn_video_url
+
+
+def test_visualization_video_rejects_unknown_url_host(monkeypatch):
+    monkeypatch.setenv("DO_SPACES_CDN_URL", "https://cdn.example.test")
+
+    client = _make_client()
+    response = client.get(
+        "/visualization/video",
+        params={"path": "https://evil.example.com/video.mp4"},
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 403
+
+
 def test_task_video_artifact_falls_back_to_live_result_video_path(monkeypatch):
     class _FallbackExecutionService:
         def submit(self, submission_payload: dict[str, Any]) -> dict[str, str]:

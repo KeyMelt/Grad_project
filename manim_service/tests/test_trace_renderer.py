@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import shutil
+import threading
+import time as time_mod
 from pathlib import Path
 from unittest.mock import patch
 
@@ -12,13 +14,13 @@ from manim_service.jobs.queue import Job, JobKind, JobStatus, MemoryJobQueue
 from manim_service.jobs.trace_renderer import (
     RenderError,
     _canonical_cache_path,
+    _canonical_clip_cache_path,
+    _compute_clip_hash,
     _compute_trace_hash,
+    _invoke_trace_manim,
     render_trace,
 )
 from manim_service.storage import output as storage
-from manim_service.trace_scenes.taxi_board import TaxiBoard, classify_taxi_transition
-from manim_service.trace_scenes.trace_boards import make_board
-from manim_service.trace_scenes.trace_replay_scene import _parse_updated_values
 
 
 def _make_trace_job(lesson_id: str = "td_q_learning", steps: list | None = None) -> Job:
@@ -82,6 +84,7 @@ class TestComputeTraceHash:
 
 
 def test_trace_scene_parses_q_table_updated_values_as_source_state():
+    from manim_service.trace_scenes.trace_replay_scene import _parse_updated_values
     parsed = _parse_updated_values({"Q(3, 1)": 0.42, "Q(7,2)": -0.5, "V(9)": 1.0})
 
     assert parsed == {3: 0.42, 7: -0.5, 9: 1.0}
@@ -99,6 +102,54 @@ STEPS = [
         "agent_caption": "Moving down",
     }
 ]
+
+
+class TestInvokeTraceManim:
+    def test_media_dir_override_used_in_cmd(self, tmp_path):
+        """When media_dir_override is given, Manim is invoked with that --media_dir."""
+        data_json = tmp_path / "steps.json"
+        data_json.write_text("[]", encoding="utf-8")
+        override_dir = tmp_path / "isolated_media"
+
+        captured_cmd = []
+
+        def fake_run(cmd, **kwargs):
+            captured_cmd.extend(cmd)
+            # Simulate Manim writing its output
+            output = override_dir / "videos" / "trace_replay_scene" / "480p15" / "TraceReplayScene.mp4"
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_bytes(b"fake")
+            class R:
+                returncode = 0
+            return R()
+
+        with patch("subprocess.run", side_effect=fake_run):
+            result = _invoke_trace_manim(data_json, media_dir_override=override_dir)
+
+        assert str(override_dir) in captured_cmd, "override media_dir must appear in subprocess cmd"
+        assert result == override_dir / "videos" / "trace_replay_scene" / "480p15" / "TraceReplayScene.mp4"
+
+    def test_default_media_dir_used_when_no_override(self, tmp_path):
+        """Without override, uses settings.TRACE_MANIM_MEDIA_DIR."""
+        from manim_service import settings as ms
+        data_json = tmp_path / "steps.json"
+        data_json.write_text("[]", encoding="utf-8")
+
+        captured_cmd = []
+
+        def fake_run(cmd, **kwargs):
+            captured_cmd.extend(cmd)
+            output = ms.TRACE_MANIM_MEDIA_DIR / "videos" / "trace_replay_scene" / "480p15" / "TraceReplayScene.mp4"
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_bytes(b"fake")
+            class R:
+                returncode = 0
+            return R()
+
+        with patch("subprocess.run", side_effect=fake_run):
+            _invoke_trace_manim(data_json)
+
+        assert str(ms.TRACE_MANIM_MEDIA_DIR) in captured_cmd
 
 
 class TestRenderTrace:
@@ -412,10 +463,13 @@ class TestTaxiTraceIntegration:
         assert C.grid_shape("Taxi") == (5, 5)
 
     def test_taxi_board_factory_uses_isolated_board(self):
+        from manim_service.trace_scenes.taxi_board import TaxiBoard
+        from manim_service.trace_scenes.trace_boards import make_board
         board = make_board("Taxi", TAXI_Q_LEARNING_STEPS[0])
         assert isinstance(board, TaxiBoard)
 
     def test_taxi_transition_classifier_uses_explicit_passenger_state(self):
+        from manim_service.trace_scenes.taxi_board import classify_taxi_transition
         assert classify_taxi_transition(TAXI_Q_LEARNING_STEPS[0]) == "pickup"
         assert classify_taxi_transition(TAXI_Q_LEARNING_STEPS[1]) == "dropoff"
         assert classify_taxi_transition(ILLEGAL_TAXI_STEP) == "illegal_dropoff"
@@ -685,3 +739,122 @@ class TestMcRenderTrace:
         ):
             result = render_trace(job)
         assert result.read_bytes() == b"td-data"
+
+
+class TestParallelClipRendering:
+    def _make_episodes(self, n=3):
+        return [
+            {
+                "episode_index": i * 100,
+                "role": ["untrained", "improving", "converged"][i],
+                "stage_label": f"Stage {i}",
+                "steps": [{"state": i, "action": 0, "reward": float(i), "next_state": i + 1, "done": i == 2}],
+            }
+            for i in range(n)
+        ]
+
+    def test_clips_rendered_concurrently(self, tmp_path, monkeypatch):
+        """All 3 clips must be dispatched before any finishes (concurrent, not serial)."""
+        start_times = []
+        end_times = []
+        lock = threading.Lock()
+
+        def fake_invoke(data_json, *, episode_label=None, media_dir_override=None):
+            with lock:
+                start_times.append(time_mod.monotonic())
+            time_mod.sleep(0.05)  # simulate work
+            out = media_dir_override / "videos" / "trace_replay_scene" / "480p15" / "TraceReplayScene.mp4"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(b"fake_video")
+            with lock:
+                end_times.append(time_mod.monotonic())
+            return out
+
+        monkeypatch.setattr(
+            "manim_service.jobs.trace_renderer._invoke_trace_manim", fake_invoke
+        )
+        monkeypatch.setattr(manim_settings, "SHARED_MEDIA_DIR", tmp_path)
+        monkeypatch.setattr(storage, "SHARED_MEDIA_DIR", tmp_path, raising=False)
+
+        def fake_concat(paths, out):
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(b"concatenated")
+
+        monkeypatch.setattr("manim_service.jobs.trace_renderer._concat_clips", fake_concat)
+
+        from manim_service.jobs.trace_renderer import _render_episode_clips
+        storage.ensure_subdirs()
+
+        _render_episode_clips(lesson_id="td_q_learning", episodes=self._make_episodes(), job_id="test-parallel-001")
+
+        assert len(start_times) == 3, "all 3 clips must be rendered"
+        # Concurrent: first clip must start before last clip finishes
+        assert min(start_times) < max(end_times) - 0.04, (
+            "clips must run concurrently, not purely serial"
+        )
+
+    def test_clip_order_preserved_in_concat(self, tmp_path, monkeypatch):
+        """Clips must be concatenated in episode order regardless of thread finish order."""
+        concat_order = []
+
+        def fake_invoke(data_json, *, episode_label=None, media_dir_override=None):
+            # Reverse-order: last clip finishes first
+            delay = 0.03 * (3 - int(episode_label.split()[-1]) if episode_label else 0)
+            time_mod.sleep(delay)
+            out = media_dir_override / "videos" / "trace_replay_scene" / "480p15" / "TraceReplayScene.mp4"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(b"fake")
+            return out
+
+        def fake_concat(paths, out):
+            concat_order.extend(paths)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(b"concatenated")
+
+        monkeypatch.setattr("manim_service.jobs.trace_renderer._invoke_trace_manim", fake_invoke)
+        monkeypatch.setattr("manim_service.jobs.trace_renderer._concat_clips", fake_concat)
+        monkeypatch.setattr(manim_settings, "SHARED_MEDIA_DIR", tmp_path)
+        monkeypatch.setattr(storage, "SHARED_MEDIA_DIR", tmp_path, raising=False)
+
+        from manim_service.jobs.trace_renderer import _render_episode_clips
+        storage.ensure_subdirs()
+
+        episodes = self._make_episodes()
+        _render_episode_clips(lesson_id="td_q_learning", episodes=episodes, job_id="test-order-002")
+
+        # The clips must be concatenated in episode order (by role: untrained, improving, converged)
+        assert len(concat_order) == 3
+        roles_in_order = [p.name for p in concat_order]
+        assert "untrained" in roles_in_order[0], f"First clip should be untrained, got {roles_in_order[0]}"
+        assert "improving" in roles_in_order[1], f"Second clip should be improving, got {roles_in_order[1]}"
+        assert "converged" in roles_in_order[2], f"Third clip should be converged, got {roles_in_order[2]}"
+
+    def test_stage_label_passed_as_episode_label(self, tmp_path, monkeypatch):
+        """stage_label from the episode dict must reach _invoke_trace_manim as episode_label."""
+        received_labels = []
+
+        def fake_invoke(data_json, *, episode_label=None, media_dir_override=None):
+            received_labels.append(episode_label)
+            out = media_dir_override / "videos" / "trace_replay_scene" / "480p15" / "TraceReplayScene.mp4"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(b"fake")
+            return out
+
+        monkeypatch.setattr("manim_service.jobs.trace_renderer._invoke_trace_manim", fake_invoke)
+        monkeypatch.setattr(manim_settings, "SHARED_MEDIA_DIR", tmp_path)
+        monkeypatch.setattr(storage, "SHARED_MEDIA_DIR", tmp_path, raising=False)
+
+        from manim_service.jobs.trace_renderer import _render_episode_clips
+        storage.ensure_subdirs()
+
+        episodes = [
+            {
+                "episode_index": 0,
+                "role": "untrained",
+                "stage_label": "① Untrained · episode 1",
+                "steps": [{"state": 0, "action": 0, "reward": -1.0, "next_state": 1, "done": False}],
+            }
+        ]
+        _render_episode_clips(lesson_id="td_q_learning", episodes=episodes, job_id="test-label-003")
+
+        assert "① Untrained · episode 1" in received_labels

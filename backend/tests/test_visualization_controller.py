@@ -268,7 +268,7 @@ class TestTupleStateNormalisation:
             "policy_evaluation"
         )
 
-    def test_enqueue_replay_render_with_staged_td_payload_posts_episode_trace_only(self, monkeypatch):
+    def test_enqueue_replay_render_with_staged_td_payload_posts_episodes(self, monkeypatch):
         captured_bodies: list[dict] = []
 
         class _CapturingHttp:
@@ -323,9 +323,11 @@ class TestTupleStateNormalisation:
         assert result["replay_render_status"] == "queued"
         assert result["replay_episode_indices"] == [0, 500]
         body = captured_bodies[0]
-        assert "episodes" not in body
-        assert [stage["stage"] for stage in body["episode_trace"]["steps"]] == [
-            "untrained",
-            "converged",
-        ]
-        assert body["episode_trace"]["steps"][0]["steps"][0]["state"] == 1
+        # Staged payloads now route through the episodes path for parallel rendering.
+        assert "episodes" in body
+        assert [ep["role"] for ep in body["episodes"]] == ["untrained", "converged"]
+        assert body["episodes"][0]["episode_index"] == 0
+        assert body["episodes"][1]["episode_index"] == 500
+        assert body["episodes"][0]["steps"][0]["state"] == 1
+        # episode_trace.steps carries the last stage's steps as a legacy fallback.
+        assert body["episode_trace"]["steps"][0]["state"] == 12

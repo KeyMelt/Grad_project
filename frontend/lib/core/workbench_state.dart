@@ -2757,8 +2757,8 @@ def lesson_function(*args, **kwargs):
   }
 
   Future<void> _pollReplayRender(String jobId) async {
-    for (var attempt = 0; attempt < 30 && !isClosed; attempt += 1) {
-      await Future<void>.delayed(const Duration(seconds: 2));
+    for (var attempt = 0; attempt < 120 && !isClosed; attempt += 1) {
+      await Future<void>.delayed(const Duration(seconds: 5));
       if (isClosed || state.replayRenderJobId != jobId) {
         return;
       }

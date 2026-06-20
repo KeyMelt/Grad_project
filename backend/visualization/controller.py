@@ -103,15 +103,25 @@ class VisualizationController:
                     "replay_episode_indices": [],
                 }
 
+            episodes = [
+                {
+                    "episode_index": int(s.get("episode_index", i)),
+                    "role": s.get("stage", f"stage_{i}"),
+                    "stage_label": s.get("stage_label") or "",
+                    "steps": s.get("steps", []),
+                }
+                for i, s in enumerate(stages)
+                if s.get("steps")
+            ]
+            replay_episode_indices = [
+                e["episode_index"] for e in episodes
+                if isinstance(e.get("episode_index"), int)
+            ]
             payload = {
                 "lesson_id": lesson_id,
-                "episode_trace": {"steps": stages},
+                "episodes": episodes,
+                "episode_trace": {"steps": episodes[-1]["steps"] if episodes else []},
             }
-            replay_episode_indices = [
-                int(stage["episode_index"])
-                for stage in stages
-                if isinstance(stage.get("episode_index"), int)
-            ]
             try:
                 job = self._post_json(f"{self.base_url}/render/trace", payload)
             except requests.RequestException as error:

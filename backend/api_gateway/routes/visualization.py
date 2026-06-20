@@ -5,7 +5,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, RedirectResponse, Response
 
 from backend.auth.dependencies import (
     assert_owner_or_admin,
@@ -36,6 +36,14 @@ def _get_manim_job(job_id: str) -> dict[str, Any]:
     resp = _requests.get(url, timeout=10, allow_redirects=True)
     resp.raise_for_status()
     return resp.json()
+
+
+def _cdn_netloc() -> str:
+    """Return the hostname of the configured CDN, or '' if not set."""
+    cdn_url = GatewaySettings.from_env().media_cdn_url
+    if not cdn_url:
+        return ""
+    return urlparse(cdn_url).netloc
 
 
 def _proxy_manim_video(url: str) -> Response:
@@ -110,8 +118,10 @@ def _artifact_path_from_snapshot(
 def _video_response_from_path(path: str):
     if path.startswith("http://") or path.startswith("https://"):
         parsed = urlparse(path)
-        allowed_netloc = manim_service_netloc()
-        if parsed.netloc != allowed_netloc:
+        cdn = _cdn_netloc()
+        if cdn and parsed.netloc == cdn:
+            return RedirectResponse(url=path, status_code=302)
+        if parsed.netloc != manim_service_netloc():
             raise HTTPException(
                 status_code=403,
                 detail="Video URL host is not the configured manim service.",
@@ -181,21 +191,7 @@ def build_visualization_router(services: Any) -> APIRouter:
         principal: Principal | None = Depends(optional_principal),
     ):
         _resolve_principal(principal=principal)
-
-        # Case 2: path is a URL — proxy to the manim service.
-        if path.startswith("http://") or path.startswith("https://"):
-            parsed = urlparse(path)
-            allowed_netloc = manim_service_netloc()
-            if parsed.netloc != allowed_netloc:
-                raise HTTPException(
-                    status_code=403,
-                    detail="Video URL host is not the configured manim service.",
-                )
-            return _proxy_manim_video(path)
-
-        # Case 1: local filesystem path — existing behaviour.
-        video_path = _resolve_visualization_path(path, suffix=".mp4", label="Video")
-        return FileResponse(video_path, media_type="video/mp4")
+        return _video_response_from_path(path)
 
     @router.get("/visualization/replay-render/{job_id}")
     def replay_render_status(

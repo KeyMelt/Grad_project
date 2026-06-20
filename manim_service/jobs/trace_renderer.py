@@ -19,6 +19,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from manim_service import settings
@@ -235,46 +236,66 @@ def render_trace(job: Job) -> Path:
 
 
 def _render_episode_clips(*, lesson_id: str, episodes: list, job_id: str) -> Path:
-    clip_paths: list[Path] = []
+    """Render each episode clip in parallel, cache individually, then concat."""
     job_path = storage.trace_video_path(job_id)
 
-    with tempfile.TemporaryDirectory(prefix="trace_render_") as tmp_dir:
-        tmp_path = Path(tmp_dir)
-        for offset, episode in enumerate(episodes):
-            if not isinstance(episode, dict):
-                continue
-            clip_steps = episode.get("steps") or []
-            if not clip_steps:
-                continue
-            episode_index = int(episode.get("episode_index") or offset)
-            role = str(episode.get("role") or f"episode_{offset + 1}")
-            clip_hash = _compute_clip_hash(lesson_id, episode)
-            cached = _canonical_clip_cache_path(lesson_id, role, episode_index, clip_hash)
-            if cached.is_file():
-                logger.info("Trace clip cache hit for %s/%s:%s", lesson_id, role, episode_index)
-                clip_paths.append(cached)
-                continue
+    def _render_one(offset: int, episode: dict) -> tuple[int, Path | None]:
+        if not isinstance(episode, dict):
+            return offset, None
+        clip_steps = episode.get("steps") or []
+        if not clip_steps:
+            return offset, None
+        episode_index = int(episode.get("episode_index") or offset)
+        role = str(episode.get("role") or f"episode_{offset + 1}")
+        stage_label: str | None = episode.get("stage_label") or None
+        clip_hash = _compute_clip_hash(lesson_id, episode)
+        cached = _canonical_clip_cache_path(lesson_id, role, episode_index, clip_hash)
 
-            data_json = tmp_path / f"trace_clip_{offset}.json"
+        if cached.is_file():
+            logger.info("Trace clip cache hit for %s/%s:%s", lesson_id, role, episode_index)
+            return offset, cached
+
+        # Each parallel invocation writes to its own isolated temp directory so
+        # concurrent processes never collide on the shared TraceReplayScene.mp4 path.
+        with tempfile.TemporaryDirectory(prefix=f"trace_clip_{offset}_") as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            data_json = tmp_path / "trace_data.json"
             data_json.write_text(json.dumps(clip_steps, default=str), encoding="utf-8")
+            episode_label = stage_label or _episode_label(role, episode_index)
             rendered = _invoke_trace_manim(
                 data_json,
-                episode_label=_episode_label(role, episode_index),
+                episode_label=episode_label,
+                media_dir_override=tmp_path / "media",
             )
             cached.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(rendered, cached)
-            clip_paths.append(cached)
 
-        if not clip_paths:
-            raise RenderError("Trace job has no non-empty episode clips to render.")
+        return offset, cached
 
-        job_path.parent.mkdir(parents=True, exist_ok=True)
-        if len(clip_paths) == 1:
-            shutil.copy2(clip_paths[0], job_path)
-        else:
-            _concat_clips(clip_paths, job_path)
-        storage.publish_media_file(job_path)
+    valid_episodes = [
+        (i, ep) for i, ep in enumerate(episodes)
+        if isinstance(ep, dict) and ep.get("steps")
+    ]
 
+    clip_paths_by_offset: dict[int, Path] = {}
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = {pool.submit(_render_one, i, ep): i for i, ep in valid_episodes}
+        for future in as_completed(futures):
+            offset, path = future.result()  # re-raises RenderError from thread
+            if path is not None:
+                clip_paths_by_offset[offset] = path
+
+    clip_paths = [clip_paths_by_offset[i] for i in sorted(clip_paths_by_offset)]
+
+    if not clip_paths:
+        raise RenderError("Trace job has no non-empty episode clips to render.")
+
+    job_path.parent.mkdir(parents=True, exist_ok=True)
+    if len(clip_paths) == 1:
+        shutil.copy2(clip_paths[0], job_path)
+    else:
+        _concat_clips(clip_paths, job_path)
+    storage.publish_media_file(job_path)
     return job_path
 
 
@@ -319,11 +340,20 @@ def _concat_clips(segment_mp4s: list[Path], out: Path) -> None:
 # Manim invocation (mirrors _invoke_manim in worker.py)
 # ---------------------------------------------------------------------------
 
-def _invoke_trace_manim(data_json: Path, *, episode_label: str | None = None) -> Path:
+def _invoke_trace_manim(
+    data_json: Path,
+    *,
+    episode_label: str | None = None,
+    media_dir_override: Path | None = None,
+) -> Path:
     """Run the Manim CLI for TraceReplayScene and return the rendered MP4 path.
 
     Args:
         data_json: absolute path to the JSON file containing the steps list.
+        episode_label: optional label passed to the scene via TRACE_EPISODE_LABEL.
+        media_dir_override: if given, Manim writes to this directory instead of
+            settings.TRACE_MANIM_MEDIA_DIR. Required for parallel renders so
+            concurrent subprocesses do not overwrite each other's output.
 
     Returns:
         Path to the MP4 file that Manim wrote.
@@ -349,7 +379,7 @@ def _invoke_trace_manim(data_json: Path, *, episode_label: str | None = None) ->
         )
 
     quality_flag = f"-q{quality}"
-    media_dir = settings.TRACE_MANIM_MEDIA_DIR
+    media_dir = media_dir_override if media_dir_override is not None else settings.TRACE_MANIM_MEDIA_DIR
     media_dir.mkdir(parents=True, exist_ok=True)
 
     cmd = [
