@@ -31,7 +31,49 @@ TEMPLATES = ROOT / "backend" / "rl_engine" / "templates"
 OUT = Path("/tmp/demo_traces")
 OUT.mkdir(parents=True, exist_ok=True)
 
-# (lesson_id, output stem). Templates are the reference solutions.
+# Real REFERENCE SOLUTIONS for the demo. The product templates under
+# backend/rl_engine/templates/ are starter STUBS shown to students (q_learning /
+# mc are `pass`), so running them never learns. We must not turn those into
+# answer keys; the demo supplies correct solutions here instead. dp_value_iteration
+# ships a real solution already, so we read it.
+_Q_LEARNING_SOLUTION = (
+    "LEARNING_RATE = 0.5\n"
+    "DISCOUNT_FACTOR = 0.99\n"
+    "EXPLORATION_RATE = 0.20\n"
+    # EPISODE_COUNT is the (capped) per-submission count; the staged-capture
+    # training budget is the engine's own 2000-4000 for Taxi, independent of this.
+    "EPISODE_COUNT = 200\n\n"
+    "def q_learning_update(Q, state, action, reward, next_state,\n"
+    "                      alpha=LEARNING_RATE, gamma=DISCOUNT_FACTOR):\n"
+    "    best_next = max(Q[next_state])\n"
+    "    Q[state][action] += alpha * (reward + gamma * best_next - Q[state][action])\n"
+    "    return Q\n"
+)
+_MC_SOLUTION = (
+    "def mc_first_visit_prediction(episode, V, returns, gamma=1.0):\n"
+    "    visited = [s for (s, a, r) in episode]\n"
+    "    G = 0.0\n"
+    "    for t in range(len(episode) - 1, -1, -1):\n"
+    "        state, action, reward = episode[t]\n"
+    "        G = gamma * G + reward\n"
+    "        if state not in visited[:t]:\n"
+    "            if state not in returns:\n"
+    "                returns[state] = []\n"
+    "            returns[state].append(G)\n"
+    "            V[state] = sum(returns[state]) / len(returns[state])\n"
+    "    return V\n"
+)
+
+
+def _solution_code(lesson_id: str) -> str:
+    if lesson_id == "td_q_learning":
+        return _Q_LEARNING_SOLUTION
+    if lesson_id == "mc_first_visit":
+        return _MC_SOLUTION
+    return (TEMPLATES / f"{lesson_id}.py").read_text(encoding="utf-8")
+
+
+# (lesson_id, output stem).
 LESSONS = [
     ("dp_value_iteration", "frozenlake_value_iteration"),
     ("td_q_learning", "taxi_q_learning"),
@@ -69,7 +111,7 @@ def main() -> int:
 
     for lesson_id, stem in LESSONS:
         lesson = get_lesson_definition(lesson_id)
-        code = (TEMPLATES / f"{lesson_id}.py").read_text(encoding="utf-8")
+        code = _solution_code(lesson_id)
         payload = {"lesson_id": lesson_id, "code": code}
         logger = EventLogger(log_dir=settings.logger_dir)
         adapter = _create_environment_adapter(
