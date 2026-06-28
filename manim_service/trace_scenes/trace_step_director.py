@@ -110,7 +110,7 @@ def _board_flash(board, scene, state):
 
 
 # ============================================================ DP director
-def _play_dp(scene, board, step, env, *, pos, width):
+def _play_dp(scene, board, step, env, *, pos, width, closing=False):
     p = C.dp_pieces(step) or {}
     state = step.get("state")
     kind = p.get("kind")
@@ -196,6 +196,12 @@ def _play_dp(scene, board, step, env, *, pos, width):
     # (the committed value fill stays on the board).
     if fx_mobs:
         scene.play(*[FadeOut(m) for m in fx_mobs], run_time=0.3)
+    # Closing beat of the converged sweep: ripple the settled field from the goal.
+    if closing and hasattr(board, "sweep_converged"):
+        try:
+            board.sweep_converged(scene)
+        except Exception:  # noqa: BLE001
+            pass
     return card
 
 
@@ -418,7 +424,7 @@ def _play_transition_replay(scene, board, step, env, *, pos, width, first, lite=
 
 
 # ============================================================ dispatch
-def play_step(scene, board, step, env, *, pos, width, first=False, lite=False):
+def play_step(scene, board, step, env, *, pos, width, first=False, lite=False, closing=False):
     fam = C.family(step)
     try:
         # Lite stages (early/improving in a staged progression) always use the
@@ -428,7 +434,7 @@ def play_step(scene, board, step, env, *, pos, width, first=False, lite=False):
             return _play_transition_replay(scene, board, step, env,
                                            pos=pos, width=width, first=first, lite=True)
         if fam == "dp":
-            return _play_dp(scene, board, step, env, pos=pos, width=width)
+            return _play_dp(scene, board, step, env, pos=pos, width=width, closing=closing)
         if fam == "td":
             return _play_td(scene, board, step, env, pos=pos, width=width, first=first)
         if fam == "mc":

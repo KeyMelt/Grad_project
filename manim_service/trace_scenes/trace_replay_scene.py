@@ -122,7 +122,7 @@ class TraceReplayScene(Scene):
             new_counter = self._counter(idx, n).next_to(header, DOWN, buff=0.12)
             self.play(Transform(counter, new_counter), run_time=0.2)
             card = play_step(self, board, step, env, pos=card_pos, width=card_w,
-                             first=(idx == 1), lite=lite)
+                             first=(idx == 1), lite=lite, closing=(idx == n and not lite))
             if idx < n:
                 card.fade()
 
