@@ -353,8 +353,31 @@ def _play_transition_replay(scene, board, step, env, *, pos, width, first, lite=
     if first and hasattr(board, "place"):
         board.place(scene, step, run_time=0.28 if lite else 0.4)
         scene.wait(0.08 if lite else 0.2)
+    # Breadcrumb the cell the agent is leaving so the rollout reads as a journey
+    # (rich stage only — lite stays minimal).
+    if not lite and hasattr(board, "center") and isinstance(step.get("state"), int):
+        trail = getattr(board, "_trail", None)
+        if trail is None:
+            trail = fx.AgentTrail()
+            board._trail = trail
+        try:
+            trail.drop(scene, board.center(step["state"]))
+        except Exception:  # noqa: BLE001
+            pass
     if hasattr(board, "step"):
         board.step(scene, step, run_time=move_rt)
+    # Reward pulse on a DECISIVE outcome (Taxi +20 dropoff / -10 illegal, cliff
+    # -100, a goal) — skip the routine -1 step cost so a pulse stays meaningful.
+    rwd_f = C.as_float(step.get("reward"))
+    if not lite and rwd_f is not None and abs(rwd_f) >= 5 and hasattr(board, "center"):
+        ns_i = step.get("next_state")
+        cell = ns_i if isinstance(ns_i, int) else step.get("state")
+        if isinstance(cell, int):
+            try:
+                fx.reward_pulse(scene, board.center(cell), C.signed(rwd_f),
+                                color=C.REWARD if rwd_f > 0 else C.PENALTY)
+            except Exception:  # noqa: BLE001
+                pass
 
     t = C.transition(step, env)
     s, a, r, ns = t["state"], C.tex_escape(t["action_label"]), C.signed(t["reward"]), \
