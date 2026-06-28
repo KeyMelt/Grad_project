@@ -24,6 +24,7 @@ from manim import (
 )
 
 from . import trace_common as C
+from . import trace_fx as fx
 
 # ---- pacing knobs (seconds) ------------------------------------------------
 # Deliberate but not bloated: enough to read and follow each beat, not so long
@@ -134,6 +135,10 @@ def _play_dp(scene, board, step, env, *, pos, width):
     sel = next((b for b in backups if b.get("action_label") == sel_label),
                backups[0] if backups else None)
 
+    fx_mobs: list = []
+    spatial = hasattr(board, "center") and isinstance(state, int)
+    cell_w = getattr(getattr(board, "hm", None), "_cell_w", None) or 1.0
+
     if sel is not None:
         lab = C.tex_escape(sel.get("action_label", ""))
         # Show the generic backup term ONCE, then plug in each real lookup.
@@ -144,15 +149,36 @@ def _play_dp(scene, board, step, env, *, pos, width):
             ns = t.get("next_state")
             prob, rwd = C.fmt(t.get("probability")), C.signed(t.get("reward"))
             fv, contrib = C.fmt(t.get("future_value")), C.fmt(t.get("contribution"))
-            _board_flash(board, scene, ns)
-            card.reveal(_tex(rf"\;\;{prob}\,({rwd}+\gamma\!\cdot\!{fv})={contrib}",
-                             size=20, color=C.TEXT), wait=HOLD)
+            term_line = card.reveal(
+                _tex(rf"\;\;{prob}\,({rwd}+\gamma\!\cdot\!{fv})={contrib}",
+                     size=20, color=C.TEXT), wait=QUICK)
+            # GRID: value flows from the neighbour s' BACK INTO the focal state s,
+            # carrying its contribution number — the backtracking the card narrates.
+            if spatial and isinstance(ns, int):
+                cval = C.as_float(t.get("contribution")) or 0.0
+                arrow = fx.value_flow_arrow(scene, board.center(ns), board.center(state),
+                                            contrib, color=fx.sign_color(cval))
+                fx.bind_pulse(scene, term_line, arrow)
+                fx_mobs.append(arrow)
+                if (C.as_float(t.get("reward")) or 0.0) > 0:
+                    fx.reward_pulse(scene, board.center(ns), C.signed(t.get("reward")),
+                                    color=C.REWARD)
+            scene.wait(HOLD)
         exp = C.fmt(sel.get("expected_return"))
         card.reveal(_tex(rf"Q(s,{lab})=\textstyle\sum={exp}", size=23, color=C.TEAL),
                     wait=BEAT)
 
     if len(backups) > 1:
         card.reveal(_action_compare(backups, sel_label), wait=BEAT)
+        # GRID: the candidate action-values as a fan from the focal cell, the
+        # argmax spoke winning — the decision made visible ON the world.
+        if spatial:
+            dir_values = [(b.get("action_label", ""),
+                           C.as_float(b.get("expected_return")) or 0.0) for b in backups]
+            chosen_idx = next((i for i, b in enumerate(backups)
+                               if b.get("action_label") == sel_label), 0)
+            fx_mobs.append(fx.action_fan(scene, board.center(state), dir_values,
+                                         chosen_idx, cell_w=cell_w))
 
     if kind == "policy_improvement":
         card.reveal(_tex(rf"\pi(s)\leftarrow \text{{{C.tex_escape(sel_label or '')}}}",
@@ -166,6 +192,10 @@ def _play_dp(scene, board, step, env, *, pos, width):
         if p.get("delta") is not None:
             card.reveal(_tex(rf"\Delta={C.fmt(p['delta'])}", size=21, color=C.VALUE),
                         wait=HOLD)
+    # Clear this step's transient grid arrows/fan so the next backup starts clean
+    # (the committed value fill stays on the board).
+    if fx_mobs:
+        scene.play(*[FadeOut(m) for m in fx_mobs], run_time=0.3)
     return card
 
 
