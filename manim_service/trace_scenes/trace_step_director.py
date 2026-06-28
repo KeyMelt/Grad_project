@@ -285,7 +285,8 @@ def _play_mc(scene, board, step, env, *, pos, width, first):
     obs = p.get("observation_label") or (
         f"({p.get('player_sum')}, {p.get('dealer_card')}, "
         f"{'ace' if p.get('usable_ace') else 'no ace'})")
-    card = StepCard(scene, title, C.REWARD, pos=pos, width=width, height=4.7)
+    card = StepCard(scene, title, C.REWARD, pos=pos, width=width,
+                    height=6.0 if p.get("is_return_update") else 4.7)
     card.show()
     card.reveal(_tex(rf"S=\text{{{C.tex_escape(obs)}}}", size=23, color=C.STATE), wait=HOLD)
     action_line = rf"\text{{action }}{C.tex_escape(p.get('action_label') or '-')}"
@@ -294,6 +295,17 @@ def _play_mc(scene, board, step, env, *, pos, width, first):
     card.reveal(_tex(action_line, size=22, color=C.ACTION), wait=HOLD)
 
     if p.get("is_return_update"):
+        # Backward-G ladder: the return folds in one discounted reward at a time,
+        # straight from the run's return_terms (G <- r + gamma*G). No fabrication.
+        terms = p.get("return_terms") or []
+        if isinstance(terms, list) and terms:
+            card.reveal(_tex(r"G \leftarrow r+\gamma G\quad\text{(fold the future back)}",
+                             size=17, color=C.MUTED), wait=QUICK)
+            for t in terms[:4]:
+                disc, rwd = C.fmt(t.get("discount")), C.signed(t.get("reward"))
+                dr, run = C.signed(t.get("discounted_reward")), C.signed(t.get("running_return"))
+                card.reveal(_tex(rf"\;\;{disc}\!\cdot\!({rwd})={dr}\;\Rightarrow\;G={run}",
+                                 size=18, color=C.TEXT), wait=QUICK)
         card.reveal(_tex(rf"\text{{return }}G={C.signed(p.get('return_value'))}",
                          size=24, color=C.VALUE), wait=BEAT)
         hist = p.get("returns_history") or []
