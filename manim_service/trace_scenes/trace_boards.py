@@ -18,8 +18,9 @@ from pathlib import Path
 
 import numpy as np
 from manim import (
-    DOWN, RIGHT, UP, Dot, FadeIn, FadeOut, Group, ImageMobject,
-    Rectangle, RoundedRectangle, SurroundingRectangle, Text, Transform, VGroup,
+    DOWN, RIGHT, UP, Dot, FadeIn, FadeOut, Group, ImageMobject, Indicate,
+    LaggedStart, Rectangle, RoundedRectangle, SurroundingRectangle, Text,
+    Transform, VGroup,
 )
 
 from . import trace_common as C
@@ -49,6 +50,7 @@ class FrozenLakeBoard:
         from manim_service.scenes.rl_visuals import EnvironmentValueHeatmap
         rows, cols, holes, goal, start = self._map_from_step(first_step)
         self._rows, self._cols = rows, cols
+        self._goal_rc = goal
         self.hm = EnvironmentValueHeatmap(
             rows=rows, cols=cols, values=[0.0] * (rows * cols),
             holes=holes, goal=goal, start=start, width=width, label_precision=2)
@@ -195,6 +197,18 @@ class FrozenLakeBoard:
     def commit(self, scene, step, *, run_time=0.5):
         """Write the freshly-computed value into the grid cell."""
         self._apply_values(scene, step, run_time=run_time)
+
+    def sweep_converged(self, scene, *, run_time=1.4):
+        """Closing beat: ripple the settled value field outward from the goal so
+        the learner SEES it converged — value propagating from the reward source."""
+        goal = self._goal_rc or (self._rows - 1, self._cols - 1)
+        cells = sorted(
+            (rc for rc in self._shown if rc in self.hm.value_overlays),
+            key=lambda rc: abs(rc[0] - goal[0]) + abs(rc[1] - goal[1]))
+        anims = [Indicate(self.hm.value_overlays[rc], color=C.REWARD, scale_factor=1.18)
+                 for rc in cells]
+        if anims:
+            scene.play(LaggedStart(*anims, lag_ratio=0.12), run_time=run_time)
 
 
 # ============================================================ CliffWalking board

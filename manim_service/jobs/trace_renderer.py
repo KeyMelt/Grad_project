@@ -44,6 +44,7 @@ TRACE_VISUAL_HELPERS = (
     ROOT / "manim_service" / "trace_scenes" / "taxi_board.py",
     ROOT / "manim_service" / "trace_scenes" / "trace_step_director.py",
     ROOT / "manim_service" / "trace_scenes" / "trace_update_card.py",
+    ROOT / "manim_service" / "trace_scenes" / "trace_fx.py",
 )
 
 QUALITY_TO_DIR: dict[str, str] = {

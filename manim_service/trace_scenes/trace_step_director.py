@@ -24,6 +24,7 @@ from manim import (
 )
 
 from . import trace_common as C
+from . import trace_fx as fx
 
 # ---- pacing knobs (seconds) ------------------------------------------------
 # Deliberate but not bloated: enough to read and follow each beat, not so long
@@ -109,7 +110,7 @@ def _board_flash(board, scene, state):
 
 
 # ============================================================ DP director
-def _play_dp(scene, board, step, env, *, pos, width):
+def _play_dp(scene, board, step, env, *, pos, width, closing=False):
     p = C.dp_pieces(step) or {}
     state = step.get("state")
     kind = p.get("kind")
@@ -134,6 +135,10 @@ def _play_dp(scene, board, step, env, *, pos, width):
     sel = next((b for b in backups if b.get("action_label") == sel_label),
                backups[0] if backups else None)
 
+    fx_mobs: list = []
+    spatial = hasattr(board, "center") and isinstance(state, int)
+    cell_w = getattr(getattr(board, "hm", None), "_cell_w", None) or 1.0
+
     if sel is not None:
         lab = C.tex_escape(sel.get("action_label", ""))
         # Show the generic backup term ONCE, then plug in each real lookup.
@@ -144,15 +149,36 @@ def _play_dp(scene, board, step, env, *, pos, width):
             ns = t.get("next_state")
             prob, rwd = C.fmt(t.get("probability")), C.signed(t.get("reward"))
             fv, contrib = C.fmt(t.get("future_value")), C.fmt(t.get("contribution"))
-            _board_flash(board, scene, ns)
-            card.reveal(_tex(rf"\;\;{prob}\,({rwd}+\gamma\!\cdot\!{fv})={contrib}",
-                             size=20, color=C.TEXT), wait=HOLD)
+            term_line = card.reveal(
+                _tex(rf"\;\;{prob}\,({rwd}+\gamma\!\cdot\!{fv})={contrib}",
+                     size=20, color=C.TEXT), wait=QUICK)
+            # GRID: value flows from the neighbour s' BACK INTO the focal state s,
+            # carrying its contribution number — the backtracking the card narrates.
+            if spatial and isinstance(ns, int):
+                cval = C.as_float(t.get("contribution")) or 0.0
+                arrow = fx.value_flow_arrow(scene, board.center(ns), board.center(state),
+                                            contrib, color=fx.sign_color(cval))
+                fx.bind_pulse(scene, term_line, arrow)
+                fx_mobs.append(arrow)
+                if (C.as_float(t.get("reward")) or 0.0) > 0:
+                    fx.reward_pulse(scene, board.center(ns), C.signed(t.get("reward")),
+                                    color=C.REWARD)
+            scene.wait(HOLD)
         exp = C.fmt(sel.get("expected_return"))
         card.reveal(_tex(rf"Q(s,{lab})=\textstyle\sum={exp}", size=23, color=C.TEAL),
                     wait=BEAT)
 
     if len(backups) > 1:
         card.reveal(_action_compare(backups, sel_label), wait=BEAT)
+        # GRID: the candidate action-values as a fan from the focal cell, the
+        # argmax spoke winning — the decision made visible ON the world.
+        if spatial:
+            dir_values = [(b.get("action_label", ""),
+                           C.as_float(b.get("expected_return")) or 0.0) for b in backups]
+            chosen_idx = next((i for i, b in enumerate(backups)
+                               if b.get("action_label") == sel_label), 0)
+            fx_mobs.append(fx.action_fan(scene, board.center(state), dir_values,
+                                         chosen_idx, cell_w=cell_w))
 
     if kind == "policy_improvement":
         card.reveal(_tex(rf"\pi(s)\leftarrow \text{{{C.tex_escape(sel_label or '')}}}",
@@ -166,6 +192,16 @@ def _play_dp(scene, board, step, env, *, pos, width):
         if p.get("delta") is not None:
             card.reveal(_tex(rf"\Delta={C.fmt(p['delta'])}", size=21, color=C.VALUE),
                         wait=HOLD)
+    # Clear this step's transient grid arrows/fan so the next backup starts clean
+    # (the committed value fill stays on the board).
+    if fx_mobs:
+        scene.play(*[FadeOut(m) for m in fx_mobs], run_time=0.3)
+    # Closing beat of the converged sweep: ripple the settled field from the goal.
+    if closing and hasattr(board, "sweep_converged"):
+        try:
+            board.sweep_converged(scene)
+        except Exception:  # noqa: BLE001
+            pass
     return card
 
 
@@ -255,7 +291,8 @@ def _play_mc(scene, board, step, env, *, pos, width, first):
     obs = p.get("observation_label") or (
         f"({p.get('player_sum')}, {p.get('dealer_card')}, "
         f"{'ace' if p.get('usable_ace') else 'no ace'})")
-    card = StepCard(scene, title, C.REWARD, pos=pos, width=width, height=4.7)
+    card = StepCard(scene, title, C.REWARD, pos=pos, width=width,
+                    height=6.0 if p.get("is_return_update") else 4.7)
     card.show()
     card.reveal(_tex(rf"S=\text{{{C.tex_escape(obs)}}}", size=23, color=C.STATE), wait=HOLD)
     action_line = rf"\text{{action }}{C.tex_escape(p.get('action_label') or '-')}"
@@ -264,6 +301,17 @@ def _play_mc(scene, board, step, env, *, pos, width, first):
     card.reveal(_tex(action_line, size=22, color=C.ACTION), wait=HOLD)
 
     if p.get("is_return_update"):
+        # Backward-G ladder: the return folds in one discounted reward at a time,
+        # straight from the run's return_terms (G <- r + gamma*G). No fabrication.
+        terms = p.get("return_terms") or []
+        if isinstance(terms, list) and terms:
+            card.reveal(_tex(r"G \leftarrow r+\gamma G\quad\text{(fold the future back)}",
+                             size=17, color=C.MUTED), wait=QUICK)
+            for t in terms[:4]:
+                disc, rwd = C.fmt(t.get("discount")), C.signed(t.get("reward"))
+                dr, run = C.signed(t.get("discounted_reward")), C.signed(t.get("running_return"))
+                card.reveal(_tex(rf"\;\;{disc}\!\cdot\!({rwd})={dr}\;\Rightarrow\;G={run}",
+                                 size=18, color=C.TEXT), wait=QUICK)
         card.reveal(_tex(rf"\text{{return }}G={C.signed(p.get('return_value'))}",
                          size=24, color=C.VALUE), wait=BEAT)
         hist = p.get("returns_history") or []
@@ -323,8 +371,31 @@ def _play_transition_replay(scene, board, step, env, *, pos, width, first, lite=
     if first and hasattr(board, "place"):
         board.place(scene, step, run_time=0.28 if lite else 0.4)
         scene.wait(0.08 if lite else 0.2)
+    # Breadcrumb the cell the agent is leaving so the rollout reads as a journey
+    # (rich stage only — lite stays minimal).
+    if not lite and hasattr(board, "center") and isinstance(step.get("state"), int):
+        trail = getattr(board, "_trail", None)
+        if trail is None:
+            trail = fx.AgentTrail()
+            board._trail = trail
+        try:
+            trail.drop(scene, board.center(step["state"]))
+        except Exception:  # noqa: BLE001
+            pass
     if hasattr(board, "step"):
         board.step(scene, step, run_time=move_rt)
+    # Reward pulse on a DECISIVE outcome (Taxi +20 dropoff / -10 illegal, cliff
+    # -100, a goal) — skip the routine -1 step cost so a pulse stays meaningful.
+    rwd_f = C.as_float(step.get("reward"))
+    if not lite and rwd_f is not None and abs(rwd_f) >= 5 and hasattr(board, "center"):
+        ns_i = step.get("next_state")
+        cell = ns_i if isinstance(ns_i, int) else step.get("state")
+        if isinstance(cell, int):
+            try:
+                fx.reward_pulse(scene, board.center(cell), C.signed(rwd_f),
+                                color=C.REWARD if rwd_f > 0 else C.PENALTY)
+            except Exception:  # noqa: BLE001
+                pass
 
     t = C.transition(step, env)
     s, a, r, ns = t["state"], C.tex_escape(t["action_label"]), C.signed(t["reward"]), \
@@ -353,7 +424,7 @@ def _play_transition_replay(scene, board, step, env, *, pos, width, first, lite=
 
 
 # ============================================================ dispatch
-def play_step(scene, board, step, env, *, pos, width, first=False, lite=False):
+def play_step(scene, board, step, env, *, pos, width, first=False, lite=False, closing=False):
     fam = C.family(step)
     try:
         # Lite stages (early/improving in a staged progression) always use the
@@ -363,7 +434,7 @@ def play_step(scene, board, step, env, *, pos, width, first=False, lite=False):
             return _play_transition_replay(scene, board, step, env,
                                            pos=pos, width=width, first=first, lite=True)
         if fam == "dp":
-            return _play_dp(scene, board, step, env, pos=pos, width=width)
+            return _play_dp(scene, board, step, env, pos=pos, width=width, closing=closing)
         if fam == "td":
             return _play_td(scene, board, step, env, pos=pos, width=width, first=first)
         if fam == "mc":
