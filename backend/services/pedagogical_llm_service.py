@@ -89,7 +89,7 @@ class PedagogicalLLMService:
             not in {"0", "false", "no"}
         )
         self.api_key = api_key or os.getenv("GEMINI_API_KEY", "").strip()
-        self.model = model or os.getenv("RL_IDE_GEMINI_MODEL", "gemini-2.5-flash").strip()
+        self.model = model or os.getenv("RL_IDE_GEMINI_MODEL", "gemini-3.1-flash").strip()
         self.prompt_version = prompt_version
         self.timeout_seconds = timeout_seconds or float(
             os.getenv(
