@@ -616,9 +616,10 @@ class ExecutionTraceStep {
     final rawGridMetadata = json['grid_metadata'];
     final rawExplanation = json['explanation'];
     return ExecutionTraceStep(
-      state: (json['state'] as num?)?.toInt() ?? 0,
-      action: (json['action'] as num?)?.toInt() ?? 0,
-      nextState: (json['next_state'] as num?)?.toInt() ?? 0,
+      state: json['state'] is num ? (json['state'] as num).toInt() : 0,
+      action: json['action'] is num ? (json['action'] as num).toInt() : 0,
+      nextState:
+          json['next_state'] is num ? (json['next_state'] as num).toInt() : 0,
       reward: (json['reward'] as num?)?.toDouble() ?? 0.0,
       transitionProbability:
           (json['transition_probability'] as num?)?.toDouble() ?? 1.0,
